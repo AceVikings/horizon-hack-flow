@@ -15,8 +15,7 @@ function parseHash(): { id: string; params: string[] } {
 function NotBuilt({ id }: { id: string }) {
   return (
     <>
-      <PageHead title={id.charAt(0).toUpperCase() + id.slice(1)} sub="This screen is being built in another lane." />
-      <p className="fg2">Nothing is registered for <code>#/{id}</code> in views/registry.ts yet.</p>
+      <PageHead title={id.charAt(0).toUpperCase() + id.slice(1)} sub="Coming soon." />
     </>
   );
 }

@@ -73,7 +73,7 @@ export function KillSwitchDialog({ open, onClose }: { open: boolean; onClose(): 
       }
     >
       <Check state="ok">
-        Every new trade reverts on-chain with <code>VaultPaused()</code>, whoever holds the key.
+        Every new trade is refused on-chain, whoever holds the key.
       </Check>
       <Check state="ok">The trader stops proposing. Chat stays read-only.</Check>
       <Check state="warn">

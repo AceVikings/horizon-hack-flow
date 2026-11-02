@@ -196,7 +196,7 @@ function Overview(_: ViewProps) {
           tone="paused"
           icon="❚❚"
           title={allPaused ? "Both vaults are paused on-chain" : `${st.vaults.filter((v) => v.paused).map((v) => "Vault-" + MARKETS[v.market].label).join(", ")} is paused on-chain`}
-          sub="New trades revert with VaultPaused(). Stop-loss exits are off too. Only the owner device can unpause."
+          sub="New trades are refused. Stop-loss exits are off too. Only the owner device can unpause."
           action={<Btn kind="pri" onClick={() => setUnpause(true)}>Unpause on owner device</Btn>}
         />
       )}
@@ -456,7 +456,7 @@ function UnpauseDialog({ open, onClose }: { open: boolean; onClose(): void }) {
   const st = vsOk.status;
   const ps = st.vaults.filter((v) => v.paused);
   return (
-    <Dialog open={open} onClose={onClose} eyebrow="Owner device · QR handoff" title={<>Unpause on your <span className="hl">owner device</span></>} width={680} footer={<><span className="xs fg2 grow">The owner key never touches this Mac. Each QR is an EIP-681 call of <code>unpause()</code>.</span><Btn onClick={onClose} data-autofocus>Done</Btn></>}>
+    <Dialog open={open} onClose={onClose} eyebrow="Owner device · QR handoff" title={<>Unpause on your <span className="hl">owner device</span></>} width={680} footer={<><span className="xs fg2 grow">Your owner key never touches this Mac.</span><Btn onClick={onClose} data-autofocus>Done</Btn></>}>
       {ps.length === 0 ? (
         <p className="sm">Both vaults are running.</p>
       ) : (
@@ -466,7 +466,7 @@ function UnpauseDialog({ open, onClose }: { open: boolean; onClose(): void }) {
               <QR data={unpauseUri(v.address, st.chainId)} size={180} label={`Unpause Vault-${MARKETS[v.market].label}`} />
               <b>Vault-{MARKETS[v.market].label}</b>
               <span className="mono xs" style={{ wordBreak: "break-all" }}>{v.address}</span>
-              <span className="xs fg2">Scan with Safe, Ledger Live or any WalletConnect wallet holding the owner key; it signs <code>unpause()</code> on chain {st.chainId}.</span>
+              <span className="xs fg2">Scan with the wallet that holds your owner key to resume this vault.</span>
             </div>
           ))}
         </div>

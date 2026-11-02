@@ -435,7 +435,7 @@ function ManualOrder({ mv, disabled }: { mv: MarketView; disabled: boolean }) {
     <details className="card soft tight" style={{ borderStyle: "dashed" }} open={open} onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
       <summary className="row g10" style={{ cursor: "pointer", listStyle: "none" }}>
         <span className="b7">{open ? "▾" : "▸"} Advanced: manual order</span>
-        <span className="xs fg2">passes the same 13 vault checks · ⌘↵ to execute</span>
+        <span className="xs fg2">checked by your vault like every trade · ⌘↵ to place</span>
         <span className="grow" />
         <Badge>{disabled ? "disabled while paused" : open ? "open" : "collapsed"}</Badge>
       </summary>
