@@ -64,6 +64,7 @@ export default function Agent(_: ViewProps) {
   const preset = ph && ph === pb ? ph : null;
   const sel = prov.last?.providers.find((p) => p.selected);
   const models = sel?.models.filter((m) => m.tools !== false) ?? [];
+  const auto = !!prov.last?.selected.auto;
 
   const act = async (key: string, f: () => Promise<Res<unknown>>, okText?: string) => {
     setBusy(key);
@@ -87,14 +88,15 @@ export default function Agent(_: ViewProps) {
     if (m === "watch") return void act("mode", () => ate.trader!.stop(), "Agent paused. The vault still sells to protect you.");
     // without an AI account the agent runs on simple rules (same guard, same limits) until one is connected
     const engine = ai.last?.credential === "none" ? "rules" : "llm";
-    void act("mode", () => ate.trader!.start({ mode: m, engine }), `${m === "propose" ? "The agent now only suggests trades" : "The agent is trading"}${engine === "rules" ? " on simple rules (no AI account yet)" : ""}`);
+    void act("mode", () => ate.trader!.start({ mode: m, engine }), `${m === "propose" ? "The agent now only suggests trades" : "The agent is trading"}${engine === "rules" ? " on simple rules until you connect a subscription" : ""}`);
   };
   const setPreset = async (p: RiskProfile) => {
     const r = await act("preset", () => ate.strategy.set({ riskProfile: p }, `Desktop: trade ${PRESETS.find((x) => x.id === p)!.name.toLowerCase()} (${p})`));
     if (!r.ok && r.error.code === "ATE_APPROVAL_REQUIRED") toast({ kind: "info", text: `${PRESETS.find((x) => x.id === p)!.name} takes more risk`, sub: "Approve it below with Touch ID" });
     else if (r.ok) toast({ kind: "ok", text: `Trading ${PRESETS.find((x) => x.id === p)!.name.toLowerCase()}` });
   };
-  const setModel = (m: string) => sel && void act("model", () => ate.engine!.select(sel.id, m), `Model: ${models.find((x) => x.id === m)?.label ?? m}`);
+  // "" = automatic (best model the subscription offers)
+  const setModel = (m: string) => sel && void act("model", () => ate.engine!.select(sel.id, m || undefined), m ? `Model: ${models.find((x) => x.id === m)?.label ?? m}` : "Model: best available");
   const [codes, setCodes] = useState<Record<string, { code: string; expiresAt: number } | null>>({});
   const approve = async (p: PendingChange) => {
     // go to cash only tightens risk: a plain confirm, no Touch ID
@@ -110,7 +112,7 @@ export default function Agent(_: ViewProps) {
   };
   const reject = (p: PendingChange) => act(p.changeId, () => (ate.approvals ? ate.approvals.reject(p.changeId) : Promise.resolve({ ok: true as const, data: null })), "Rejected. Nothing changed.");
 
-  const status = t?.stopping ? "Stopping after this check." : t?.running ? (t.mode === "propose" ? "Your agent suggests trades. It does not trade." : t.runtime === "rules" ? "Your agent is trading on simple rules (no AI account yet)." : "Your agent is trading.") : t?.external ? "Your agent is trading (started outside Flow)." : t ? "Your agent is off. The vault still sells to protect you." : "";
+  const status = t?.stopping ? "Stopping after this check." : t?.running ? (t.mode === "propose" ? "Your agent suggests trades. It does not trade." : t.runtime === "rules" ? "Your agent is trading on simple rules until you connect a subscription." : "Your agent is trading.") : t?.external ? "Your agent is trading (started outside Flow)." : t ? "Your agent is off. The vault still sells to protect you." : "";
 
   return (
     <div className="page1">
@@ -197,8 +199,9 @@ export default function Agent(_: ViewProps) {
 
       <h2 className="h4" style={{ marginTop: 32 }}>Model</h2>
       <div className="row g10" style={{ marginTop: 10, alignItems: "center", flexWrap: "wrap" }}>
-        <select className="inp" aria-label="Model" style={{ width: 280 }} value={ai.last?.model ?? ""} disabled={!sel || busy === "model"} onChange={(e) => setModel(e.target.value)}>
-          {!models.some((m) => m.id === ai.last?.model) && ai.last && <option value={ai.last.model}>{ai.last.modelLabel}</option>}
+        <select className="inp" aria-label="Model" style={{ width: 280 }} value={auto ? "" : (ai.last?.model ?? "")} disabled={!sel || busy === "model"} onChange={(e) => setModel(e.target.value)}>
+          {sel?.id === "subscription" && <option value="">Best available{auto && ai.last?.model ? ` (${ai.last.modelLabel})` : ""}</option>}
+          {!auto && !models.some((m) => m.id === ai.last?.model) && ai.last && <option value={ai.last.model}>{ai.last.modelLabel}</option>}
           {models.map((m) => (
             <option key={m.id} value={m.id}>
               {m.label}
@@ -206,13 +209,18 @@ export default function Agent(_: ViewProps) {
           ))}
         </select>
         <span className="sm fg2">
-          {sel ? `${sel.label}${sel.configured ? "" : " · not set up"}` : (ai.last?.providerLabel ?? "")} ·{" "}
+          {sel ? (sel.id === "subscription" ? "Your subscriptions" : sel.label) : (ai.last?.providerLabel ?? "")} ·{" "}
           <button className="disclose" style={{ padding: 0 }} onClick={() => go("accounts")}>
-            Change provider
+            Accounts
           </button>
         </span>
       </div>
-      {ai.last && ai.last.credential === "none" && <div className="xs bad b7" style={{ marginTop: 6 }}>No API key for {ai.last.providerLabel}. Add one in Accounts.</div>}
+      {ai.last && ai.last.credential === "none" && (
+        <div className="sm" style={{ marginTop: 8 }}>
+          <span aria-hidden="true">ⓘ </span>
+          {sel?.id === "subscription" ? "Connect your Claude or ChatGPT subscription in Accounts to let the AI decide. Until then the agent uses simple rules." : `${ai.last.providerLabel} is not connected. Open Accounts to connect it.`}
+        </div>
+      )}
 
       <div style={{ marginTop: 28 }}>
         <button className="disclose" aria-expanded={adv} onClick={() => setAdv(!adv)}>

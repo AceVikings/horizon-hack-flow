@@ -141,7 +141,7 @@ export default function Ask(_: ViewProps) {
         }}
       />
     ) : null;
-  const engine = ai.last ? (ai.last.credential === "none" ? "simple answers (no AI account)" : ai.last.modelLabel) : null;
+  const engine = ai.last ? (ai.last.credential === "none" ? "simple answers until you connect a subscription" : ai.last.modelLabel) : null;
 
   return (
     <div className="page1" style={{ display: "flex", flexDirection: "column", minHeight: "100%" }}>
@@ -153,7 +153,7 @@ export default function Ask(_: ViewProps) {
             <div className="sentence" style={{ fontSize: 20 }}>What would you like to know?</div>
             {ai.last?.credential === "none" && (
               <div className="sm fg2" style={{ marginTop: 8 }}>
-                Answers are simple until you connect an AI account.{" "}
+                Answers are simple until you connect your Claude or ChatGPT subscription.{" "}
                 <button className="disclose" style={{ padding: 0 }} onClick={() => go("accounts")}>
                   Connect one
                 </button>

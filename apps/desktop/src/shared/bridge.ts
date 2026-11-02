@@ -189,7 +189,7 @@ export interface AiConfigPatch {
 }
 
 export interface EngineProvider {
-  id: "anthropic" | "openai" | "gemini" | "openrouter" | "ollama" | "proxy";
+  id: "subscription" | "anthropic" | "openai" | "gemini" | "openrouter" | "ollama" | "proxy";
   label: string;
   protocol: string;
   key: "required" | "optional" | "none";
@@ -203,7 +203,8 @@ export interface EngineProvider {
   models: { id: string; label: string; tools: boolean | null; streaming: boolean }[];
 }
 export interface EngineProviders {
-  selected: { provider: EngineProvider["id"]; model: string; engine: "sdk" | "claude-code" };
+  /** `auto`: the model is picked automatically (best the subscription offers). */
+  selected: { provider: EngineProvider["id"]; model: string; auto?: boolean; engine: "sdk" | "claude-code" };
   providers: EngineProvider[];
 }
 /** Credential change result: applied, or waiting for the daemon's one-time code (Touch ID unavailable). */

@@ -52,7 +52,7 @@ function handleEvent(e: DaemonEvent): void {
 
 const bad = (message: string): Res<never> => ({ ok: false, error: { code: "ATE_INTERNAL", message } });
 
-const PROVIDER_ID = /^(anthropic|openai|gemini|openrouter|ollama|proxy)$/;
+const PROVIDER_ID = /^(subscription|anthropic|openai|gemini|openrouter|ollama|proxy)$/;
 /** Provider credential set/replace/remove: replace/remove come back as a config payload → Touch ID (ate-approve) → apply. */
 async function engineCredential(id: string, body: unknown): Promise<unknown> {
   const b = (body ?? {}) as Record<string, unknown>;
