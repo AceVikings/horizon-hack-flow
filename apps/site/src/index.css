@@ -1,0 +1,80 @@
+/* Flow landing page. Tokens, fonts, highlight bar (.ate-hl), grid background (.ate-grid-bg) and focus ring come
+   from @ate/ui/base.css (design language: docs/design/DESIGN-LANGUAGE.md); its colours, fonts and the 40px grid are
+   mapped into the Tailwind theme below. Layout lives in the components as utilities. */
+@import "tailwindcss";
+@import "@ate/ui/base.css" layer(base);
+
+@theme {
+  --color-*: initial;
+  --color-yellow: #ffe17c;
+  --color-charcoal: #171e19;
+  --color-dark: #272727;
+  --color-sage: #b7c6c2;
+  --color-white: #fff;
+  --color-surface: #f8f9fa;
+  --color-ink: #0f1411;
+  --color-gold: #d4a90c;
+  --color-ok: #13744a;
+  --color-ok-dark: #7fdcaa;
+  --color-bad-dark: #ff8d95;
+  --color-warn: #855800;
+  --color-umber: #5c4700;
+
+  --font-display: "Anton", Impact, "Arial Narrow", sans-serif;
+  --font-sans: "Satoshi", "Figtree", -apple-system, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --font-serif: Georgia, "Times New Roman", serif;
+
+  --spacing-grid: 40px;
+  --spacing-nav: 80px;
+
+  /* desktop-first breakpoints: use max-lg (<= 1180), max-md (<= 900), max-sm (<= 640) */
+  --breakpoint-*: initial;
+  --breakpoint-sm: 641px;
+  --breakpoint-md: 901px;
+  --breakpoint-lg: 1181px;
+
+  --ease-ate: cubic-bezier(0.4, 0, 0.2, 1);
+  --default-transition-duration: 300ms;
+  --default-transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+
+  --animate-blink: blink 2.4s var(--ease-ate) infinite;
+  --animate-live: live 2s infinite;
+  --animate-drift: drift 6s var(--ease-ate) infinite;
+  --animate-ring: ring 2s var(--ease-ate) infinite;
+
+  @keyframes blink { 50% { box-shadow: 0 0 0 5px rgba(255, 225, 124, 0.45), 0 0 0 1px rgba(23, 30, 25, 0.35); } }
+  @keyframes live { 0% { box-shadow: 0 0 0 0 rgba(127, 220, 170, 0.6); } 100% { box-shadow: 0 0 0 8px rgba(127, 220, 170, 0); } }
+  @keyframes drift { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(-14px, -10px); } }
+  @keyframes ring { from { transform: scale(1); opacity: 1; } to { transform: scale(3.2); opacity: 0; } }
+}
+
+/* semantic colours from @ate/ui that flip per surface (light, .ate-dark, or a section that overrides them) */
+@theme inline {
+  --color-fg: var(--fg);
+  --color-fg-2: var(--fg-2);
+  --color-fg-mute: var(--fg-mute);
+  --color-line: var(--line);
+  --color-line-2: var(--line-2);
+  --color-bg-3: var(--bg-3);
+}
+
+/* Anton headline: uppercase, normal tracking, 0.9 leading */
+@utility display {
+  font-family: var(--font-display);
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: normal;
+  line-height: 0.9;
+  text-wrap: balance;
+}
+
+@layer base {
+  html { scroll-behavior: smooth; scroll-padding-top: calc(var(--spacing-nav) + 12px); }
+  body { font-size: 16px; line-height: 1.55; overflow-x: hidden; }
+  p { text-wrap: pretty; }
+  code { font-family: var(--font-mono); font-size: 0.86em; }
+  @media (width < 901px) { html { scroll-padding-top: 80px; } }
+  @media (width < 641px) { body { font-size: 15px; } }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+}
