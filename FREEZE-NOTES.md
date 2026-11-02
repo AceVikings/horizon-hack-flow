@@ -329,3 +329,22 @@ Lanes may **add** to frozen artifacts; changing anything here needs a lead-appro
    `setup.unlock()` (sealed passphrase, no prompt). The `daemon.locked` toast with reason `ate_pause` is informational.
 4. **Shared testnet keys:** run one app or trader per agent key. Two homes with the same agent key race on the same candidate,
    and the second execute reverts. The owner key is shared with the CLOUD owner service, so owner `cast send`s can clash on nonces.
+9. **OpenCode engine** (`apps/daemon/src/opencode.ts`, provider `opencode`). Uses the user's existing opencode login
+   via the official `@opencode-ai/sdk`: the daemon starts a private `opencode serve` on 127.0.0.1 (SDK
+   `createOpencodeServer`, config via `OPENCODE_CONFIG_CONTENT`) with Flow's own MCP endpoint registered twice as
+   remote MCP servers — `flowagent` (agent-scope token) and `flowchat` (chat-scope token). Built-in tools are off in the
+   config (`tools: { bash: false, edit: false, … }`) and denied by `permission` (edit/bash/webfetch/external_directory),
+   and every prompt sends a `tools` map that enables only the scope's allowlisted Flow tools (all other ids from
+   `/experimental/tool/ids` off). Sessions run in `<home>/opencode-work`. Same cycle rules: the 90 s cycle signal aborts
+   the request and calls `session.abort`; every tool call still goes through `AteService.callTool` (allowlist,
+   candidate binding, guard, approvals). Journal: agent-scope calls carry `actor.agentId = "opencode:<provider/model>"`
+   (in-app SDK engines: `"<provider>:<model>"`). Models: `config.providers()` (tool-calling ones), default
+   `opencode/deepseek-v4.1-flash` (then `opencode/glm-5.3-flash`, then any tool-calling model).
+   - Default provider: until the user picks one (`providerChosen` in ai.json), Flow uses `opencode` when an opencode
+     login exists (`~/.local/share/opencode/auth.json`, only its keys are read) and no subscription is signed in, and
+     switches to `subscription` once the sidecar lists models.
+   - `GET /engine/opencode` (ui|view) → `{ installed, signedIn, logins[], running, lastError, selectedModel, models[] }`;
+     `POST /engine/opencode/test` → lists models (starts the server). Select with `POST /engine/select { provider:
+     "opencode", model? }`. Env: `ATE_OPENCODE_BIN`, `ATE_OPENCODE_AUTH`.
+   - Live check (this Mac): opencode 1.19.3, 515 models listed, one prompt on `opencode/deepseek-v4.1-flash` answered in
+     36 s (≈13k input tokens: opencode adds its own system prompt).

@@ -103,7 +103,7 @@ describe("engine providers (Accounts)", () => {
   it("lists every provider; first key is stored directly, replace/remove need Touch ID or the one-time code", async () => {
     const list = (await (await req("GET", "/engine/providers", ui)).json()) as { selected: { provider: string }; providers: { id: string; configured: boolean; warning: string | null }[] };
     expect(list.selected.provider).toBe("subscription");
-    expect(list.providers.map((p) => p.id)).toEqual(["subscription", "anthropic", "openai", "gemini", "openrouter", "ollama", "proxy"]);
+    expect(list.providers.map((p) => p.id)).toEqual(["opencode", "subscription", "anthropic", "openai", "gemini", "openrouter", "ollama", "proxy"]);
     expect(list.providers.find((p) => p.id === "proxy")!.warning).toMatch(/terms/);
     const key = "sk-proj-" + "a".repeat(40);
     const first = (await (await req("POST", "/engine/providers/openai/credential", ui, { action: "set", apiKey: key })).json()) as { saved: boolean; provider: { configured: boolean } };
@@ -120,5 +120,14 @@ describe("engine providers (Accounts)", () => {
     expect((await req("POST", "/engine/select", ui, { provider: "nope" })).status).toBe(400);
     const r = (await (await req("POST", "/engine/select", ui, { provider: "anthropic", model: "claude-sonnet-5-5" })).json()) as { selected: { model: string } };
     expect(r.selected.model).toBe("claude-sonnet-5-5");
+  });
+});
+
+describe("journal engine label", () => {
+  it("records actor.agentId for agent-scope calls with an engine label", async () => {
+    const r = await svc.callTool("agent", "ate_decide", { decision: "no_trade", market: "hsk-dex:WHSK/USDT:3000", reason: "no_signal", rationale: "nothing worth doing this cycle at all" }, { engine: "llm", agentId: "opencode:opencode/deepseek-v4.1-flash" });
+    expect(r.ok).toBe(true);
+    const e = svc.journal.list({ kind: ["no_trade"], limit: 1 })[0]!;
+    expect(e.actor).toMatchObject({ kind: "agent", agentId: "opencode:opencode/deepseek-v4.1-flash" });
   });
 });

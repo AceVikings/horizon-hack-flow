@@ -24,6 +24,7 @@ import { join } from "node:path";
 import type { ToolName } from "@ate/core";
 import { TOOL_DEFINITIONS } from "@ate/mcp";
 import { bestModel, type ProxySidecar } from "./sidecar.js";
+import { OPENCODE_PREFERRED, type OpencodeEngine } from "./opencode.js";
 import {
   PROVIDERS,
   PROVIDER_IDS,
@@ -67,7 +68,7 @@ export interface AiConfig {
   chatEffort: Effort;
   providers: Partial<Record<ProviderId, ProviderSettings>>;
 }
-export type CredentialSource = "keychain" | "file" | "env" | "profile" | "subscription" | "none";
+export type CredentialSource = "keychain" | "file" | "env" | "profile" | "subscription" | "opencode" | "none";
 export interface AiHealth {
   provider: ProviderId;
   providerLabel: string;
@@ -115,7 +116,7 @@ const nowSec = () => Math.floor(Date.now() / 1000);
 /** One agent conversation, in the selected provider's native message format (append-only). */
 export interface Conversation {
   provider: ProviderId;
-  protocol: "anthropic" | "openai" | "gemini";
+  protocol: "anthropic" | "openai" | "gemini" | "opencode";
   model: string;
   items: unknown[];
 }
@@ -285,6 +286,9 @@ export class AiEngine {
   private health_: Partial<Record<ProviderId, ProviderStatus["health"]>> = {};
   private models_: Partial<Record<ProviderId, ModelInfo[]>> = {};
   readonly keys: ProviderKeys;
+  private autoProvider = false;
+  /** The user picked a provider (Agent / Accounts); until then Flow chooses (opencode login → subscription). */
+  private providerChosen = false;
   /** False (per provider) after a strict-schema 400: later loops send plain schemas; the daemon validates anyway. */
   strictOk: Partial<Record<ProviderId, boolean>> = {};
 
@@ -294,6 +298,8 @@ export class AiEngine {
     private readonly clients: Clients = {},
     /** The CLIProxyAPI sidecar behind the default "subscription" provider. */
     readonly sidecar?: ProxySidecar,
+    /** The private opencode server behind the "opencode" provider (the user's opencode login). */
+    readonly opencode?: OpencodeEngine,
   ) {
     this.keys = new ProviderKeys(home, env);
     // default: the user's own subscriptions through the sidecar; "" = pick the best model the subscription offers
@@ -310,9 +316,13 @@ export class AiEngine {
         ...(j.providers && typeof j.providers === "object" ? { providers: j.providers } : {}),
       };
       if (j.models) this.models_ = j.models;
+      this.providerChosen = !!(j as { providerChosen?: boolean }).providerChosen;
     } catch {
       /* defaults */
     }
+    // No saved choice: use the user's opencode login when there is one (the subscription takes over once signed in)
+    this.autoProvider = !this.providerChosen && !isProviderId(env.ATE_AI_PROVIDER);
+    if (this.autoProvider) this.cfg.provider = opencode?.signedIn && !sidecar?.ready ? "opencode" : "subscription";
     if (isProviderId(env.ATE_AI_PROVIDER)) this.cfg.provider = env.ATE_AI_PROVIDER;
     if (typeof env.ATE_AI_MODEL === "string" && env.ATE_AI_MODEL) this.cfg.model = env.ATE_AI_MODEL;
     if (this.cfg.provider === "anthropic" && !this.cfg.model) this.cfg.model = DEFAULT_MODEL;
@@ -322,7 +332,7 @@ export class AiEngine {
     return JSON.parse(JSON.stringify(this.cfg)) as AiConfig;
   }
   private persist() {
-    writeFileSync(join(this.home, "ai.json"), JSON.stringify({ ...this.cfg, models: this.models_ }, null, 2), { mode: 0o600 });
+    writeFileSync(join(this.home, "ai.json"), JSON.stringify({ ...this.cfg, models: this.models_, providerChosen: this.providerChosen }, null, 2), { mode: 0o600 });
   }
 
   /** Model info from the provider's last listing (Anthropic: built in). */
@@ -338,6 +348,10 @@ export class AiEngine {
     // the Claude Code CLI engine runs Anthropic models only: choosing it alone switches the provider too
     const provider = p.provider === undefined ? (p.engine === "claude-code" ? "anthropic" : this.cfg.provider) : p.provider;
     if (!isProviderId(provider)) throw Object.assign(new Error(`unknown provider ${String(provider)}`), { status: 400, code: "ATE_CONFIG_INVALID" });
+    if (p.provider !== undefined || p.engine === "claude-code") {
+      this.providerChosen = true;
+      this.autoProvider = false;
+    }
     let model = p.model ?? (provider !== this.cfg.provider ? (provider === "anthropic" ? DEFAULT_MODEL : (this.models_[provider]?.find((m) => m.tools !== false)?.id ?? "")) : this.cfg.model);
     if (typeof model !== "string" || model.length > 200 || (provider === "anthropic" && p.model !== undefined && !/^claude-[a-z0-9.-]+$/.test(model))) throw Object.assign(new Error(`unknown model ${String(model)}`), { status: 400, code: "ATE_CONFIG_INVALID" });
     const info = model ? this.modelInfo(provider, model) : null;
@@ -384,12 +398,18 @@ export class AiEngine {
     return this.cfg.providers[id]?.baseURL ?? PROVIDERS[id].baseURL;
   }
   /** Wire protocol: subscriptions speak Claude-compatible for Claude models and OpenAI-compatible for the rest. */
-  private protocolOf(id: ProviderId, model = this.effectiveModel()): "anthropic" | "openai" | "gemini" {
+  private protocolOf(id: ProviderId, model = this.effectiveModel()): "anthropic" | "openai" | "gemini" | "opencode" {
+    if (id === "opencode") return "opencode";
     if (id === "subscription") return /^claude/i.test(model) ? "anthropic" : "openai";
     return id === "proxy" ? (this.cfg.providers.proxy?.protocol ?? "openai") : PROVIDERS[id].protocol;
   }
   /** The model the agents use: the chosen one, or (subscription, none chosen / gone) the best the subscription offers. */
   effectiveModel(): string {
+    if (this.cfg.provider === "opencode") {
+      const ids = (this.models_.opencode ?? []).filter((m) => m.tools !== false).map((m) => m.id);
+      if (this.cfg.model && (ids.length === 0 || ids.includes(this.cfg.model))) return this.cfg.model;
+      return OPENCODE_PREFERRED.find((m) => ids.length === 0 || ids.includes(m)) ?? ids[0] ?? OPENCODE_PREFERRED[0]!;
+    }
     if (this.cfg.provider !== "subscription") return this.cfg.model;
     const ids = (this.models_.subscription ?? []).filter((m) => m.tools !== false).map((m) => m.id);
     if (this.cfg.model && (ids.length === 0 || ids.includes(this.cfg.model))) return this.cfg.model;
@@ -398,6 +418,7 @@ export class AiEngine {
 
   credentialOf(id: ProviderId): ProviderStatus["credential"] {
     if (id === "subscription") return { source: this.subscriptionReady() ? "subscription" : "none", hint: null, stored: false };
+    if (id === "opencode") return { source: this.opencode?.installed && this.opencode.signedIn ? "opencode" : "none", hint: null, stored: false };
     return this.keys.source(id);
   }
   private subscriptionReady(): boolean {
@@ -406,6 +427,7 @@ export class AiEngine {
   configured(id: ProviderId): boolean {
     const def = PROVIDERS[id];
     if (id === "subscription") return this.subscriptionReady();
+    if (id === "opencode") return !!this.opencode?.installed && !!this.opencode.signedIn;
     // the proxy has a default URL; it counts as set up once the user saved settings or a test reached it
     if (id === "proxy") return !!this.cfg.providers.proxy?.baseURL || !!this.health_.proxy?.ok;
     if (def.key === "none") return true;
@@ -456,6 +478,14 @@ export class AiEngine {
   async test(id: ProviderId): Promise<ProviderStatus> {
     const at = nowSec();
     try {
+      if (id === "opencode") {
+        if (!this.opencode?.installed) throw Object.assign(new Error("opencode is not installed on this Mac"), { kind: "no_credentials" });
+        this.models_.opencode = await this.opencode.models();
+        this.health_.opencode = { at, ok: true };
+        this.persist();
+        if (id === this.cfg.provider) this.lastCheck = { at, reachable: true };
+        return this.providers().find((p) => p.id === id)!;
+      }
       if (id === "subscription" && this.sidecar) {
         const st = await this.sidecar.check();
         if (!st.healthy) throw Object.assign(new Error(st.installed ? "Your subscription proxy is not running" : "Your subscription proxy is not installed yet"), { kind: "no_credentials" });
@@ -466,6 +496,7 @@ export class AiEngine {
       const client = proto === "anthropic" ? this.anthropicClient(id) : proto === "gemini" ? this.geminiClient() : this.openaiClient(id);
       const ms = await listModels(id, client, { baseURL: this.baseURL(id) });
       this.models_[id] = id === "anthropic" ? ms.filter((m) => /^claude-/.test(m.id)) : ms;
+      if (id === "subscription" && ms.length > 0 && this.autoProvider && this.cfg.provider === "opencode") this.cfg.provider = "subscription";
       this.health_[id] = { at, ok: true };
       this.persist();
     } catch (e) {
@@ -535,11 +566,27 @@ export class AiEngine {
   }
   /** Append a user message in the conversation's native format. */
   pushUser(c: Conversation, text: string): void {
+    if (c.protocol === "opencode") {
+      c.items.push({ role: "user", content: text });
+      return;
+    }
     c.items.push(c.protocol === "gemini" ? ({ role: "user", parts: [{ text }] } satisfies Content) : { role: "user", content: text });
   }
 
   /** Run the tool loop on the conversation's provider. Strict schemas fall back to plain ones after a 400. */
-  async run(kind: "trader" | "chat", c: Conversation, o: { effort: Effort; system: string; toolNames: readonly string[]; call(name: string, input: unknown, id: string): Promise<ToolCallResult>; signal?: AbortSignal; onText?(d: string): void; maxTurns?: number; maxTokens?: number }): Promise<LoopResult> {
+  async run(kind: "trader" | "chat", c: Conversation, o: { effort: Effort; system: string; toolNames: readonly string[]; call(name: string, input: unknown, id: string): Promise<ToolCallResult>; signal?: AbortSignal; onText?(d: string): void; maxTurns?: number; maxTokens?: number; onToolCall?(name: string, input: unknown, result: unknown): void }): Promise<LoopResult> {
+    if (c.protocol === "opencode") {
+      // opencode's agent calls Flow's tools itself, over Flow's MCP (same server-side rules); results come back as parts
+      if (!this.opencode) throw new Error("opencode engine unavailable in this daemon");
+      const last = [...c.items].reverse().find((x) => (x as { role?: string }).role === "user") as { content: string } | undefined;
+      const meta = c.items.find((x) => (x as { opencodeSession?: string }).opencodeSession) as { opencodeSession: string } | undefined;
+      const r = await this.opencode.prompt({ scope: kind === "trader" ? "agent" : "chat", model: c.model, system: o.system, text: last?.content ?? "", toolNames: o.toolNames, ...(meta ? { sessionId: meta.opencodeSession } : {}), ...(o.signal ? { signal: o.signal } : {}), agentId: `opencode:${c.model}` });
+      if (!meta) c.items.unshift({ opencodeSession: r.sessionId });
+      for (const t of r.calls) o.onToolCall?.(t.tool, t.input, t.output);
+      if (r.text) o.onText?.(r.text);
+      this.lastUsage = { at: nowSec(), kind, ...r.usage };
+      return r;
+    }
     const info = this.modelInfo(c.provider, c.model);
     if (info && info.tools === false) throw new ToolsUnsupportedError(c.provider, c.model);
     const start = c.items.length;

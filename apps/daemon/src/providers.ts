@@ -25,7 +25,7 @@ import type { ToolName } from "@ate/core";
 import { TOOL_DEFINITIONS } from "@ate/mcp";
 import { anthropicClient, loadStoredApiKey, modelCredentials, removeApiKey, storeApiKey } from "./setup/model.js";
 
-export type ProviderId = "subscription" | "anthropic" | "openai" | "gemini" | "openrouter" | "ollama" | "proxy";
+export type ProviderId = "subscription" | "opencode" | "anthropic" | "openai" | "gemini" | "openrouter" | "ollama" | "proxy";
 /** Keychain slots that are not a provider's own key (the managed proxy's management key). */
 export type SecretSlot = ProviderId | "subscription-mgmt";
 export type Protocol = "anthropic" | "openai" | "gemini";
@@ -46,6 +46,9 @@ export interface ProviderDef {
 export const PROVIDERS: Record<ProviderId, ProviderDef> = {
   // Default: the user's own subscriptions (Claude, ChatGPT/Codex, Gemini) through the CLIProxyAPI sidecar the daemon
   // installs, starts and health-checks on 127.0.0.1 (./sidecar.ts). Its local client key is generated, never typed.
+  // The user's existing opencode login, through a private `opencode serve` the daemon drives with @opencode-ai/sdk;
+  // the opencode agent calls Flow's tools over Flow's own MCP endpoint (./opencode.ts).
+  opencode: { id: "opencode", label: "OpenCode", protocol: "openai", key: "none", caps: { streaming: false } },
   subscription: { id: "subscription", label: "Your subscriptions", protocol: "openai", baseURL: "http://127.0.0.1:8317/v1", key: "none", caps: { streaming: true } },
   anthropic: { id: "anthropic", label: "Anthropic", protocol: "anthropic", key: "required", keyPattern: /^sk-ant-[A-Za-z0-9_-]{20,200}$/, caps: { streaming: true } },
   openai: { id: "openai", label: "OpenAI", protocol: "openai", key: "required", keyPattern: /^sk-[A-Za-z0-9_-]{20,300}$/, caps: { streaming: true } },

@@ -5,6 +5,7 @@ import { registerAppRoutes } from "./app-routes.js";
 import { AiEngine } from "./engine.js";
 import { ProviderKeys } from "./providers.js";
 import { ProxySidecar } from "./sidecar.js";
+import { OpencodeEngine } from "./opencode.js";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -270,7 +271,9 @@ export async function startDaemon(o: StartOptions = {}): Promise<RunningDaemon> 
   // In-app agent engine (Anthropic SDK) shared by the chat routes and the supervised trader.
   // The default engine runs on the user's subscriptions through the CLIProxyAPI sidecar the daemon manages.
   const sidecar = new ProxySidecar(home, new ProviderKeys(home, env), env);
-  const ai = new AiEngine(home, env, {}, sidecar);
+  // OpenCode: the user's opencode login, driven through a private `opencode serve` that calls Flow's MCP.
+  const opencode = new OpencodeEngine({ home, daemonPort: port, tokens, env, log });
+  const ai = new AiEngine(home, env, {}, sidecar, opencode);
   registerChatRoutes({ routes, tokens, service, home, emit, log, ai });
   // /setup/* (desktop onboarding + Settings), ui scope only.
   registerSetupRoutes({ routes, home, env, cfg, configPath, service, unlock, broadcast: (e) => http.broadcast(e), approval: approvalHandle, log });
@@ -305,6 +308,7 @@ export async function startDaemon(o: StartOptions = {}): Promise<RunningDaemon> 
     stop: async () => {
       await app.trader.stop(false);
       await sidecar.stop();
+      opencode.stop();
       service.stopScan();
       txq.stop();
       await http.close();

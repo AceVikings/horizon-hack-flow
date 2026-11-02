@@ -2,6 +2,9 @@
 // (guard re-run → re-quote → pre-flight → TxQueue), positions, strategy, pause and the journal writes.
 // Every MCP tool is implemented here; transports (MCP over HTTP/stdio, /view) call `callTool`.
 
+import { AsyncLocalStorage } from "node:async_hooks";
+/** Engine label of the agent behind the current tool call (journal actor.agentId). */
+const agentLabel = new AsyncLocalStorage<string>();
 import type Database from "better-sqlite3";
 import {
   AteError,
@@ -847,8 +850,10 @@ export class AteService {
 
   actorFor(scope: CallerScope): DecisionActor {
     switch (scope) {
-      case "agent":
-        return { kind: "agent", via: "mcp", ...(this.agentAddress() ? { address: this.agentAddress()! } : {}) };
+      case "agent": {
+        const id = agentLabel.getStore();
+        return { kind: "agent", via: "mcp", ...(id ? { agentId: id } : {}), ...(this.agentAddress() ? { address: this.agentAddress()! } : {}) };
+      }
       case "chat":
         return { kind: "human", via: "chat" };
       case "ui":
@@ -931,7 +936,9 @@ export class AteService {
    * Calls a tool as `scope`. Throws InvalidParamsError for schema-invalid args (→ JSON-RPC InvalidParams).
    * `internal` is the daemon itself (guard exits, smoke); `ui`/`session` use the chat allowlist + execute for confirm.
    */
-  async callTool(scope: CallerScope, name: string, rawArgs: unknown, opts: { engine?: Engine } = {}): Promise<ToolResult<unknown>> {
+  async callTool(scope: CallerScope, name: string, rawArgs: unknown, opts: { engine?: Engine; agentId?: string } = {}): Promise<ToolResult<unknown>> {
+    // Additive (Flow v1): the engine label (e.g. "opencode:opencode/deepseek-v4.1-flash") rides on the journal actor
+    if (opts.agentId) return agentLabel.run(opts.agentId.slice(0, 120), () => this.callTool(scope, name, rawArgs, { ...opts, agentId: undefined }));
     const t0 = Date.now();
     if (!(TOOL_NAMES as readonly string[]).includes(name)) throw new InvalidParamsError(name, [`unknown tool ${name}`]);
     const tool = name as ToolName;

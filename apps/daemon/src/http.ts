@@ -24,6 +24,8 @@ export interface TokenInfo {
   sessionId?: string;
   /** Engine label for decisions made with this token (e.g. `rules` for --engine rules runners). */
   engine?: "llm" | "rules";
+  /** Additive: journal actor.agentId for agent-scope calls with this token (e.g. "opencode:<model>"). */
+  agentId?: string;
 }
 
 export class TokenRegistry {
@@ -262,7 +264,7 @@ export class DaemonHttp {
           if (!this.toolLimiter.allow(`${scope}:${name}`)) {
             return { ok: false, error: { code: "ATE_RPC_RATE_LIMITED", message: "60 req/min per tool exceeded", retryable: true } };
           }
-          const out = await svc.callTool(scope, name, args, engine ? { engine } : {});
+          const out = await svc.callTool(scope, name, args, { ...(engine ? { engine } : {}), ...(auth.agentId ? { agentId: auth.agentId } : {}) });
           // Additive (Flow v1 chat tool cards): chat-scope calls stream as chat.tool with their args and result.
           const sessionId = auth.sessionId;
           if (scope === "chat" && sessionId) {

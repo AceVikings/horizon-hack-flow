@@ -53,7 +53,7 @@ export function createSdkTraderExecutor(o: SdkTraderOptions): { run(ctx: CycleCt
           toolNames: o.toolNames,
           signal: ctx.signal,
           maxTurns: 24,
-          call: async (name: string, input: unknown) => toolResultContent(await o.service.callTool("agent", name, input, { engine: "llm" }).catch((e: Error) => ({ ok: false, error: { code: "ATE_INVALID_PARAMS", message: e.message } }))),
+          call: async (name: string, input: unknown) => toolResultContent(await o.service.callTool("agent", name, input, { engine: "llm", agentId: `${conv.provider}:${conv.model}` }).catch((e: Error) => ({ ok: false, error: { code: "ATE_INVALID_PARAMS", message: e.message } }))),
         });
         o.log?.(`cycle ${ctx.cycle}: ${r.stop} · ${r.turns} turns · ${r.toolCalls} tool calls · ${conv.provider}/${conv.model}${r.servedBy !== conv.model ? ` (served by ${r.servedBy})` : ""} · in ${r.usage.inputTokens} out ${r.usage.outputTokens} cache read ${r.usage.cacheReadTokens} write ${r.usage.cacheWriteTokens}`);
         if (r.stop === "refusal") return { ok: false, summary: `model refused (${r.refusal?.category ?? "unspecified"})`, turns: r.turns };
@@ -103,6 +103,8 @@ export async function runSdkChatTurn(o: SdkChatOptions, t: SdkChatTurn): Promise
     maxTurns: 8,
     maxTokens: 8000,
     onText: (d: string) => o.emit({ type: "chat.delta", at: now(), data: { sessionId: t.sessionId, turnId: t.turnId, role: "agent", text: d, engine: "llm", model: cfg.model, provider: cfg.provider, done: false } }),
+    // opencode runs the tools itself (over Flow's MCP): its calls arrive afterwards as cards
+    onToolCall: (name: string, input: unknown, result: unknown) => o.emit({ type: "chat.tool", at: now(), data: { sessionId: t.sessionId, turnId: t.turnId, tool: name, args: input, result } }),
     call: async (name: string, input: unknown) => {
       const result = await o.service.callTool("chat", name, input).catch((e: Error) => ({ ok: false, error: { code: "ATE_INVALID_PARAMS", message: e.message } }));
       o.emit({ type: "chat.tool", at: now(), data: { sessionId: t.sessionId, turnId: t.turnId, tool: name, args: input, result } });

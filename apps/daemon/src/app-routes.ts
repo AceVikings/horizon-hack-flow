@@ -24,6 +24,7 @@ import { randomBytes } from "node:crypto";
 import { configPayload, type ApprovalPayload } from "@ate/approve";
 import { DEFAULT_MODEL, findClaudeBin, type AiConfig, type AiEngine } from "./engine.js";
 import { PROVIDERS, PROVIDER_IDS, isProviderId, type ProviderId } from "./providers.js";
+import { opencodeLogins } from "./opencode.js";
 import { createSdkTraderExecutor } from "./engine-agents.js";
 import type { Routes, TokenRegistry } from "./http.js";
 import { EXPECTED, FULL_RUN, decodeRevert, runRogue, type AttackId, type AttackResult } from "./rogue.js";
@@ -608,6 +609,16 @@ export function registerAppRoutes(o: AppRoutesOptions): { trader: TraderSupervis
         return { login: st, models: sc.status().models, selectedModel: ai.config.provider === "subscription" ? ai.effectiveModel() : null };
       }),
   });
+
+  // ---- OpenCode (the user's opencode login): status + model listing
+  const oc = ai.opencode;
+  r.register({
+    method: "GET",
+    path: "/engine/opencode",
+    scopes: ["ui", "view"],
+    handler: ({ json }) => json(200, { installed: !!oc?.installed, signedIn: !!oc?.signedIn, logins: oc ? opencodeLogins() : [], running: !!oc?.running, lastError: oc?.lastError ?? null, selectedModel: ai.config.provider === "opencode" ? ai.effectiveModel() : null, models: ai.providers().find((p) => p.id === "opencode")?.models ?? [] }),
+  });
+  r.register({ method: "POST", path: "/engine/opencode/test", scopes: ["ui"], handler: ({ json }) => guard(json, () => ai.test("opencode")) });
 
   const pendingCred = new Map<string, { id: ProviderId; action: "set" | "remove"; key: string | null; expiresAt: number; payload: ApprovalPayload }>();
   for (const id of PROVIDER_IDS) {
