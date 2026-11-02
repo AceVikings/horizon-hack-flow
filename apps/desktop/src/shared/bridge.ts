@@ -211,6 +211,8 @@ export interface EngineProviders {
   /** `auto`: the model is picked automatically (best the subscription offers). */
   selected: { provider: EngineProvider["id"]; model: string; auto?: boolean; engine: "sdk" | "claude-code" };
   providers: EngineProvider[];
+  /** Ask's model: its own choice (`own`) or the trader's. */
+  chat?: { provider: EngineProvider["id"]; model: string; own: boolean };
 }
 /** Credential change result: applied, or waiting for the daemon's one-time code (Touch ID unavailable). */
 export type EngineCredentialResult = { saved: true; provider: EngineProvider } | { needsCode: true; nonce: string; expiresAt: number };
@@ -235,6 +237,25 @@ export interface SubscriptionStatus {
   configPath: string;
   selectedModel: string | null;
 }
+
+/** Tools (MCP): Flow's server, the user's opencode servers and servers added in Flow. */
+export interface McpServerInfo {
+  id: string;
+  name: string;
+  source: "flow" | "opencode" | "user";
+  type: "builtin" | "stdio" | "http";
+  command?: string;
+  args?: string[];
+  url?: string;
+  envKeys?: string[];
+  headerKeys?: string[];
+  enabled: { chat: boolean; trader: boolean };
+  state: "connected" | "available" | "error";
+  error: string | null;
+  tools: { name: string; description: string }[];
+  checkedAt: number | null;
+}
+export type McpEnableResult = { servers: McpServerInfo[] } | { needsCode: true; nonce: string; expiresAt: number };
 
 export interface AteBridge {
   readonly fixtures: boolean;
@@ -295,6 +316,8 @@ export interface AteBridge {
     credential(id: EngineProvider["id"], body: { action?: "set" | "remove"; apiKey?: string; baseURL?: string; protocol?: "openai" | "anthropic" }): Promise<Res<EngineCredentialResult>>;
     confirm(id: EngineProvider["id"], nonce: string, code: string): Promise<Res<EngineCredentialResult>>;
     select(provider: EngineProvider["id"], model?: string): Promise<Res<EngineProviders>>;
+    /** Ask's own model (null = follow the trader's). */
+    selectChat(provider: EngineProvider["id"] | null, model?: string): Promise<Res<EngineProviders>>;
   };
   /** Additive (lane D3): your subscriptions through the CLIProxyAPI sidecar (install / start / stop / restart / check). */
   subscription?: {
@@ -303,6 +326,15 @@ export interface AteBridge {
     /** In-app sign-in: the provider's login URL (open in the browser) and a state to poll. */
     login(provider: "claude" | "codex" | "antigravity" | "kimi" | "kimi-ai" | "xai" | "devin" | "meta"): Promise<Res<{ url: string; state: string | null }>>;
     loginStatus(state: string): Promise<Res<{ login: unknown; models: string[]; selectedModel: string | null }>>;
+  };
+  /** Additive (lane D3): Tools (MCP). Turning a server on for the trader asks for Touch ID in main (code fallback). */
+  mcp?: {
+    list(): Promise<Res<{ servers: McpServerInfo[] }>>;
+    add(def: { name: string; type: "stdio" | "http"; command?: string; args?: string[]; url?: string; env?: Record<string, string>; headers?: Record<string, string> }): Promise<Res<{ servers: McpServerInfo[] }>>;
+    remove(id: string): Promise<Res<{ servers: McpServerInfo[] }>>;
+    test(id: string): Promise<Res<{ servers: McpServerInfo[] }>>;
+    enable(id: string, agent: "chat" | "trader", on: boolean): Promise<Res<McpEnableResult>>;
+    confirm(nonce: string, code: string): Promise<Res<{ servers: McpServerInfo[] }>>;
   };
   events: { subscribe(handler: (e: DaemonEvent) => void): () => void };
 }
@@ -350,6 +382,13 @@ export const IPC_METHODS = [
   "engine.credential",
   "engine.confirm",
   "engine.select",
+  "engine.selectChat",
+  "mcp.list",
+  "mcp.add",
+  "mcp.remove",
+  "mcp.test",
+  "mcp.enable",
+  "mcp.confirm",
   "subscription.status",
   "subscription.op",
   "subscription.login",

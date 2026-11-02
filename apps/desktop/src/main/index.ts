@@ -189,6 +189,38 @@ async function invoke(method: IpcMethod, arg: any, arg2?: any): Promise<unknown>
       if (!PROVIDER_ID.test(String(arg)) || typeof c.nonce !== "string" || !/^\d{8}$/.test(String(c.code))) return bad("expected provider, nonce and the 8-digit code");
       return daemon.call("POST", `/engine/providers/${arg}/credential`, { nonce: c.nonce, approval: String(c.code) });
     }
+    case "engine.selectChat":
+      return arg === null ? daemon.call("POST", "/engine/select", { agent: "chat", provider: null }) : PROVIDER_ID.test(String(arg)) && typeof arg2 === "string" ? daemon.call("POST", "/engine/select", { agent: "chat", provider: String(arg), model: arg2 }) : bad("pick a provider and a model");
+    case "mcp.list":
+      return daemon.call("GET", "/engine/mcp");
+    case "mcp.add": {
+      const a = (arg ?? {}) as Record<string, unknown>;
+      const strMap = (x: unknown) => (x && typeof x === "object" ? Object.fromEntries(Object.entries(x as Record<string, unknown>).filter(([k, v]) => /^[A-Za-z0-9_-]{1,64}$/.test(k) && typeof v === "string" && v.length < 4000)) : undefined);
+      return daemon.call("POST", "/engine/mcp/add", {
+        name: String(a.name ?? "").slice(0, 60),
+        type: a.type === "http" ? "http" : "stdio",
+        ...(typeof a.command === "string" ? { command: a.command.slice(0, 500) } : {}),
+        ...(Array.isArray(a.args) ? { args: a.args.map(String).slice(0, 40) } : {}),
+        ...(typeof a.url === "string" ? { url: a.url.slice(0, 500) } : {}),
+        ...(strMap(a.env) ? { env: strMap(a.env) } : {}),
+        ...(strMap(a.headers) ? { headers: strMap(a.headers) } : {}),
+      });
+    }
+    case "mcp.remove":
+      return daemon.call("POST", "/engine/mcp/remove", { id: String(arg) });
+    case "mcp.test":
+      return daemon.call("POST", "/engine/mcp/test", { id: String(arg) });
+    case "mcp.enable": {
+      // turning a server on for the trader comes back as a config payload: Touch ID (ate-approve) or the one-time code
+      const a = (arg ?? {}) as { id?: unknown; agent?: unknown; on?: unknown };
+      const r1 = await daemon.call<{ servers?: unknown; nonce?: string; expiresAt?: number; payload?: ApprovalPayload; codeIssued?: boolean }>("POST", "/engine/mcp/enable", { id: String(a.id), agent: a.agent === "trader" ? "trader" : "chat", on: a.on === true });
+      if (!r1.ok || !r1.data.nonce || !r1.data.payload) return r1;
+      const sig = await signApproval(r1.data.payload);
+      if (sig.ok) return daemon.call("POST", "/engine/mcp/enable", { nonce: r1.data.nonce, approval: sig.signature });
+      return r1.data.codeIssued ? { ok: true, data: { needsCode: true, nonce: r1.data.nonce, expiresAt: r1.data.expiresAt } } : bad(`Touch ID unavailable (${sig.code}) and no one-time code was issued`);
+    }
+    case "mcp.confirm":
+      return /^\d{8}$/.test(String(arg2)) ? daemon.call("POST", "/engine/mcp/enable", { nonce: String(arg), approval: String(arg2) }) : bad("enter the 8-digit code");
     case "engine.select":
       return PROVIDER_ID.test(String(arg)) ? daemon.call("POST", "/engine/select", { provider: String(arg), ...(typeof arg2 === "string" ? { model: arg2 } : {}) }) : bad("unknown provider");
     case "ai.health":

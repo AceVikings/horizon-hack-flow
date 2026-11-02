@@ -320,6 +320,19 @@ export class CloudBridge {
       return this.d.daemon.call("POST", `/engine/providers/${a}/credential`, { nonce: r1.data.nonce, approval: sig });
     },
     "engine.confirm": async () => bad("the cloud approves with a passkey"),
+    "engine.selectChat": async (_c, a, b) => (a === null ? this.d.daemon.call("POST", "/engine/select", { agent: "chat", provider: null }) : PROVIDER_ID.test(String(a)) && typeof b === "string" ? this.d.daemon.call("POST", "/engine/select", { agent: "chat", provider: String(a), model: b }) : bad("pick a provider and a model")),
+    "mcp.list": async () => this.d.daemon.call("GET", "/engine/mcp"),
+    "mcp.add": async (_c, a) => this.d.daemon.call("POST", "/engine/mcp/add", a ?? {}),
+    "mcp.remove": async (_c, a) => this.d.daemon.call("POST", "/engine/mcp/remove", { id: String(a) }),
+    "mcp.test": async (_c, a) => this.d.daemon.call("POST", "/engine/mcp/test", { id: String(a) }),
+    // no Touch ID in a browser: turning a server on for the trader goes through the daemon's one-time code
+    "mcp.enable": async (_c, a) => {
+      const x = (a ?? {}) as { id?: unknown; agent?: unknown; on?: unknown };
+      const r = await this.d.daemon.call<{ nonce?: string; expiresAt?: number; codeIssued?: boolean }>("POST", "/engine/mcp/enable", { id: String(x.id), agent: x.agent === "trader" ? "trader" : "chat", on: x.on === true });
+      if (!r.ok || !r.data.nonce) return r;
+      return r.data.codeIssued ? { ok: true, data: { needsCode: true, nonce: r.data.nonce, expiresAt: r.data.expiresAt } } : bad("approval needed but no one-time code was issued");
+    },
+    "mcp.confirm": async (_c, a, b) => (/^\d{8}$/.test(String(b)) ? this.d.daemon.call("POST", "/engine/mcp/enable", { nonce: String(a), approval: String(b) }) : bad("enter the 8-digit code")),
     "engine.select": async (_c, a, b) => (PROVIDER_ID.test(String(a)) ? this.d.daemon.call("POST", "/engine/select", { provider: String(a), ...(typeof b === "string" ? { model: b } : {}) }) : bad("unknown provider")),
     "candidates.get": async (_c, a) => this.d.daemon.tool("ate_candidates_get", (MARKET_IDS as readonly string[]).includes(a) ? { market: a as MarketId } : {}),
     "charts.chart": async (_c, a) => (a && typeof a === "object" ? this.d.daemon.tool("ate_chart", a as never) : bad("expected a chart input")),
