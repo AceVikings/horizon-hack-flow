@@ -19,7 +19,7 @@ export function Footer() {
           <ul className={list}>
             <li><a href="#how">How it works</a></li>
             <li><a href="#proof">Testnet proof</a></li>
-            <li><a href="#get">Download for macOS and Windows (coming soon)</a></li>
+            <li><a href="#get">Download for macOS and Windows</a></li>
           </ul>
         </nav>
         <nav aria-label="Docs">

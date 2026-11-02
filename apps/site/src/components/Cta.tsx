@@ -1,16 +1,21 @@
 import { useState, type FormEvent } from "react";
 import { DocsButton, wrap } from "../ui";
+import { downloads } from "../downloads";
 
 const WAITLIST_TO = "hello@flowverse.cloud";
 
-function SoonButton({ label }: { label: string }) {
+function DownloadButton({ label, href }: { label: string; href: string | null }) {
+  const cls =
+    "inline-flex h-[68px] items-center rounded-xl bg-charcoal px-9 font-display text-[24px] leading-none text-white uppercase no-underline shadow-[0_20px_40px_-12px_rgba(23,30,25,0.5)] transition-shadow hover:shadow-[0_26px_50px_-14px_rgba(23,30,25,0.55)] max-sm:w-full max-sm:justify-center";
+  if (href)
+    return (
+      <a href={href} className={`${cls} cursor-pointer`} download>
+        {label}
+      </a>
+    );
   return (
-    <span
-      role="button"
-      aria-disabled="true"
-      className="inline-flex h-[68px] cursor-default items-center rounded-xl bg-charcoal px-9 font-display text-[24px] leading-none text-white uppercase no-underline opacity-92 shadow-[0_20px_40px_-12px_rgba(23,30,25,0.5)] transition-shadow hover:shadow-[0_26px_50px_-14px_rgba(23,30,25,0.55)] max-sm:w-full max-sm:justify-center"
-    >
-      {label}
+    <span role="button" aria-disabled="true" className={`${cls} cursor-default opacity-92`}>
+      {label} · coming soon
     </span>
   );
 }
@@ -92,11 +97,11 @@ export function Cta() {
           <span className="block text-balance">Let it trade.</span> <span className="block text-balance">Know the worst case.</span>
         </h2>
         <p className="mt-7 max-w-2xl text-[clamp(19px,1rem+0.6vw,24px)] font-medium">
-          Flow runs on your computer. macOS and Windows apps are coming soon.
+          {downloads.win ? "Flow runs on your computer. Get it for macOS or Windows." : "Flow runs on your computer. Get it for macOS; Windows is coming soon."}
         </p>
         <div className="mt-10 flex flex-wrap justify-center gap-x-[18px] gap-y-3.5 max-sm:w-full max-sm:flex-col">
-          <SoonButton label="macOS · coming soon" />
-          <SoonButton label="Windows · coming soon" />
+          <DownloadButton label="macOS" href={downloads.mac} />
+          <DownloadButton label="Windows" href={downloads.win} />
           <DocsButton onYellow />
         </div>
         <Waitlist />

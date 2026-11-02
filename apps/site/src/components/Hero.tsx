@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { AppMock } from "./AppMock";
 import { AppleIcon, WindowsIcon } from "./icons";
 import { DocsButton, Hl, wrap } from "../ui";
+import { downloads } from "../downloads";
 
 const stats = [
   { label: "Per trade", value: "$100" },
@@ -9,14 +10,17 @@ const stats = [
   { label: "Held per vault", value: "$150" },
 ];
 
-function SoonButton({ icon, label }: { icon: ReactNode; label: string }) {
+function DownloadButton({ icon, label, href }: { icon: ReactNode; label: string; href: string | null }) {
+  const cls =
+    "inline-flex h-16 items-center gap-3 rounded-xl border-2 border-charcoal bg-yellow px-8 font-display text-[22px] leading-none text-charcoal uppercase no-underline shadow-[5px_5px_0_var(--color-charcoal)] transition-[translate,box-shadow] hover:shadow-[4px_4px_0_var(--color-charcoal)] active:shadow-[4px_4px_0_var(--color-charcoal)] max-sm:justify-center";
+  if (href)
+    return (
+      <a href={href} className={`${cls} cursor-pointer`} download>
+        {icon} {label}
+      </a>
+    );
   return (
-    <span
-      role="button"
-      aria-disabled="true"
-      title="Coming soon"
-      className="inline-flex h-16 cursor-default items-center gap-3 rounded-xl border-2 border-charcoal bg-yellow px-8 font-display text-[22px] leading-none text-charcoal uppercase no-underline opacity-92 shadow-[5px_5px_0_var(--color-charcoal)] transition-[translate,box-shadow] hover:shadow-[4px_4px_0_var(--color-charcoal)] active:shadow-[4px_4px_0_var(--color-charcoal)] max-sm:justify-center"
-    >
+    <span role="button" aria-disabled="true" title="Coming soon" className={`${cls} cursor-default opacity-92`}>
       {icon} {label}{" "}
       <small className="ml-1 font-sans text-[13px] leading-none font-semibold tracking-normal normal-case opacity-75">
         Coming soon
@@ -50,12 +54,12 @@ export function Hero() {
           so a bad prompt or a stolen key can't cost more than the limits you set.
         </p>
         <div className="mt-[38px] flex flex-wrap items-center justify-center gap-x-[18px] gap-y-3.5 max-sm:w-full max-sm:flex-col max-sm:items-stretch">
-          <SoonButton icon={<AppleIcon />} label="macOS" />
-          <SoonButton icon={<WindowsIcon />} label="Windows" />
+          <DownloadButton icon={<AppleIcon />} label="macOS" href={downloads.mac} />
+          <DownloadButton icon={<WindowsIcon />} label="Windows" href={downloads.win} />
           <DocsButton />
         </div>
         <p className="mt-[18px] text-[14px] text-fg-mute">
-          Desktop apps for macOS and Windows are coming soon. Testnet today, mainnet next.
+          {downloads.win ? "macOS (Apple silicon) and Windows." : "macOS (Apple silicon) now, Windows soon."} Testnet today, mainnet next.
         </p>
 
         <dl className="mt-16 grid w-full max-w-[980px] grid-cols-[repeat(4,1fr)] overflow-hidden rounded-2xl border border-line-2 bg-white max-sm:mt-12 max-sm:grid-cols-[repeat(2,1fr)]">
