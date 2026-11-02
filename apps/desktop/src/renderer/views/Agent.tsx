@@ -10,6 +10,7 @@ import { ago, int } from "../src/format";
 import { PageHead, useNav } from "../src/shell";
 import { Btn, Seg } from "../src/ui";
 import { CodeApprove, approveRiskier } from "./approveCode";
+import { strat as stratCall, type SavedStrategy } from "./strategyKit";
 import type { ViewProps } from "./registry";
 
 type Mode = "autonomous" | "propose" | "watch";
@@ -38,8 +39,8 @@ function profileOf(s: StrategyGetOutput | null, m: MarketId): RiskProfile | null
 
 const mmss = (s: number) => `${Math.floor(Math.max(0, s) / 60)}:${String(Math.max(0, s) % 60).padStart(2, "0")}`;
 const scopeLabel = (s: string) => (s === "portfolio" ? "all" : (MARKETS[s as MarketId]?.asset.replace("WHSK", "HSK").replace("WBTC", "BTC") ?? s));
-const FIELD: Record<string, string> = { stopLossBps: "Sell-if-down", takeProfitBps: "Take profit", tradeSizeUsd: "Trade size", entrySpreadBps: "Entry gap", minNetEdgeBps: "Min edge", targetAssets: "Holds", cycleSeconds: "Checks every", maxPositionUsd: "Max position" };
-const val = (f: string, v: unknown) => (Array.isArray(v) ? (v.length ? v.map((x) => String(x).replace(/^W/, "")).join(", ") : "cash only") : f.endsWith("Bps") ? `${Number(v) / 100}%` : f.endsWith("Usd") ? `$${Number(v)}` : f === "cycleSeconds" ? `${v} s` : String(v));
+const FIELD: Record<string, string> = { customStrategy: "Strategy", minEntryIntervalSec: "Time between buys", stopLossBps: "Sell-if-down", takeProfitBps: "Take profit", tradeSizeUsd: "Trade size", entrySpreadBps: "Entry gap", minNetEdgeBps: "Min edge", targetAssets: "Holds", cycleSeconds: "Checks every", maxPositionUsd: "Max position" };
+const val = (f: string, v: unknown) => (f === "customStrategy" ? (v ? String(v).replace(/ 0x[0-9a-f]+$/i, "") : "preset") : f === "minEntryIntervalSec" ? `${Math.round(Number(v) / 60)} min` : Array.isArray(v) ? (v.length ? v.map((x) => String(x).replace(/^W/, "")).join(", ") : "cash only") : f.endsWith("Bps") ? `${Number(v) / 100}%` : f.endsWith("Usd") ? `$${Number(v)}` : f === "cycleSeconds" ? `${v} s` : String(v));
 const via = (v: string) => (v === "chat" ? "From Ask" : v === "ui" ? "From this app" : v === "session" ? "From ate chat" : `From ${v}`);
 
 export default function Agent(_: ViewProps) {
@@ -54,6 +55,7 @@ export default function Agent(_: ViewProps) {
   const ai = useRemote<AiHealth>(() => (ate.ai ? ate.ai.health() : offline("AI engine needs the live daemon")), [], { every: 15000 });
   const prov = useRemote<EngineProviders>(() => (ate.engine ? ate.engine.providers() : offline("AI engine needs the live daemon")), [], { every: 30000 });
   const pend = useRemote<PendingChange[]>(() => (ate.approvals ? ate.approvals.list() : Promise.resolve({ ok: true as const, data: [] })), [], { every: 4000 });
+  const strats = useRemote(() => stratCall<{ strategies: SavedStrategy[]; pending: { id: string; spec: { name: string }; sentences: string[]; via: string; expiresAt: number }[] }>(ate, "/strategies"), [], { every: 15000 });
 
   const t = trader.last;
   const st = vsOk?.status;
@@ -166,6 +168,26 @@ export default function Agent(_: ViewProps) {
         </section>
       )}
 
+      {(strats.last?.pending ?? []).map((p) => (
+        <section key={p.id} className="card" style={{ border: "2px solid var(--c)", padding: "16px 20px", marginBottom: 22 }} aria-label="Save this strategy?">
+          <header className="ch">
+            <h2 className="h4">Save “{p.spec.name}”?</h2>
+          </header>
+          <div className="sm">From Ask. Saving does not change what trades.</div>
+          {p.sentences.slice(0, 4).map((x, k) => (
+            <div key={k} className="sm" style={{ marginTop: 6 }}>
+              {x}
+            </div>
+          ))}
+          <div className="row g8" style={{ marginTop: 12 }}>
+            <Btn kind="pri" onClick={() => void stratCall<SavedStrategy>(ate, "/strategies/confirm-save", { pendingId: p.id }).then((r) => (r.ok ? (toast({ kind: "ok", text: "Strategy saved" }), go(`strategy/${r.data.id}`)) : toast({ kind: "error", text: r.error.message })))}>
+              Save
+            </Btn>
+            <Btn onClick={() => void stratCall(ate, "/strategies/drop-save", { pendingId: p.id }).then(() => strats.reload())}>Not now</Btn>
+          </div>
+        </section>
+      ))}
+
       <div className="sentence" style={{ fontSize: 20 }} role="status">
         {status || "Reading your agent…"}
       </div>
@@ -197,6 +219,9 @@ export default function Agent(_: ViewProps) {
         ))}
       </div>
       {s && !preset && <div className="xs fg2" style={{ marginTop: 8 }}>Your settings are custom. Pick one to reset both markets.</div>}
+
+      <h2 className="h4" style={{ marginTop: 32 }}>Your strategies</h2>
+      <YourStrategies list={strats.last?.strategies ?? null} error={strats.res && !strats.res.ok ? strats.res.error.message : null} />
 
       <h2 className="h4" style={{ marginTop: 32 }}>Model</h2>
       <div className="row g10" style={{ marginTop: 10, alignItems: "center", flexWrap: "wrap" }}>
@@ -250,6 +275,37 @@ export default function Agent(_: ViewProps) {
           </section>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Lane STRAT: the user's own strategies — one line each, the last test in plain words, where it trades. */
+function YourStrategies({ list, error }: { list: SavedStrategy[] | null; error: string | null }) {
+  const go = useNav();
+  return (
+    <div style={{ marginTop: 10 }}>
+      {list === null && <div className="sm fg2">{error ?? "Reading your strategies…"}</div>}
+      {list?.length === 0 && <div className="sm">Write your own rules in plain words, test them on past prices, then use them on HSK or BTC.</div>}
+      {list && list.length > 0 && (
+        <div className="card" style={{ padding: "4px 20px" }}>
+          {list.map((x, k) => (
+            <button key={x.id} className="row" onClick={() => go(`strategy/${x.id}`)} style={{ width: "100%", textAlign: "left", background: "none", border: 0, borderTop: k ? "1px solid var(--line)" : 0, padding: "14px 0", cursor: "pointer", alignItems: "flex-start" }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="b7" style={{ fontSize: 15 }}>
+                  {x.spec.name}
+                  {x.activeOn.length > 0 && <span className="sm b5"> · trading {x.activeOn.join(" and ")}</span>}
+                </div>
+                <div className="sm fg2" style={{ marginTop: 3 }}>{x.sentences[0]}</div>
+                <div className="sm" style={{ marginTop: 3 }}>{x.lastBacktest ? `${x.lastBacktest.line}.` : "Not tested yet."}</div>
+              </div>
+              <span className="sm b7" aria-hidden="true">Open ›</span>
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="row g10" style={{ marginTop: 12 }}>
+        <Btn onClick={() => go("strategy/new")}>New strategy</Btn>
+      </div>
     </div>
   );
 }

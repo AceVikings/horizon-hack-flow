@@ -307,6 +307,8 @@ export interface AteBridge {
   /** Additive (lane D4): read-only charts and tables (ate_chart / ate_data). */
   charts?: { chart(input: import("@ate/core").ChartInput): Promise<Res<import("@ate/core").ChartSpec>>; data(input: import("@ate/core").DataInput): Promise<Res<import("@ate/core").DataTable>> };
   cycle?: { request(): Promise<Res<{ started: boolean; reason?: string; cycle: number }>> };
+  /** Additive (lane STRAT): custom strategies, backtests, practice runs, training (daemon routes in STRAT_PATHS). */
+  strat?: { call<T = unknown>(path: StratPath, body?: unknown): Promise<Res<T>> };
   /** Additive (lane D3): the in-app agent engine (Anthropic SDK). setKey sends the key once to the daemon keychain. */
   ai?: { health(): Promise<Res<AiHealth>>; check(): Promise<Res<AiHealth>>; setKey(apiKey: string): Promise<Res<AiHealth>>; clearKey(): Promise<Res<AiHealth>>; config(p: AiConfigPatch): Promise<Res<AiHealth>> };
   /** Additive (lane D3): model providers for the in-app agents (Accounts). Replace/remove asks for Touch ID in main. */
@@ -399,6 +401,29 @@ export const IPC_METHODS = [
   "charts.chart",
   "charts.data",
   "cycle.request",
+  // lane STRAT (additive)
+  "strat.call",
 ] as const;
+
+/** Lane STRAT: the daemon routes `strat.call` may reach (GET for /strategies, POST otherwise). */
+export const STRAT_PATHS = [
+  "/strategies",
+  "/strategies/describe",
+  "/strategies/draft",
+  "/strategies/save",
+  "/strategies/remove",
+  "/strategies/use",
+  "/strategies/confirm-save",
+  "/strategies/drop-save",
+  "/strategies/adopt",
+  "/backtest",
+  "/practice/estimate",
+  "/practice/start",
+  "/practice/state",
+  "/practice/control",
+  "/train",
+  "/sweep",
+] as const;
+export type StratPath = (typeof STRAT_PATHS)[number];
 export type IpcMethod = (typeof IPC_METHODS)[number];
 export const EVENT_CHANNEL = "ate:event";

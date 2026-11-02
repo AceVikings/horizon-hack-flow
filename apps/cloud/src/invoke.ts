@@ -9,6 +9,7 @@ import { MARKET_IDS, type DaemonEvent, type MarketId, type StrategyApprovalPendi
 import { decodePayload, payloadBytes, renderReason, strategyPayload, tradePayload, writePinnedKey, type ApprovalPayload, type TradeApprovalBody } from "@ate/approve";
 import type { DaemonClient } from "../../desktop/src/main/daemon";
 import type { ChatMessage, IpcMethod, JournalFilter, Res, Settings } from "../../desktop/src/shared/bridge";
+import { STRAT_PATHS } from "../../desktop/src/shared/bridge";
 import { APPROVAL_RE, SETUP_GET_RE, SETUP_POST_RE, type DaemonState, type SetupIpc } from "../../desktop/src/shared/setup-bridge";
 import type { Auth } from "./auth.js";
 import type { RunCtx } from "./runs.js";
@@ -338,6 +339,8 @@ export class CloudBridge {
     "charts.chart": async (_c, a) => (a && typeof a === "object" ? this.d.daemon.tool("ate_chart", a as never) : bad("expected a chart input")),
     "charts.data": async (_c, a) => (a && typeof a === "object" ? this.d.daemon.tool("ate_data", a as never) : bad("expected a data input")),
     "cycle.request": async () => this.d.daemon.call("POST", "/cycle", {}),
+    // lane STRAT (additive): strategy routes only; "use" that raises risk returns a pending change (passkey / code)
+    "strat.call": async (_c, a, b) => ((STRAT_PATHS as readonly string[]).includes(String(a)) ? this.d.daemon.call(a === "/strategies" ? "GET" : "POST", String(a), a === "/strategies" ? undefined : (b ?? {})) : bad("unknown strategy route")),
   };
 
   /** Dispatch `ns.method` with positional args. */

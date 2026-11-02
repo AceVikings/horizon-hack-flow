@@ -52,6 +52,7 @@ const ate = Object.freeze({
   candidates: Object.freeze({ get: (m?: string) => call("candidates.get", m) }),
   charts: Object.freeze({ chart: (i: unknown) => call("charts.chart", i), data: (i: unknown) => call("charts.data", i) }),
   cycle: Object.freeze({ request: () => call("cycle.request") }),
+  strat: Object.freeze({ call: (path: string, body?: unknown) => call("strat.call", path, body) }),
   // CLOUD lane: owner actions run by the isolated owner service (FREEZE-NOTES CLOUD.3); Touch ID for risk-raising ones.
   owner: Object.freeze({
     status: () => ipcRenderer.invoke("ate:owner.status"),

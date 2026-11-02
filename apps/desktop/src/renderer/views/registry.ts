@@ -58,6 +58,9 @@ export const VIEWS: ViewDef[] = [
   { id: "setup", component: lazy(() => import("./setup/Wizard")), chrome: "setup" },
   { id: "ask", component: lazy(() => import("./Ask")) },
   { id: "agent", component: lazy(() => import("./Agent")) },
+  // lane STRAT: a strategy (new / saved: read-back, test on past data, use) and AI practice on past data
+  { id: "strategy", component: lazy(() => import("./Strategy")), nav: "agent" },
+  { id: "practice", component: lazy(() => import("./Practice")), nav: "agent" },
   { id: "proof", component: lazy(() => import("./Proof")) },
   { id: "payments", component: lazy(() => import("./Payments")) },
   { id: "settings", component: lazy(() => import("./setup/Settings")) },

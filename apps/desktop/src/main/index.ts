@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { DaemonEvent, MarketId } from "@ate/core";
 import { MARKET_IDS } from "@ate/core";
-import { EVENT_CHANNEL, IPC_METHODS, type ChatMessage, type IpcMethod, type JournalFilter, type PaymentsList, type Res, type Settings } from "../shared/bridge";
+import { EVENT_CHANNEL, IPC_METHODS, STRAT_PATHS, type ChatMessage, type IpcMethod, type JournalFilter, type PaymentsList, type Res, type Settings } from "../shared/bridge";
 import { DaemonClient } from "./daemon";
 import { signApproval } from "./approve";
 import type { ApprovalPayload } from "@ate/approve";
@@ -245,6 +245,9 @@ async function invoke(method: IpcMethod, arg: any, arg2?: any): Promise<unknown>
       return daemon.tool("ate_candidates_get", (MARKET_IDS as readonly string[]).includes(arg) ? { market: arg as MarketId } : {});
     case "cycle.request":
       return daemon.call("POST", "/cycle", {});
+    case "strat.call":
+      // lane STRAT: only the strategy routes; /strategies is the one GET
+      return (STRAT_PATHS as readonly string[]).includes(String(arg)) ? daemon.call(arg === "/strategies" ? "GET" : "POST", String(arg), arg === "/strategies" ? undefined : (arg2 ?? {}), /^\/(backtest|train|sweep|practice\/(estimate|start)|strategies\/draft)$/.test(String(arg)) ? 600_000 : 20_000) : bad("unknown strategy route");
     case "settings.get":
       return { ok: true, data: { ...settings, daemonPort: daemon.connection().port ?? null } };
     case "settings.set":

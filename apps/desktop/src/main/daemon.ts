@@ -100,14 +100,14 @@ export class DaemonClient {
   }
 
   /** Structured call for the approval routes: daemon errors (`{error:{code,message,details}}`) become Res errors. */
-  async call<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<Res<T>> {
+  async call<T>(method: "GET" | "POST", path: string, body?: unknown, timeoutMs = 20_000): Promise<Res<T>> {
     if (this.info.mode !== "live" || !this.rt) return { ok: false, error: { code: "ATE_DAEMON_LOCKED", message: this.info.detail ?? "daemon offline" } };
     try {
       const res = await fetch(this.base() + path, {
         method,
         headers: { "content-type": "application/json", origin: ORIGIN, authorization: `Bearer ${this.uiToken}` },
         body: body === undefined ? undefined : JSON.stringify(body),
-        signal: AbortSignal.timeout(20_000),
+        signal: AbortSignal.timeout(timeoutMs),
       });
       const text = await res.text();
       let j: any = {};
