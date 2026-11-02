@@ -227,7 +227,6 @@ export function Shell({ nav, chrome = "app", children }: { nav: string; chrome?:
             </div>
           ))}
         </div>
-        {conn?.mode === "fixtures" && <div className="fixbanner">Fixtures · synthetic data, no daemon</div>}
         <KillSwitchDialog open={kill} onClose={() => setKill(false)} />
       </Slots.Provider>
     </ShellC.Provider>
