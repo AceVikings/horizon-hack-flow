@@ -5,6 +5,7 @@ import { viaClaudeCode, type AiHealth } from "@shared/bridge";
 import { useApp } from "../../src/app";
 import {Btn, QR} from "../../src/ui";
 import { SubscriptionSignIn } from "./Subscriptions";
+import { OpencodeCard } from "./Opencode";
 import { Details, ErrLine, HandoffDialog, Section, Spinner, Wizard, go, useOwner, useSetup, useSetupGet, StatusText } from "./common";
 
 interface Fund {
@@ -90,6 +91,9 @@ function AiPart({ onState, rules, setRules }: { onState(ok: boolean): void; rule
       ) : h.credential === "none" ? (
         <>
           <SubscriptionSignIn onConnected={setSub} />
+          <div style={{ marginTop: 14 }}>
+            <OpencodeCard onUsed={() => setSub(true)} />
+          </div>
           <Details summary="Other ways to connect (advanced)">
           <div className="row g12">
             <input className="textin" type="password" autoComplete="off" spellCheck={false} placeholder="Anthropic API key (sk-ant-…)" aria-label="Anthropic API key" value={key} onChange={(e) => setKey(e.target.value)} />

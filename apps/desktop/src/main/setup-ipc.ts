@@ -5,7 +5,7 @@ import { randomBytes } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { dialog, safeStorage, shell, systemPreferences, type BrowserWindow, type IpcMain } from "electron";
 import { uiAttachPayload, type ApprovalPayload } from "@ate/approve";
 import type { Res } from "../shared/bridge";
@@ -323,6 +323,18 @@ export function registerSetupIpc(o: { ipcMain: IpcMain; daemon: DaemonClient; ap
       if (process.platform !== "darwin") return { ok: true, data: { opened: false, command } };
       const script = join(tmpdir(), `flow-proxy-login-${randomBytes(4).toString("hex")}.command`);
       writeFileSync(script, `#!/bin/sh\n# Opened by Flow: sign in to your subscription. Flow never sees this login.\nexec ${command}\n`, { mode: 0o700 });
+      execFileSync("/usr/bin/open", ["-a", "Terminal", script]);
+      return { ok: true, data: { opened: true, command } };
+    }
+    if (op === "opencode-login") {
+      // the user's own opencode CLI: `opencode auth login` in their Terminal (Flow never sees the login)
+      const dirs = [process.env.ATE_OPENCODE_BIN ? dirname(process.env.ATE_OPENCODE_BIN) : "", ...(process.env.PATH ?? "").split(":"), "/opt/homebrew/bin", "/usr/local/bin", join(homedir(), ".opencode/bin"), join(homedir(), ".local/bin")];
+      const ob = dirs.map((d) => (d ? join(d, "opencode") : "")).find((p) => p && existsSync(p));
+      if (!ob || !SAFE_PATH.test(ob)) return err("opencode is not installed on this Mac");
+      const command = `'${ob}' auth login`;
+      if (process.platform !== "darwin") return { ok: true, data: { opened: false, command } };
+      const script = join(tmpdir(), `flow-opencode-login-${randomBytes(4).toString("hex")}.command`);
+      writeFileSync(script, `#!/bin/sh\n# Opened by Flow: sign in to opencode. Flow never sees this login.\nexec ${command}\n`, { mode: 0o700 });
       execFileSync("/usr/bin/open", ["-a", "Terminal", script]);
       return { ok: true, data: { opened: true, command } };
     }

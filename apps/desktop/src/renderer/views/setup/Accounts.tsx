@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import {Btn} from "../../src/ui";
 import { PageHead } from "../../src/shell";
 import { SubscriptionSignIn, TERMS_LINE } from "./Subscriptions";
+import { OpencodeCard } from "./Opencode";
 import { Details, ErrLine, Spinner, useApproval, useSetup, useSetupGet, StatusText } from "./common";
 
 interface Model {
@@ -253,6 +254,9 @@ export default function Accounts() {
             <p className="ssec-s">Use the AI plan you already pay for. No API key needed.</p>
             <SubscriptionSignIn onConnected={() => pr.reload()} />
           </section>
+          <div style={{ marginTop: 18 }}>
+            <OpencodeCard />
+          </div>
           <Details summary="Other ways to connect (advanced)">
           <div className="provgrid" style={{ gridTemplateColumns: "1fr 1fr", marginTop: 8 }}>
             {main.map((p) => (
