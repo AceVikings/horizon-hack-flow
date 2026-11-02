@@ -23,6 +23,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { ToolName } from "@ate/core";
 import { TOOL_DEFINITIONS } from "@ate/mcp";
+import { bestModel, type ProxySidecar } from "./sidecar.js";
 import {
   PROVIDERS,
   PROVIDER_IDS,
@@ -66,7 +67,7 @@ export interface AiConfig {
   chatEffort: Effort;
   providers: Partial<Record<ProviderId, ProviderSettings>>;
 }
-export type CredentialSource = "keychain" | "file" | "env" | "profile" | "none";
+export type CredentialSource = "keychain" | "file" | "env" | "profile" | "subscription" | "none";
 export interface AiHealth {
   provider: ProviderId;
   providerLabel: string;
@@ -291,9 +292,12 @@ export class AiEngine {
     private readonly home: string,
     private readonly env: NodeJS.ProcessEnv = process.env,
     private readonly clients: Clients = {},
+    /** The CLIProxyAPI sidecar behind the default "subscription" provider. */
+    readonly sidecar?: ProxySidecar,
   ) {
     this.keys = new ProviderKeys(home, env);
-    this.cfg = { provider: "anthropic", model: DEFAULT_MODEL, engine: "sdk", traderEffort: "low", chatEffort: "low", providers: {} };
+    // default: the user's own subscriptions through the sidecar; "" = pick the best model the subscription offers
+    this.cfg = { provider: "subscription", model: "", engine: "sdk", traderEffort: "low", chatEffort: "low", providers: {} };
     try {
       const j = JSON.parse(readFileSync(join(home, "ai.json"), "utf8")) as Partial<AiConfig> & { models?: Partial<Record<ProviderId, ModelInfo[]>> };
       this.cfg = {
@@ -309,7 +313,9 @@ export class AiEngine {
     } catch {
       /* defaults */
     }
+    if (isProviderId(env.ATE_AI_PROVIDER)) this.cfg.provider = env.ATE_AI_PROVIDER;
     if (typeof env.ATE_AI_MODEL === "string" && env.ATE_AI_MODEL) this.cfg.model = env.ATE_AI_MODEL;
+    if (this.cfg.provider === "anthropic" && !this.cfg.model) this.cfg.model = DEFAULT_MODEL;
   }
 
   get config(): AiConfig {
@@ -336,7 +342,8 @@ export class AiEngine {
     const info = model ? this.modelInfo(provider, model) : null;
     if (info && info.tools === false) throw Object.assign(new ToolsUnsupportedError(provider, model), { status: 400, code: "ATE_CONFIG_INVALID" });
     if (p.engine === "claude-code" && provider !== "anthropic") throw Object.assign(new Error("the Claude Code CLI engine only runs Anthropic models"), { status: 400, code: "ATE_CONFIG_INVALID" });
-    model = model || this.cfg.model;
+    // subscription with no explicit model = automatic (best model the subscription offers)
+    model = provider === "subscription" && !p.model && provider !== this.cfg.provider ? "" : model || this.cfg.model;
     this.cfg = {
       ...this.cfg,
       provider,
@@ -372,17 +379,32 @@ export class AiEngine {
   }
 
   private baseURL(id: ProviderId): string | undefined {
+    if (id === "subscription") return this.sidecar?.baseURL ?? PROVIDERS.subscription.baseURL;
     return this.cfg.providers[id]?.baseURL ?? PROVIDERS[id].baseURL;
   }
-  private protocolOf(id: ProviderId): "anthropic" | "openai" | "gemini" {
+  /** Wire protocol: subscriptions speak Claude-compatible for Claude models and OpenAI-compatible for the rest. */
+  private protocolOf(id: ProviderId, model = this.effectiveModel()): "anthropic" | "openai" | "gemini" {
+    if (id === "subscription") return /^claude/i.test(model) ? "anthropic" : "openai";
     return id === "proxy" ? (this.cfg.providers.proxy?.protocol ?? "openai") : PROVIDERS[id].protocol;
+  }
+  /** The model the agents use: the chosen one, or (subscription, none chosen / gone) the best the subscription offers. */
+  effectiveModel(): string {
+    if (this.cfg.provider !== "subscription") return this.cfg.model;
+    const ids = (this.models_.subscription ?? []).filter((m) => m.tools !== false).map((m) => m.id);
+    if (this.cfg.model && (ids.length === 0 || ids.includes(this.cfg.model))) return this.cfg.model;
+    return bestModel(ids) ?? this.cfg.model;
   }
 
   credentialOf(id: ProviderId): ProviderStatus["credential"] {
+    if (id === "subscription") return { source: this.subscriptionReady() ? "subscription" : "none", hint: null, stored: false };
     return this.keys.source(id);
+  }
+  private subscriptionReady(): boolean {
+    return !!this.sidecar?.ready || (!!this.health_.subscription?.ok && (this.models_.subscription?.length ?? 0) > 0);
   }
   configured(id: ProviderId): boolean {
     const def = PROVIDERS[id];
+    if (id === "subscription") return this.subscriptionReady();
     // the proxy has a default URL; it counts as set up once the user saved settings or a test reached it
     if (id === "proxy") return !!this.cfg.providers.proxy?.baseURL || !!this.health_.proxy?.ok;
     if (def.key === "none") return true;
@@ -433,8 +455,13 @@ export class AiEngine {
   async test(id: ProviderId): Promise<ProviderStatus> {
     const at = nowSec();
     try {
-      if (id !== "proxy" && !this.configured(id)) throw Object.assign(new Error("No API key for this provider"), { kind: "no_credentials" });
-      const proto = this.protocolOf(id);
+      if (id === "subscription" && this.sidecar) {
+        const st = await this.sidecar.check();
+        if (!st.healthy) throw Object.assign(new Error(st.installed ? "Your subscription proxy is not running" : "Your subscription proxy is not installed yet"), { kind: "no_credentials" });
+      }
+      if (id !== "proxy" && id !== "subscription" && !this.configured(id)) throw Object.assign(new Error("No API key for this provider"), { kind: "no_credentials" });
+      // model listing always goes through the OpenAI-compatible /v1/models on the subscription proxy
+      const proto = id === "subscription" ? "openai" : this.protocolOf(id);
       const client = proto === "anthropic" ? this.anthropicClient(id) : proto === "gemini" ? this.geminiClient() : this.openaiClient(id);
       const ms = await listModels(id, client, { baseURL: this.baseURL(id) });
       this.models_[id] = id === "anthropic" ? ms.filter((m) => /^claude-/.test(m.id)) : ms;
@@ -450,14 +477,15 @@ export class AiEngine {
 
   health(): AiHealth {
     const p = this.cfg.provider;
-    const info = this.modelInfo(p, this.cfg.model);
+    const eff = this.effectiveModel();
+    const info = this.modelInfo(p, eff);
     const st = this.providers().find((x) => x.id === p)!;
     return {
       provider: p,
       providerLabel: PROVIDERS[p].label,
       engine: this.cfg.engine,
-      model: this.cfg.model,
-      modelLabel: info?.label ?? this.cfg.model,
+      model: eff,
+      modelLabel: info?.label ?? (eff || "best available"),
       models: st.models.map((m) => ({ id: m.id, label: m.label, tools: m.tools })),
       credential: this.credential(),
       traderEffort: this.cfg.traderEffort,
@@ -501,7 +529,8 @@ export class AiEngine {
 
   /** A new, empty conversation on the selected provider and model. */
   conversation(): Conversation {
-    return { provider: this.cfg.provider, protocol: this.protocolOf(this.cfg.provider), model: this.cfg.model, items: [] };
+    const model = this.effectiveModel();
+    return { provider: this.cfg.provider, protocol: this.protocolOf(this.cfg.provider, model), model, items: [] };
   }
   /** Append a user message in the conversation's native format. */
   pushUser(c: Conversation, text: string): void {

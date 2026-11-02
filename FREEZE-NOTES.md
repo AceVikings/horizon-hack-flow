@@ -250,3 +250,21 @@ Lanes may **add** to frozen artifacts; changing anything here needs a lead-appro
    > repeat the numbers as a table: give one or two plain sentences on what the chart shows. Add indicators only when the
    > user asks for them. When the user trades manually, you inform and never trade or propose a trade for them; point them
    > to Trade or to Tools & guides for sizing and cost.
+8. **Default engine = your subscriptions (CLIProxyAPI sidecar).** Provider `subscription` (default; API-key providers
+   stay available under Accounts → "Other ways to connect (advanced)" and are never prompted). The daemon owns the
+   sidecar (`apps/daemon/src/sidecar.ts`): detects the user's binary (Flow-installed, `ATE_CLIPROXY_BIN`, PATH, brew
+   dirs) or installs the official release from github.com/router-for-me/CLIProxyAPI (platform asset, sha256 checked
+   against the release's `checksums.txt`, unpacked into `<home>/bin/cliproxyapi-<version>`), writes
+   `<home>/cliproxy/config.yaml` (127.0.0.1 only, generated client key + management key kept in the keychain as
+   `flow/subscription-api-key` / `flow/subscription-mgmt-api-key`, management localhost-only, **no cloaking keys**),
+   starts it on 127.0.0.1:8317 (next free port up to 8326), health-checks `/v1/models`, stops it with the daemon.
+   Claude models go through the proxy's Claude-compatible endpoint (`@anthropic-ai/sdk`, baseURL = proxy), everything
+   else through its OpenAI-compatible `/v1` (`openai` SDK). Model "" = automatic: the best model the signed-in
+   subscriptions offer (Claude Opus → Sonnet → the GPT-5 family → Gemini Pro, newest first). Sign-in stays in the
+   user's terminal (the binary's own login flags, listed in `loginFlags`).
+   - `GET /engine/subscription` (ui|view) → `{ installed, bin, source: flow|user, version, running, owned, pid, port,
+     baseURL, healthy, models[], lastError, checkedAt, loginFlags[], selectedModel }`.
+   - `POST /engine/subscription/{install|start|stop|restart|check}` (ui) → same shape (install = download, verify, start).
+   - `GET /engine/providers` lists `subscription` first; `selected` gains `auto: true` while the model is automatic.
+     `POST /engine/select { provider: "subscription" }` (no model) returns to automatic.
+   - Env: `ATE_SIDECAR=0` keeps the daemon from starting the proxy; `ATE_AI_PROVIDER` / `ATE_AI_MODEL` override.

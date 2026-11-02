@@ -25,7 +25,9 @@ import type { ToolName } from "@ate/core";
 import { TOOL_DEFINITIONS } from "@ate/mcp";
 import { anthropicClient, loadStoredApiKey, modelCredentials, removeApiKey, storeApiKey } from "./setup/model.js";
 
-export type ProviderId = "anthropic" | "openai" | "gemini" | "openrouter" | "ollama" | "proxy";
+export type ProviderId = "subscription" | "anthropic" | "openai" | "gemini" | "openrouter" | "ollama" | "proxy";
+/** Keychain slots that are not a provider's own key (the managed proxy's management key). */
+export type SecretSlot = ProviderId | "subscription-mgmt";
 export type Protocol = "anthropic" | "openai" | "gemini";
 
 export interface ProviderDef {
@@ -42,6 +44,9 @@ export interface ProviderDef {
 }
 
 export const PROVIDERS: Record<ProviderId, ProviderDef> = {
+  // Default: the user's own subscriptions (Claude, ChatGPT/Codex, Gemini) through the CLIProxyAPI sidecar the daemon
+  // installs, starts and health-checks on 127.0.0.1 (./sidecar.ts). Its local client key is generated, never typed.
+  subscription: { id: "subscription", label: "Your subscriptions", protocol: "openai", baseURL: "http://127.0.0.1:8317/v1", key: "none", caps: { streaming: true } },
   anthropic: { id: "anthropic", label: "Anthropic", protocol: "anthropic", key: "required", keyPattern: /^sk-ant-[A-Za-z0-9_-]{20,200}$/, caps: { streaming: true } },
   openai: { id: "openai", label: "OpenAI", protocol: "openai", key: "required", keyPattern: /^sk-[A-Za-z0-9_-]{20,300}$/, caps: { streaming: true } },
   gemini: { id: "gemini", label: "Google Gemini", protocol: "gemini", key: "required", keyPattern: /^[A-Za-z0-9_-]{30,100}$/, caps: { streaming: false } },
@@ -78,7 +83,7 @@ export interface ModelInfo {
 
 // ------------------------------------------------------------------ credentials
 
-const svc = (id: ProviderId) => `flow/${id}-api-key`;
+const svc = (id: SecretSlot) => `flow/${id}-api-key`;
 const useKeychain = (env: NodeJS.ProcessEnv) => env.ATE_KEYSTORE !== "file" && process.platform === "darwin" && existsSync("/usr/bin/security");
 
 export class ProviderKeys {
@@ -89,10 +94,10 @@ export class ProviderKeys {
   get kind(): "keychain" | "file" {
     return useKeychain(this.env) ? "keychain" : "file";
   }
-  private file(id: ProviderId) {
+  private file(id: SecretSlot) {
     return join(this.home, "keys", `${id}-api-key`);
   }
-  load(id: ProviderId): string | null {
+  load(id: SecretSlot): string | null {
     if (id === "anthropic") return loadStoredApiKey(this.home, this.env);
     try {
       if (useKeychain(this.env)) return execFileSync("/usr/bin/security", ["find-generic-password", "-a", "ate", "-s", svc(id), "-w"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim() || null;
@@ -101,17 +106,17 @@ export class ProviderKeys {
       return null;
     }
   }
-  save(id: ProviderId, key: string): void {
+  save(id: SecretSlot, key: string): void {
     if (id === "anthropic") return void storeApiKey(this.home, key, this.env);
     if (useKeychain(this.env)) {
-      execFileSync("/usr/bin/security", ["add-generic-password", "-U", "-a", "ate", "-s", svc(id), "-l", `Flow · ${PROVIDERS[id].label} API key`, "-w", key], { stdio: "ignore" });
+      execFileSync("/usr/bin/security", ["add-generic-password", "-U", "-a", "ate", "-s", svc(id), "-l", `Flow · ${id in PROVIDERS ? PROVIDERS[id as ProviderId].label : id} key`, "-w", key], { stdio: "ignore" });
       return;
     }
     mkdirSync(join(this.home, "keys"), { recursive: true, mode: 0o700 });
     writeFileSync(this.file(id), key, { mode: 0o600 });
     chmodSync(this.file(id), 0o600);
   }
-  remove(id: ProviderId): void {
+  remove(id: SecretSlot): void {
     if (id === "anthropic") return removeApiKey(this.home, this.env);
     try {
       if (useKeychain(this.env)) execFileSync("/usr/bin/security", ["delete-generic-password", "-a", "ate", "-s", svc(id)], { stdio: "ignore" });
@@ -426,7 +431,12 @@ export function geminiClient(key: string | null): GoogleGenAI {
 }
 export function anthropicFor(home: string, env: NodeJS.ProcessEnv, id: ProviderId, key: string | null, baseURL?: string): Anthropic {
   if (id === "anthropic") return anthropicClient(home, env);
-  return new Anthropic({ apiKey: key ?? "not-needed", ...(baseURL ? { baseURL: baseURL.replace(/\/v1\/?$/, "") } : {}) });
+  return new Anthropic({
+    apiKey: key ?? "not-needed",
+    ...(baseURL ? { baseURL: baseURL.replace(/\/v1\/?$/, "") } : {}),
+    // the subscription proxy takes its client key as a bearer as well as x-api-key
+    ...(id === "subscription" && key ? { defaultHeaders: { authorization: `Bearer ${key}` } } : {}),
+  });
 }
 
 const NON_CHAT = /(embed|whisper|tts|dall-e|image|audio|moderation|transcribe|realtime|search|davinci|babbage|computer-use)/i;

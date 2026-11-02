@@ -3,6 +3,8 @@
 import { registerChatRoutes } from "./chat.js";
 import { registerAppRoutes } from "./app-routes.js";
 import { AiEngine } from "./engine.js";
+import { ProviderKeys } from "./providers.js";
+import { ProxySidecar } from "./sidecar.js";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -266,7 +268,9 @@ export async function startDaemon(o: StartOptions = {}): Promise<RunningDaemon> 
   }
   // /chat/token, /chat (chat runner with a per-session chat token) and /trade/approve (confirm mode).
   // In-app agent engine (Anthropic SDK) shared by the chat routes and the supervised trader.
-  const ai = new AiEngine(home, env);
+  // The default engine runs on the user's subscriptions through the CLIProxyAPI sidecar the daemon manages.
+  const sidecar = new ProxySidecar(home, new ProviderKeys(home, env), env);
+  const ai = new AiEngine(home, env, {}, sidecar);
   registerChatRoutes({ routes, tokens, service, home, emit, log, ai });
   // /setup/* (desktop onboarding + Settings), ui scope only.
   registerSetupRoutes({ routes, home, env, cfg, configPath, service, unlock, broadcast: (e) => http.broadcast(e), approval: approvalHandle, log });
@@ -280,7 +284,9 @@ export async function startDaemon(o: StartOptions = {}): Promise<RunningDaemon> 
   await service.init().catch((e) => log(`init: ${(e as Error).message}`));
   txq.start();
   if (o.scan !== false) service.startScan();
-  if (env.ATE_TRADER_RESUME !== "0") void app.trader.resume();
+  // start the subscription proxy first (if installed) so a resumed LLM trader finds its models
+  const sidecarUp = ai.config.provider === "subscription" && sidecar.detect() && env.ATE_SIDECAR !== "0" ? sidecar.start().then(() => ai.test("subscription")).catch((e) => log(`subscription proxy: ${(e as Error).message}`)) : Promise.resolve();
+  if (env.ATE_TRADER_RESUME !== "0") void sidecarUp.then(() => app.trader.resume());
 
   log(`listening on http://127.0.0.1:${port} (MCP: /mcp, events: /events) — ${signer.unlocked ? "unlocked" : "LOCKED (run `ate unlock`)"}`);
   tty(`read-only view: http://127.0.0.1:${port}/view#token=${viewToken}`);
@@ -298,6 +304,7 @@ export async function startDaemon(o: StartOptions = {}): Promise<RunningDaemon> 
     unlock,
     stop: async () => {
       await app.trader.stop(false);
+      await sidecar.stop();
       service.stopScan();
       txq.stop();
       await http.close();

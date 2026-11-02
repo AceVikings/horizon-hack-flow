@@ -102,8 +102,8 @@ describe("proof + trader routes", () => {
 describe("engine providers (Accounts)", () => {
   it("lists every provider; first key is stored directly, replace/remove need Touch ID or the one-time code", async () => {
     const list = (await (await req("GET", "/engine/providers", ui)).json()) as { selected: { provider: string }; providers: { id: string; configured: boolean; warning: string | null }[] };
-    expect(list.selected.provider).toBe("anthropic");
-    expect(list.providers.map((p) => p.id)).toEqual(["anthropic", "openai", "gemini", "openrouter", "ollama", "proxy"]);
+    expect(list.selected.provider).toBe("subscription");
+    expect(list.providers.map((p) => p.id)).toEqual(["subscription", "anthropic", "openai", "gemini", "openrouter", "ollama", "proxy"]);
     expect(list.providers.find((p) => p.id === "proxy")!.warning).toMatch(/terms/);
     const key = "sk-proj-" + "a".repeat(40);
     const first = (await (await req("POST", "/engine/providers/openai/credential", ui, { action: "set", apiKey: key })).json()) as { saved: boolean; provider: { configured: boolean } };

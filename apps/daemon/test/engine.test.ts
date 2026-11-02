@@ -117,7 +117,7 @@ describe("AiEngine", () => {
   it("falls back to plain tool schemas after a strict-mode 400", async () => {
     const bad = new Anthropic.BadRequestError(400, { type: "error", error: { type: "invalid_request_error", message: "schema" } }, "schema", new Headers());
     const { client, calls } = mockClient([bad, { content: [{ type: "text", text: "ok" }], stop_reason: "end_turn" }]);
-    const ai = new AiEngine(home(), { ATE_KEYSTORE: "file", ANTHROPIC_API_KEY: "sk-ant-test" }, anth(client));
+    const ai = new AiEngine(home(), { ATE_KEYSTORE: "file", ANTHROPIC_API_KEY: "sk-ant-test", ATE_AI_PROVIDER: "anthropic" }, anth(client));
     const c = ai.conversation();
     ai.pushUser(c, "x");
     const r = await ai.run("chat", c, { effort: "low", system: "s", toolNames: ["ate_positions"], call: async () => ({ content: "", isError: false }) });
@@ -147,10 +147,11 @@ describe("AiEngine", () => {
     expect(ai.credentialOf("openai").source).toBe("none");
   });
 
-  it("defaults to Anthropic / Opus 5.5 with low effort; refuses a model without tool use", () => {
+  it("defaults to your subscriptions (best model, automatic) with low effort; refuses a model without tool use", () => {
     const h = home();
     const ai = new AiEngine(h, { ATE_KEYSTORE: "file" });
-    expect(ai.config).toMatchObject({ provider: "anthropic", model: "claude-opus-5-5", engine: "sdk", traderEffort: "low", chatEffort: "low" });
+    expect(ai.config).toMatchObject({ provider: "subscription", model: "", engine: "sdk", traderEffort: "low", chatEffort: "low" });
+    expect(new AiEngine(h, { ATE_KEYSTORE: "file", ATE_AI_PROVIDER: "anthropic" }).config).toMatchObject({ provider: "anthropic", model: "claude-opus-5-5" });
     writeFileSync(join(h, "ai.json"), JSON.stringify({ provider: "anthropic", model: "claude-opus-5-5", models: { ollama: [{ id: "tiny", label: "tiny", tools: false, streaming: true }] } }));
     const ai2 = new AiEngine(h, { ATE_KEYSTORE: "file" });
     expect(() => ai2.setConfig({ provider: "ollama", model: "tiny" })).toThrow(/does not support tool use/);
@@ -166,7 +167,7 @@ describe("AiEngine", () => {
     const h = home();
     const bin = join(h, "claude");
     writeFileSync(bin, "#!/bin/sh\n", { mode: 0o755 });
-    const ai = new AiEngine(h, { ATE_KEYSTORE: "file", ATE_CLAUDE_BIN: bin, PATH: "" });
+    const ai = new AiEngine(h, { ATE_KEYSTORE: "file", ATE_CLAUDE_BIN: bin, PATH: "", ATE_AI_PROVIDER: "anthropic" });
     expect(ai.health()).toMatchObject({ credential: "none", claudeCli: bin });
     ai.setConfig({ engine: "claude-code" });
     expect((await ai.check()).lastCheck).toMatchObject({ reachable: true });
@@ -220,7 +221,7 @@ describe("in-app agents", () => {
       { content: [toolUse("t1", "ate_decide", { decision: "no_trade", market: "hsk-dex:WHSK/USDT:3000", reason: "no_signal", rationale: "nothing worth doing this cycle" })], stop_reason: "tool_use" },
       { content: [{ type: "text", text: "No trade." }], stop_reason: "end_turn" },
     ]);
-    const ai = new AiEngine(mkdtempSync(join(tmpdir(), "ate-ai-")), { ATE_KEYSTORE: "file", ANTHROPIC_API_KEY: "sk-ant-test" }, { anthropic: () => client });
+    const ai = new AiEngine(mkdtempSync(join(tmpdir(), "ate-ai-")), { ATE_KEYSTORE: "file", ANTHROPIC_API_KEY: "sk-ant-test", ATE_AI_PROVIDER: "anthropic" }, { anthropic: () => client });
     const scopes: string[] = [];
     const ex = createSdkTraderExecutor({
       ai,
@@ -244,7 +245,7 @@ describe("in-app agents", () => {
       { content: [toolUse("t1", "ate_positions", {})], stop_reason: "tool_use" },
       { content: [{ type: "text", text: "Up $0.31 today." }], stop_reason: "end_turn" },
     ]);
-    const ai = new AiEngine(mkdtempSync(join(tmpdir(), "ate-ai-")), { ATE_KEYSTORE: "file", ANTHROPIC_API_KEY: "sk-ant-test" }, { anthropic: () => client });
+    const ai = new AiEngine(mkdtempSync(join(tmpdir(), "ate-ai-")), { ATE_KEYSTORE: "file", ANTHROPIC_API_KEY: "sk-ant-test", ATE_AI_PROVIDER: "anthropic" }, { anthropic: () => client });
     const events: { type: string; data: Record<string, unknown> }[] = [];
     const scopes: string[] = [];
     const r = await runSdkChatTurn(
@@ -267,7 +268,7 @@ describe("hard per-cycle deadline (the 523 s hang)", () => {
   it("a request that never settles ends at the abort, and the timeout reaches the SDK call", async () => {
     const opts: unknown[] = [];
     const client = { beta: { messages: { stream: (_p: unknown, o: unknown) => (opts.push(o), { on() {}, finalMessage: () => never<never>() }) } }, models: { retrieve: async () => ({}) } } as unknown as LoopClient & Anthropic;
-    const ai = new AiEngine(mkdtempSync(join(tmpdir(), "ate-ai-")), { ATE_KEYSTORE: "file", ANTHROPIC_API_KEY: "sk-ant-test" }, { anthropic: () => client });
+    const ai = new AiEngine(mkdtempSync(join(tmpdir(), "ate-ai-")), { ATE_KEYSTORE: "file", ANTHROPIC_API_KEY: "sk-ant-test", ATE_AI_PROVIDER: "anthropic" }, { anthropic: () => client });
     const ex = createSdkTraderExecutor({ ai, service: { callTool: async () => ({ ok: true, data: {} }) } as never, promptFile: prompt, toolNames: ["ate_decide"], dryRun: false, context: [] });
     const ac = new AbortController();
     setTimeout(() => ac.abort(), 50);

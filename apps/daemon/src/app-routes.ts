@@ -119,7 +119,7 @@ class TraderSupervisor {
     const mode: TraderMode = b.mode === "propose" ? "propose" : "autonomous";
     const engine = b.engine === "rules" ? "rules" : "llm";
     if (typeof b.model === "string" && b.model && b.model !== this.o.ai.config.model) this.o.ai.setConfig({ model: b.model });
-    const model = this.o.ai.config.model;
+    const model = this.o.ai.effectiveModel();
     const viaCli = engine === "llm" && this.o.ai.config.engine === "claude-code" && this.o.ai.config.provider === "anthropic";
     if (engine === "llm" && !viaCli && !this.o.ai.available()) throw Object.assign(new Error(`${PROVIDERS[this.o.ai.config.provider].label} is not set up: add its API key under Accounts (or run on the rules engine)`), { status: 409, code: "ATE_CONFIG_INVALID" });
     const cycleSeconds = Math.max(30, Math.min(3600, Number(b.cycleSeconds) || 120));
@@ -555,7 +555,7 @@ export function registerAppRoutes(o: AppRoutesOptions): { trader: TraderSupervis
     const st = trader.state();
     if (st.running && st.engine === "llm" && (before.provider !== ai.config.provider || before.model !== ai.config.model || before.engine !== ai.config.engine)) await trader.start({ mode: st.mode, engine: "llm", cycleSeconds: st.cycleSeconds });
   };
-  r.register({ method: "GET", path: "/engine/providers", scopes: ["ui", "view"], handler: ({ json }) => json(200, { selected: { provider: ai.config.provider, model: ai.config.model, engine: ai.config.engine }, providers: ai.providers() }) });
+  r.register({ method: "GET", path: "/engine/providers", scopes: ["ui", "view"], handler: ({ json }) => json(200, { selected: { provider: ai.config.provider, model: ai.effectiveModel(), auto: ai.config.provider === "subscription" && !ai.config.model, engine: ai.config.engine }, providers: ai.providers() }) });
   r.register({
     method: "POST",
     path: "/engine/select",
@@ -567,9 +567,29 @@ export function registerAppRoutes(o: AppRoutesOptions): { trader: TraderSupervis
         const before = ai.config;
         ai.setConfig({ provider: b.provider, ...(typeof b.model === "string" ? { model: b.model } : {}), ...(b.engine === "sdk" || b.engine === "claude-code" ? { engine: b.engine } : {}) });
         await restartIfChanged(before);
-        return { selected: { provider: ai.config.provider, model: ai.config.model, engine: ai.config.engine }, providers: ai.providers() };
+        return { selected: { provider: ai.config.provider, model: ai.effectiveModel(), auto: ai.config.provider === "subscription" && !ai.config.model, engine: ai.config.engine }, providers: ai.providers() };
       }),
   });
+  // ---- the subscription proxy sidecar (CLIProxyAPI): status, one-click install, start / stop / restart, health
+  const sc = ai.sidecar;
+  const noSidecar = () => Object.assign(new Error("subscription proxy unavailable in this daemon"), { status: 404, code: "ATE_INTERNAL" });
+  r.register({ method: "GET", path: "/engine/subscription", scopes: ["ui", "view"], handler: ({ json }) => guard(json, () => (sc ? { ...sc.status(), selectedModel: ai.config.provider === "subscription" ? ai.effectiveModel() : null } : Promise.reject(noSidecar()))) });
+  for (const op of ["install", "start", "stop", "restart", "check"] as const) {
+    r.register({
+      method: "POST",
+      path: `/engine/subscription/${op}`,
+      scopes: ["ui"],
+      handler: ({ json }) =>
+        guard(json, async () => {
+          if (!sc) throw noSidecar();
+          const st = op === "install" ? await sc.install().then(() => sc.start()) : op === "start" ? await sc.start() : op === "stop" ? await sc.stop() : op === "restart" ? await sc.restart() : await sc.check();
+          if (st.healthy) await ai.test("subscription"); // refresh the model list (and the automatic model)
+          o.log?.(`engine: subscription proxy ${op} → ${st.healthy ? `healthy, ${st.models.length} models` : (st.lastError ?? "not running")}`);
+          return { ...sc.status(), selectedModel: ai.config.provider === "subscription" ? ai.effectiveModel() : null };
+        }),
+    });
+  }
+
   const pendingCred = new Map<string, { id: ProviderId; action: "set" | "remove"; key: string | null; expiresAt: number; payload: ApprovalPayload }>();
   for (const id of PROVIDER_IDS) {
     r.register({ method: "POST", path: `/engine/providers/${id}/test`, scopes: ["ui"], handler: ({ json }) => guard(json, () => ai.test(id)) });
