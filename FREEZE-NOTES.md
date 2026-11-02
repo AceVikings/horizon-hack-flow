@@ -386,3 +386,37 @@ Lanes may **add** to frozen artifacts; changing anything here needs a lead-appro
    `drawings` for zones), or call `ate_chart` and overlay. `ChartView` props: `look`, `logScale`, `drawings`,
    `onCrosshair` (OHLC readout), `drawTool`/`onDraw`. Wrap several charts in `<CrosshairLink>` to link crosshairs.
    Please don't fork the components; ask D4 for additive props.
+
+## STRAT. Custom strategies, backtests, practice runs, training (lane STRAT, additive)
+
+1. **Spec** `flow.strategy/v1` (`packages/core/src/custom-strategy.ts`, Zod, pure, also used by the renderer): name, kind
+   `rules|ai`, markets `HSK|BTC`, barMinutes, entry `{when: all|any, conditions}`, exit `{conditions, takeProfitPct,
+   stopLossPct, trailingStopPct, maxHoldHours}`, sizing `{usd|pct of the day's budget}`, limits `{maxTradesPerDay,
+   cooldownMin}`, instructions (AI kind). Condition `{signal, op: above|below|between|crosses_above|crosses_below, value,
+   value2?, period?, period2?, windowMin?, ma?, source?}`; signals gap_oracle, gap_cex (only when named), change, ema, sma,
+   vwap, rsi, bollinger, hour, pnl (exits), ma_cross, resistance, support, volatility, trend, volume. Price action reads
+   on-chain prices (pool, oracle between swaps). `describeStrategy` = the sentences; `specRisk`/`compareRisk` decide Touch ID
+   (bigger size, looser stop, more buys a day, shorter cooldown). Spec hash = sha256 of `canonicalJson`.
+2. **Core additions:** `GeneratorId` + `"custom"`, `Candidate.strategy?`, `MarketStrategyParams.custom?: CustomStrategyRef`,
+   `StrategyPatch.customStrategy?` / `minEntryIntervalSec?` (change records only). Tools `ate_backtest` (read-only; chat,
+   ui, view, agent) and `ate_strategy_save` (chat/ui; waits for the user's OK; never agent), `AGENT_EXCLUDED_TOOLS`.
+3. **Engine:** a market with `custom` runs `customDrafts` instead of spread-revert opens/rebalance (old spread-revert closes
+   stay); entries are sized by `entryBuyCap` (guard + vault caps bind); custom sells are turnover-exempt exits. Rules-kind
+   entries and every custom exit are executed by the daemon (agent scope, `[engine=rules]`) while the trader runs
+   autonomously (`service.customAuto`); AI-kind candidates go to the LLM (take, buy less or veto, never more).
+4. **Use on a market:** `POST /strategies/use {id|null, market}` → `customActivation` → `service.proposeStrategyChange`:
+   riskier → pending change (existing /strategy/approve, Touch ID or one-time code); safer → applied and journalled
+   `strategy_change` with "spec 0x…" in the rationale.
+5. **Daemon routes** (ui; `apps/daemon/src/strategies/index.ts`): /strategies (GET), /strategies/{describe,draft,save,remove,
+   use,confirm-save,drop-save,adopt}, /backtest, /practice/{estimate,start,state,control}, /train, /sweep. History is
+   mainnet only (Swap logs via the charts tables, APRO rounds, QuoterV2 depth). Drafts and practice use the selected engine
+   with `noExtraTools` (no user MCP servers); opencode practice runs in JSON mode (its MCP would reach the live daemon).
+6. **@ate/backtest:** `Simulator` (paper vaults, impact + 0.30% fee, trade/epoch/exposure caps, exit reserve, budget,
+   interval, guard stop + re-entry lock, breaker), `runBacktest`, `PracticeSession` (virtual clock, sampling, 90 s cutoff,
+   pause/step/stop; tools ate_market_get/candidates_get/positions/chart/propose/execute/decide answered from bars ≤ now),
+   `suggestImprovements`, `sweep` (70/30 hold-out + plain overfitting warning). Practice decisions never touch the journal.
+7. **Desktop:** `window.ate.strat.call(path, body)` (IPC `strat.call`, allowlist `STRAT_PATHS`; cloud invoke too).
+   Views `strategy/<id|new>` and `practice/<id>` (nav agent); Agent → "Your strategies".
+8. **Trader prompt:** before acting on a candidate the agent calls `ate_chart` (on-chain pool, 5 m and 1 h, EMA20/50, RSI14,
+   analyse) and opens each rationale's Details with an `Analysis:` line (trend, RSI, support/resistance, volatility, gap vs
+   cost, expected edge); tool budget ~14 within the 90 s cutoff.
