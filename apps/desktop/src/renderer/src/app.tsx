@@ -74,6 +74,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (r.ok) {
           setChain(r.data.status.chainId);
           setVsOk(r.data);
+          // The kill switch locks the agent key. Once the owner's unpause has landed on every vault, unlock it again
+          // (sealed passphrase, no prompt, same as opening the app) so the agent can trade and pause again.
+          const v = r.data.status.vaults;
+          if (r.data.status.locked && v.length && v.every((x) => !x.paused)) void ate.setup?.unlock();
           setFetchedAt(Math.floor(Date.now() / 1000));
           setStale(null);
         } else {
@@ -105,7 +109,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (e.type === "trade.rejected") toast({ kind: "error", text: `Refused on ${label(e.data.market)}: ${e.data.code}`, sub: e.data.message });
       if (e.type === "policy.violation") toast({ kind: "error", text: `Vault refused a trade (${e.data.code})`, ...(e.data.txHash ? { href: explorer.tx(e.data.txHash), hrefLabel: e.data.txHash } : {}) });
       if (e.type === "gas.low") toast({ kind: "error", text: `Agent gas low: ${e.data.agentHsk} HSK`, sub: `below ${e.data.thresholdHsk} HSK` });
-      if (e.type === "daemon.locked" && e.data.locked) toast({ kind: "error", text: "Daemon locked", sub: e.data.reason });
+      if (e.type === "daemon.locked" && e.data.locked) toast(e.data.reason === "ate_pause" ? { kind: "info", text: "Agent key locked until you resume" } : { kind: "error", text: "Daemon locked", sub: e.data.reason });
       refresh();
     });
     return () => {
