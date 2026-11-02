@@ -57,12 +57,21 @@ requires. A rerun reuses existing tokens, pools and liquidity. It deploys fresh 
 ## Run the daemon and the trader on 133
 
 ```sh
-node apps/daemon/scripts/testnet-config.mjs deployments/133.json ~/.ate-testnet/config.json   # validated §16 config
-ATE_HOME=~/.ate-testnet node apps/daemon/dist/bin.js keygen   # agent key (id ate-testnet-agent); must be the vault agent
-ATE_HOME=~/.ate-testnet ATE_DEPLOYMENTS=deployments/133.json node apps/daemon/dist/bin.js start
+node apps/daemon/scripts/testnet-config.mjs deployments/133.json ~/.ate-testnet/config.json --enable-strategy
+# import the vault's agent key into the encrypted store (no raw-key dev path); passphrase from env or stdin
+ATE_HOME=~/.ate-testnet ATE_KEYSTORE=file ATE_IMPORT_PRIVATE_KEY="$(jq -r '.[0].private_key' ~/.ate/testnet/agent.json)" \
+  node apps/daemon/dist/bin.js keygen
+ATE_HOME=~/.ate-testnet ATE_KEYSTORE=file ATE_DEPLOYMENTS=deployments/133.json \
+  node apps/daemon/dist/bin.js start --allow-rogue --approval-fallback=armed --profile WHSK=demo
 ATE_HOME=~/.ate-testnet node apps/daemon/dist/bin.js smoke --market WHSK --usd 5
-ATE_HOME=~/.ate-testnet ate agent run --mode autonomous   # trader (Lane C runner)
+ATE_HOME=~/.ate-testnet node apps/cli/dist/bin.js agent run --model sonnet --profile WHSK=demo --deployments deployments/133.json
+ATE_HOME=~/.ate-testnet ATE_ROGUE_TOKEN=<from the daemon terminal> node apps/cli/dist/bin.js rogue --market WHSK
+ATE_HOME=~/.ate-testnet node apps/cli/dist/bin.js chat --model sonnet   # session code: daemon terminal
 ```
+
+The fixture config ships with the strategy disabled, so without `--enable-strategy` the guard rejects every
+proposal. `ate chat` and strategy loosening need Touch ID, or the one-time code the daemon prints on its own
+terminal after you type `approval-fallback enable` there.
 
 A config with `chain.id: 133` makes the daemon switch the market, token and venue constants to the config's
 addresses at load (`applyConfigNetwork`). It also signs with chain ID 133. APRO does not exist on testnet, so
@@ -81,11 +90,26 @@ Live smoke on 2026-11-02:
 - WBTC: `0x8e8fbaa132d730f678f9dab4bab0e97fea020ac159c44796f5961ce0bb4ffeb1`, EAS UID `0x8d46…5a50`
 - The $5,000 `check()` returned 9 (`ERR_TRADE_CAP`) on both vaults.
 
+## Run on 2 Nov 2026
+
+The LLM trader, `ate rogue`, the guardian pause and `ate chat` ran against these vaults. Every link is in
+[`docs/JUDGE.md`](JUDGE.md). The journal export is [`testnet-133-journal.json`](testnet-133-journal.json). The WBTC
+pool (−150 bps) and the HSK pool (+200 bps) were moved off the Supra price with `OFFSET_BPS` for part of the run,
+then re-centered.
+
 ## Testnet caveats
 
 - **Nobody arbitrages the pools.** They sit at the Supra price from deploy time. When Supra moves more than 2.5%
-  (`maxOracleDeviationBps`), normal-path trades revert `ERR_ORACLE_DEVIATION`. To fix it, re-center the pool:
-  mint test tokens and swap toward the adapter price. Exit-path sells still work.
+  (`maxOracleDeviationBps`), normal-path trades revert `ERR_ORACLE_DEVIATION`. To fix it, re-center the pool.
+  The script mints test tokens to the deployer and swaps exactly to the adapter price. Exit-path sells still work.
+
+  ```sh
+  cd contracts && MARKET=hsk forge script script/RecenterTestnetPool.s.sol:RecenterTestnetPool \
+    --rpc-url https://testnet.hsk.xyz --private-key "$(jq -r '.[0].private_key' ~/.ate/testnet/deployer.json)" --broadcast
+  ```
+
+  `MARKET=btc` does the WBTC pool. `OFFSET_BPS=-150` moves the pool 150 bps below the adapter price instead. This
+  stages a price gap on purpose; say so wherever you show a trade that used it.
 - **Supra testnet updates slowly.** The pair was ~4 h old at deploy. The generated config enables pull refresh
   (testnet DORA, `refreshAgeSec` 43200), which keeps it inside `maxOracleAge` (90000 s).
 - **Wait for the TWAP.** Both pools need 300 s of history after creation before `observe([300,0])` works.
