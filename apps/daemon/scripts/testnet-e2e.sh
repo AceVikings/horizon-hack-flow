@@ -44,7 +44,10 @@ fi
 
 cd "$ROOT/apps/daemon"
 node scripts/testnet-config.mjs "$DEP" "$HOME_DIR/config.json" --rpc "$RPC" --scan-seconds 3600 >/dev/null
-export ATE_HOME="$HOME_DIR" ATE_DEPLOYMENTS="$DEP" ATE_AGENT_PRIVATE_KEY="$AGENT_PK" ATE_ALLOW_RAW_KEY=1 ATE_KEYSTORE=file
+export ATE_HOME="$HOME_DIR" ATE_DEPLOYMENTS="$DEP" ATE_KEYSTORE=file
+# import the agent key into the encrypted file store (not the raw-key dev path); throwaway passphrase per run
+ATE_AGENT_PASSPHRASE="$(openssl rand -hex 16)"; export ATE_AGENT_PASSPHRASE
+ATE_IMPORT_PRIVATE_KEY="$AGENT_PK" node dist/bin.js keygen >/dev/null
 node dist/bin.js start > "$HOME_DIR/daemon.log" 2>&1 &
 DAEMON=$!
 for _ in $(seq 1 30); do [ -f "$HOME_DIR/runtime.json" ] && break; sleep 1; done; sleep 3
