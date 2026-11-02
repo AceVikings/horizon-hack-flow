@@ -140,6 +140,15 @@ export class OwnerChain {
     throw new OwnerError(504, `${label}: not mined after several re-broadcasts (${t.hash})`);
   }
 
+  /** Load-balanced RPCs can lag a block behind the node that gave us the receipt: wait until the code is visible. */
+  private async codeAt(a: Address): Promise<void> {
+    for (let i = 0; i < 30; i++) {
+      const c = await this.pub.getCode({ address: a }).catch(() => undefined);
+      if (c && c !== "0x") return;
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+  }
+
   async send(label: string, to: Address, data: Hex, value = 0n): Promise<{ label: string; hash: Hex }> {
     const t = await this.submit({ to, data, value });
     const r = await this.mined(label, t);
@@ -155,6 +164,7 @@ export class OwnerChain {
     const t = await this.submit({ to: null, data });
     const r = await this.mined(label, t);
     if (r.status !== "success" || !r.contractAddress) throw new OwnerError(502, `${label} failed (${t.hash})`);
+    await this.codeAt(r.contractAddress);
     return { label, hash: t.hash, address: r.contractAddress };
   }
 
@@ -188,6 +198,7 @@ export class OwnerChain {
       const v = prior?.vault ? { address: prior.vault } : await this.create(`${k.toUpperCase()} vault`, `${vaultCode}${encodeAbiParameters(args.map(() => ({ type: "address" })), args).slice(2)}` as Hex);
       if ("hash" in v) txs.push(v as { label: string; hash: Hex });
       o.onStep?.({ market: id, adapter: a.address, vault: v.address });
+      await this.codeAt(v.address);
       const st = await this.vault(v.address, id);
       const g = o.guardian ?? (this.dep.guardian as Address);
       const sameLimits = (Object.keys(o.limits) as (keyof VaultLimits)[]).every((f) => BigInt(st.limits[f]) === BigInt(o.limits[f]));
