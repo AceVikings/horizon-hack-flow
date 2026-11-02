@@ -383,7 +383,7 @@ account, trading or wallet skill is installed, no API key exists) is vendored at
 The Vikings AWS account hosts a small Linux EC2 worker in a private subnet. A public NAT gateway in a
 separate public subnet owns Elastic IP `13.205.56.13`. There are no inbound ports; administration uses
 SSM Session Manager with an instance role limited to SSM, IMDSv2, and encrypted EBS. Operations detail:
-`docs/aws-hsp-worker.md`; templates in `infra/aws/`.
+an ops runbook and templates kept outside the repository (IaC is never committed).
 
 - **All HSP calls originate on the worker** (`ate-pay`). The desktop never calls HSP directly; its egress
   IP is not allowlisted.
