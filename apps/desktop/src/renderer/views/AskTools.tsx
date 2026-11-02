@@ -1,7 +1,7 @@
 // Ask extras (Flow v1): the chat model picker next to the composer (Ask's own model, persisted; the Agent screen keeps
 // the trader's) and the "Tools (MCP)" sheet — Flow's server, the user's opencode servers and servers added in Flow,
 // each enabled for Ask and for the trader separately (the trader needs Touch ID to get another server's tools).
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { EngineProvider, EngineProviders, McpServerInfo, Res } from "@shared/bridge";
 import { useApp, useRemote } from "../src/app";
 import { Btn, Dialog } from "../src/ui";
@@ -29,9 +29,24 @@ export function ChatModelPicker() {
     setOpen(false);
     prov.reload();
   };
+  // load model lists for connected providers that have none cached yet (e.g. OpenCode on first open)
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    if (!open || !ate.engine || !p) return;
+    const missing = p.providers.filter((x) => x.configured && x.models.length === 0 && !x.health);
+    if (!missing.length) return;
+    setLoading(true);
+    void Promise.all(missing.map((x) => ate.engine!.test(x.id))).finally(() => {
+      setLoading(false);
+      prov.reload();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, p?.providers.length]);
   const lists = useMemo(
     () =>
-      usable.map((x) => {
+      usable
+        .filter((x) => x.models.some((m) => m.tools !== false))
+        .map((x) => {
         const tools = x.models.filter((m) => m.tools !== false);
         const ids = tools.map((m) => m.id);
         const short = x.id === "opencode" || x.id === "subscription" || x.id === "openrouter" ? curate(ids) : ids.slice(0, 6);
@@ -51,7 +66,8 @@ export function ChatModelPicker() {
         <label className="row g8 sm" style={{ alignItems: "center", marginBottom: 12 }}>
           <input type="radio" name="askmodel" checked={!!chat && !chat.own} onChange={() => void pick(null)} /> Same as the Agent
         </label>
-        {lists.length === 0 && <div className="sm">No model provider is connected yet. Connect one in Accounts.</div>}
+        {loading && <div className="sm fg2">Loading models…</div>}
+        {!loading && lists.length === 0 && <div className="sm">No model provider is connected yet. Connect one in Accounts.</div>}
         {lists.map(({ prov: x, short, all: everything }) => {
           const shown = all ? everything.filter((m) => !needle || m.id.toLowerCase().includes(needle) || m.label.toLowerCase().includes(needle)) : short;
           return (
