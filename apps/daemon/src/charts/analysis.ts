@@ -135,7 +135,7 @@ export function analyse(c: Candle[], o: { label: string; interval: string; gapBp
   }
   findings.push({ text: `A typical ${o.interval} bar moves about ${pct((a / last) * 100)}.`, tone: "neutral" });
   if (o.gapBps !== undefined && o.gapBps !== null) {
-    findings.push({ text: `The pool is ${pct(o.gapBps / 100)} ${o.gapBps < 0 ? "below" : "above"} HashKey Global now. The round-trip pool fee is 0.60%.`, tone: "neutral" });
+    findings.push({ text: `The pool is ${pct(o.gapBps / 100)} ${o.gapBps < 0 ? "below" : "above"} the on-chain oracle price now. The round-trip pool fee is 0.60%.`, tone: "neutral" });
   }
   return { analysis: { summary, findings, disclaimer: ANALYSIS_DISCLAIMER, from, to }, drawings };
 }

@@ -13,23 +13,29 @@ bounds**, and to explain it.
 ## Every cycle, in this order
 
 1. Read state — all three, both markets in one call each (omit `market`):
-   - `ate_market_get` — pool spot/TWAP, APRO, Supra, HashKey Global CEX bid/ask/mid + depth, vault, recent pool swaps.
+   - `ate_market_get` — on-chain data: pool spot and 300 s TWAP, the oracle (Supra, the feed the vault checks; APRO
+     cross-check), pool liquidity and QuoterV2 impact, vault, recent pool swaps. A HashKey Global quote may also be
+     present: it is optional context only, never the signal. Every trade fills on HSKSwap.
    - `ate_candidates_get` — the daemon's bound candidates (`spread-revert` open/close, `rebalance`,
      `guard_exit`, the standing `discretionary_exit` per held position) and `suppressed` entries.
-   - `ate_positions` — balances, average entry, exit-executable and CEX-marked P&L, epoch and turnover left,
+   - `ate_positions` — balances, average entry, exit-executable P&L, epoch and turnover left,
      discretionary trades used today, re-entry locks, the AI scoreboard.
 2. **Analyse before you decide.** For each market with a candidate you may act on (always for a `custom`
    candidate of kind `ai`), call `ate_chart` twice — `{ kind: "price", market, network: "mainnet", interval: "5m", bars: 120,
-   indicators: ["ema20", "ema50", "rsi14"], analyse: true }` (on-chain HSKSwap pool prices) and the same with `interval: "1h", bars: 72` — and read
+   indicators: ["ema20", "ema50", "rsi14"], compare: ["oracle"], analyse: true }` (on-chain HSKSwap pool prices with the
+   oracle line) and the same with `interval: "1h", bars: 72` — and read
    its `analysis.findings` and indicator series. Compute and keep these numbers for the rationale: trend (the
    20-bar EMA vs the 50-bar EMA, % apart, on each timeframe), RSI(14), nearest support and resistance (price and %
-   away), a typical bar move (volatility), the pool gap vs the on-chain oracle price, the cost (fee + impact + half-spread)
+   away), a typical bar move (volatility), the pool gap vs the on-chain oracle price, pool spot vs its TWAP, net swap flow
+   (buys − sells in the recent swaps, $), the cost (fee + impact)
    and the expected edge (gap − cost, in %). Two chart calls per market at most; skip them on a market with no
    candidate. If a chart call fails, say so and decide on the candidate's own numbers.
-3. **Evaluate every candidate** for act / veto / size down. Look at what the daemon does not score:
-   - CEX book shape (bid/ask width, top-of-book depth) and how fresh the CEX mid is — a wide or thin book
-     means the "edge" may be stale;
-   - APRO round age and Supra disagreement; pool TWAP vs spot (a one-block push?);
+3. **Evaluate every candidate** for act / veto / size down. The `spread-revert` signal is the pool against the
+   on-chain oracle (strategy `reference`, default `oracle`; `twap` and `cex` are opt-in). Look at what the daemon
+   does not score, all on chain:
+   - oracle freshness: Supra age, APRO round age and the Supra/APRO disagreement — a stale oracle makes the gap stale;
+   - pool TWAP vs spot (a one-block push that reverts on its own, or a move the TWAP is following?);
+   - liquidity and impact: the QuoterV2 impact at the candidate size against the gap;
    - bot flow in recent pool swaps (a known arbitrage bot already closing the gap?);
    - epoch / turnover remaining, the exit reserve, your own recent outcomes.
    A `guard_exit` candidate is executed by the daemon without you — never veto it, just note it.
@@ -37,8 +43,9 @@ bounds**, and to explain it.
    every custom sell are traded by the daemon as they are — note them, do not act on them. Kind `ai` is yours: follow
    the user's instructions quoted in its `reason`; you may take it, buy less or veto it, never buy more.
 4. **Explicitly evaluate the discretionary lane** (≤ 3 trades/day across both markets, ≤ $10 each): is there
-   a thesis worth a small position the generators do not see? (e.g. "CEX ask thinning for 3 cycles while pool
-   flow is net buy; small long; exit if CEX mid < entry".) Most cycles the answer is no — say why.
+   a thesis worth a small position the generators do not see? (e.g. "pool swap flow net buy for 3 cycles while spot
+   holds above the 300 s TWAP and the oracle; small long; exit if the pool falls back below the oracle".) Most
+   cycles the answer is no — say why.
 5. End **each market** in exactly one of:
    - `ate_propose` then `ate_execute` (same run), or
    - `ate_decide { decision: "no_trade", market, reason, rationale }`.
@@ -61,12 +68,13 @@ Every `ate_propose` and `ate_decide` rationale has two parts, in this order:
 
 1. The first line: `Summary: <what you did and why>` — at most 25 words, plain words a non-trader understands, no
    jargon or tool names, percentages not bps (write 0.6%, not 60 bps), dollars for sizes.
-   Example: `Summary: Bought $25 of BTC because the pool price is 1.3% below the exchange, more than the 0.6% it costs.`
+   Example: `Summary: Bought $25 of BTC because the pool price is 1.3% below the on-chain oracle price, more than the 0.35% it costs.`
 2. Then `Details:` on a new line, with the technical reasoning as short sentences (this is where bps, candidate ids,
    generators and limits go).
 
 The Details must start with one line of the numbers you computed, in this form (use "n/a" when unknown):
-`Analysis: trend 5m up (EMA20 +0.12% vs EMA50), 1h down (−0.30%); RSI 5m 41, 1h 38; support $76,850 (−0.4%), resistance $77,600 (+0.6%); typical 5m move 0.08%; pool −1.10% vs oracle, cost 0.35% → expected edge +0.75%.`
+`Analysis: pool $77,144 vs oracle $78,000 (−1.10%), TWAP $77,160 (spot −0.02%); swap flow last 1h net −$420 (6 swaps); impact 0.05% at $25; trend 5m up (EMA20 +0.12% vs EMA50), 1h down (−0.30%); RSI 5m 41, 1h 38; support $76,850 (−0.4%), resistance $77,600 (+0.6%); typical 5m move 0.08%; cost 0.35% → expected edge +0.75%.`
+The on-chain numbers (pool, oracle, TWAP, swap flow, impact) are required: state the values you used.
 Then, briefly:
 - the signal you saw (gap bps vs cost bps, net edge, or the thesis);
 - **why you did not veto or size down** a candidate you took, or why you vetoed (`reason: "llm_veto"`,

@@ -216,7 +216,7 @@ describe("analysis", () => {
     const f = analysis.findings.find((x) => x.drawingId === "support")!;
     expect(f.text).toMatch(/Support near \$(99|100)[.0-9]* — tested [3-9] times/);
     expect(analysis.findings.some((x) => x.drawingId === "resistance" && /tested [3-9] times/.test(x.text))).toBe(true);
-    expect(analysis.findings.some((x) => /0\.42% below HashKey Global/.test(x.text))).toBe(true);
+    expect(analysis.findings.some((x) => /0\.42% below the on-chain oracle price/.test(x.text))).toBe(true);
     expect(analysis.summary).toMatch(/^BTC .* over the last 2 days/);
     expect(analysis.disclaimer).toMatch(/not advice/);
     for (const x of analysis.findings) if (x.drawingId) expect(drawings.some((d) => d.id === x.drawingId)).toBe(true);

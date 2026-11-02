@@ -318,12 +318,13 @@ export class ChartService {
     }
   }
 
-  /** Last pool-vs-exchange gap in bps for the analysis (null when either side is missing). */
-  private async gapBps(spec: ChartSpec, m: MarketId, iv: ChartInterval, bars: number): Promise<number | null> {
+  /** Last pool-vs-oracle gap in bps for the analysis — the on-chain oracle the vault checks (null when either side is missing). */
+  private async gapBps(spec: ChartSpec, m: MarketId, _iv: ChartInterval, _bars: number): Promise<number | null> {
     const pool = spec.series.find((s) => s.id === "pool")?.candles?.at(-1)?.c;
     if (!pool) return null;
-    const cex = spec.series.find((s) => s.id === "cmp_cex")?.points?.at(-1)?.v ?? (await this.cexCandles(m, iv, Math.min(bars, 5))).candles.at(-1)?.c;
-    return cex ? Math.round(((pool - cex) / cex) * 10_000) : null;
+    const live = (await this.d.snapshot())?.markets[m]?.price;
+    const oracle = live && live.oracle.price !== "0" ? e8(live.oracle.price) : spec.series.find((s) => s.id === "cmp_oracle")?.points?.at(-1)?.v;
+    return oracle ? Math.round(((pool - oracle) / oracle) * 10_000) : null;
   }
 
   // ------------------------------------------------------------------ series builders
