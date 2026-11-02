@@ -53,4 +53,9 @@ export const VIEWS: ViewDef[] = [
   { id: "home", component: lazy(() => import("./Overview")) },
   { id: "trade", component: lazy(() => import("./Markets")) },
   { id: "activity", component: lazy(() => import("./Activity")) },
+  { id: "unlock", component: lazy(() => import("./setup/Unlock")), chrome: "setup" },
+  { id: "welcome", component: lazy(() => import("./setup/Welcome")), chrome: "setup" },
+  { id: "setup", component: lazy(() => import("./setup/Wizard")), chrome: "setup" },
+  { id: "settings", component: lazy(() => import("./setup/Settings")) },
+  { id: "accounts", component: lazy(() => import("./setup/Accounts")) },
 ];
