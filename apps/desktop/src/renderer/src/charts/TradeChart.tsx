@@ -82,6 +82,14 @@ export function TradeChart({ market, height = 300 }: { market: MarketId; height?
   const last = candles?.at(-1);
   const r = readout ?? (last ? { t: last.t, o: last.o, h: last.h, l: last.l, c: last.c } : null);
 
+  // the agent's ate_chart lands on this chart: its indicators, drawings and findings, and the toolbar follows its spec
+  const applyAgent = (s: ChartSpec) => {
+    setAgentSpec(s);
+    setView("chart");
+    if (s.interval && INTERVALS.includes(s.interval)) setIv(s.interval);
+    if (s.input?.indicators) setInd(s.input.indicators.filter((i) => i !== "atr14").slice(-4));
+  };
+
   // ---- analyse without the agent (deterministic, same backend) and ask the agent
   const [analysing, setAnalysing] = useState(false);
   const analyseNow = async () => {
@@ -218,7 +226,7 @@ export function TradeChart({ market, height = 300 }: { market: MarketId; height?
           )}
           {spec && <p className="chsrc">{sourceLine(spec.sources)}{spec.notes[0] ? ` · ${spec.notes[0]}` : ""}</p>}
           {agentSpec && <AnalysisPanel spec={agentSpec} market={market} onHover={setHl} onClose={() => setAgentSpec(null)} />}
-          <AskChart market={market} context={`${label}, ${interval} bars${indicators.length ? `, indicators ${indicators.join(", ")}` : ""}`} onChart={setAgentSpec} />
+          <AskChart market={market} context={`${label}, ${interval} bars${indicators.length ? `, indicators ${indicators.join(", ")}` : ""}`} onChart={applyAgent} />
         </>
       )}
       {view === "depth" && <DepthView market={market} />}
@@ -289,7 +297,8 @@ function AskChart({ market, context, onChart }: { market: MarketId; context: str
         if (d.sessionId !== sid) return;
         if (e.type === "chat.tool") {
           const r = d.result as { ok?: boolean; data?: ChartSpec } | undefined;
-          if (d.tool === "ate_chart" && r?.ok && r.data && r.data.market === market && r.data.x.type === "time") cb.current(r.data);
+          // a time chart for this market (or with no market: the agent left it to the default) replaces the page chart
+          if (d.tool === "ate_chart" && r?.ok && r.data && (!r.data.market || r.data.market === market) && r.data.x?.type === "time") cb.current(r.data);
           return;
         }
         if (d.role !== "agent") return;
