@@ -389,7 +389,10 @@ class Proof {
 
   async get(): Promise<unknown> {
     const s = this.o.service.status();
-    const [recorded, pauses] = await Promise.all([this.recorded(), this.pauseHistory()]);
+    // the chain read is best effort: a slow or unreachable RPC never holds the page (last known list instead)
+    const PAUSE_HISTORY_MS = 4000;
+    const pausesOrCached = Promise.race([this.pauseHistory(), new Promise<PauseEvent[]>((r) => setTimeout(() => r(this.pauses?.list ?? []), PAUSE_HISTORY_MS))]);
+    const [recorded, pauses] = await Promise.all([this.recorded(), pausesOrCached]);
     const hsk = this.vaultFor("hsk-dex:WHSK/USDT:3000");
     const paused = Object.fromEntries(s.vaults.map((v) => [v.market, v.paused]));
     return {
