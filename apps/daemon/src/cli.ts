@@ -21,6 +21,7 @@ import { createChainClient, erc20Abi, probeRpcs } from "@ate/chain";
 import { connectDaemonClient, runStdioProxy } from "@ate/mcp";
 import { CexReader, MarketReader, aggregatorAbi, poolAbi, readAproCrossCheck } from "@ate/oracle";
 import { HskDexAdapter } from "@ate/venues";
+import { watchParent } from "./watchdog.js";
 import { ateHome, createAgentKey, loadConfigFile, parseProfiles, readRuntime, startDaemon, DAEMON_VERSION } from "./daemon.js";
 
 export interface Ctx {
@@ -100,6 +101,14 @@ export async function daemonStart(ctx: Ctx): Promise<number> {
   };
   process.on("SIGINT", () => void stop());
   process.on("SIGTERM", () => void stop());
+  // Spawned by the Flow app: exit with it (the app omits ATE_PARENT_PID when the user keeps the daemon running).
+  const parent = Number(ctx.env.ATE_PARENT_PID);
+  if (Number.isInteger(parent) && parent > 1) {
+    watchParent(parent, () => {
+      ctx.stderr.write(`parent app ${parent} is gone: stopping\n`);
+      void stop();
+    });
+  }
   await new Promise(() => {});
   return 0;
 }

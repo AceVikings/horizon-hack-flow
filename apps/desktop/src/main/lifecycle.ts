@@ -72,6 +72,9 @@ export function daemonBin(appPath: string): string {
   return process.env.ATE_DAEMON_BIN ?? resolve(appPath, "../daemon/dist/bin.js");
 }
 
+let exitHooked = false;
+let current: ChildProcess | null = null;
+
 export class DaemonSupervisor {
   private child: ChildProcess | null = null;
   private log: WriteStream | null = null;
@@ -146,11 +149,22 @@ export class DaemonSupervisor {
     this.uiToken = null;
     this.log = createWriteStream(join(home, "daemon.log"), { flags: "a", mode: 0o600 });
     const args = [bin, "start", "--setup", "--approval-fallback=armed", ...(process.env.ATE_DAEMON_ARGS ?? "").split(" ").filter(Boolean)];
-    const env = { ...process.env, ATE_HOME: home, ATE_APPROVAL_CODE_FD: "3", ATE_APPROVAL_STDIN: "1", ELECTRON_RUN_AS_NODE: undefined };
+    // ATE_PARENT_PID: the daemon exits when this app is gone (even if killed without quit handlers), unless the user
+    // chose to keep it running (FLOW_KEEP_DAEMON=1).
+    const keep = process.env.FLOW_KEEP_DAEMON === "1";
+    const env = { ...process.env, ATE_HOME: home, ATE_APPROVAL_CODE_FD: "3", ATE_APPROVAL_STDIN: "1", ELECTRON_RUN_AS_NODE: undefined, ...(keep ? {} : { ATE_PARENT_PID: String(process.pid) }) };
     delete env.ELECTRON_RUN_AS_NODE;
     const child = spawn(node, args, { cwd: resolve(this.appPath, "../.."), env, stdio: ["pipe", "pipe", "pipe", "pipe"], detached: false });
     this.child = child;
     this.owned = true;
+    if (!keep && !exitHooked) {
+      exitHooked = true;
+      // last resort on any exit path of this process (synchronous kill; the watchdog covers SIGKILL)
+      process.on("exit", () => {
+        if (current?.exitCode === null) current.kill("SIGTERM");
+      });
+    }
+    current = child;
     if (child.pid) writeFileSync(join(home, "flow-daemon.pid"), String(child.pid), { mode: 0o600 });
     child.stdout?.pipe(this.log, { end: false });
     child.stderr?.on("data", (b: Buffer) => {
