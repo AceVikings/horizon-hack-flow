@@ -2,6 +2,7 @@
 
 import { registerChatRoutes } from "./chat.js";
 import { registerAppRoutes } from "./app-routes.js";
+import { AiEngine } from "./engine.js";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -242,11 +243,13 @@ export async function startDaemon(o: StartOptions = {}): Promise<RunningDaemon> 
     log(`approval routes unavailable: ${(e as Error).message.split("\n")[0]}`);
   }
   // /chat/token, /chat (chat runner with a per-session chat token) and /trade/approve (confirm mode).
-  registerChatRoutes({ routes, tokens, service, home, emit, log });
+  // In-app agent engine (Anthropic SDK) shared by the chat routes and the supervised trader.
+  const ai = new AiEngine(home, env);
+  registerChatRoutes({ routes, tokens, service, home, emit, log, ai });
   // /setup/* (desktop onboarding + Settings), ui scope only.
   registerSetupRoutes({ routes, home, env, cfg, configPath, service, unlock, broadcast: (e) => http.broadcast(e), approval: approvalHandle, log });
   // Flow desktop v1 (additive): supervised trader, pending-change list/reject, in-app proof suite (testnet only).
-  const app = registerAppRoutes({ routes, tokens, service, home, port, deploymentsPath: findDeployments(env, cfg.chain.id), log });
+  const app = registerAppRoutes({ routes, tokens, service, home, port, deploymentsPath: findDeployments(env, cfg.chain.id), ai, log });
   const runtime: RuntimeJson = { pid: process.pid, port, agentToken, startedAt: Math.floor(Date.now() / 1000), version: DAEMON_VERSION };
   const runtimePath = join(home, "runtime.json");
   writeFileSync(runtimePath, JSON.stringify(runtime, null, 2), { mode: 0o600 });

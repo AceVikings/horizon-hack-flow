@@ -9,6 +9,7 @@ import { createChainClient } from "@ate/chain";
 import { Journal, migrate } from "@ate/journal";
 import { AgentSigner } from "@ate/wallet";
 import { registerAppRoutes } from "../src/app-routes.js";
+import { AiEngine } from "../src/engine.js";
 import { DaemonHttp, Routes, TokenRegistry } from "../src/http.js";
 import { AteService } from "../src/service.js";
 import { loadStrategy } from "../src/strategy-stub.js";
@@ -32,7 +33,8 @@ beforeAll(async () => {
   const routes = new Routes();
   http = new DaemonHttp({ service: svc, tokens, routes, version: "test" });
   const port = await http.listen();
-  registerAppRoutes({ routes, tokens, service: svc, home: mkdtempSync(join(tmpdir(), "ate-app-")), port, deploymentsPath: null });
+  const home = mkdtempSync(join(tmpdir(), "ate-app-"));
+  registerAppRoutes({ routes, tokens, service: svc, home, port, deploymentsPath: null, ai: new AiEngine(home, { ATE_KEYSTORE: "file" }) });
   base = `http://127.0.0.1:${port}`;
 });
 afterAll(async () => http.close());
@@ -47,7 +49,7 @@ describe("chat go-to-cash confirmation (FLOW.md journey C)", () => {
     const keep = before.filter((a) => a !== before[0]);
     const r = await svc.callTool("chat", "ate_strategy_set", { patch: { targetAssets: keep }, rationale: "go to cash on one asset, keep the other" });
     expect(r.ok).toBe(false);
-    const det = (r as { error: { code: string; details: { changeId: string; confirm?: string } } }).error;
+    const det = (r as unknown as { error: { code: string; details: { changeId: string; confirm?: string } } }).error;
     expect(det.code).toBe("ATE_APPROVAL_REQUIRED");
     expect(det.details.confirm).toBe("sells_now");
     expect(svc.strategy.portfolio.targetAssets).toEqual(before);

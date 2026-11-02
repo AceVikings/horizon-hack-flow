@@ -20,6 +20,8 @@ import { join } from "node:path";
 import { MARKETS, MARKET_IDS, policyVaultAbi, type MarketId } from "@ate/core";
 import { createPublicClient, http as viemHttp, type Address, type Hex, type PublicClient } from "viem";
 import { chatMcpSpec } from "./chat.js";
+import { AI_MODELS, DEFAULT_MODEL, type AiConfig, type AiEngine, type AiModel } from "./engine.js";
+import { createSdkTraderExecutor } from "./engine-agents.js";
 import type { Routes, TokenRegistry } from "./http.js";
 import { EXPECTED, FULL_RUN, decodeRevert, runRogue, type AttackId, type AttackResult } from "./rogue.js";
 import type { AteService } from "./service.js";
@@ -35,10 +37,13 @@ export interface AppRoutesOptions {
   port: number;
   /** deployments/<chainId>.json path (deployedBlock, guardian, owner, explorer). */
   deploymentsPath: string | null;
+  /** In-app agent engine (Anthropic SDK) shared with the chat routes. */
+  ai: AiEngine;
   log?: (m: string) => void;
 }
 
 const nowSec = () => Math.floor(Date.now() / 1000);
+const isAiModel = (m: unknown): m is AiModel => AI_MODELS.some((x) => x.id === m);
 const errBody = (code: string, message: string, hint?: string) => ({ error: { code, message, ...(hint ? { hint } : {}) } });
 
 // ------------------------------------------------------------------ trader supervisor
@@ -51,6 +56,8 @@ export interface TraderState {
   mode: TraderMode;
   engine: "llm" | "rules";
   model: string;
+  /** "sdk" (in-app, Anthropic SDK), "claude-code" (optional CLI fallback) or "rules". */
+  runtime: "sdk" | "claude-code" | "rules";
   cycleSeconds: number;
   toolsAllowed: number;
   startedAt: number | null;
@@ -63,12 +70,12 @@ interface Wanted {
   wanted: boolean;
   mode: TraderMode;
   engine: "llm" | "rules";
-  model: string;
+  model?: string;
   cycleSeconds: number;
 }
 
 class TraderSupervisor {
-  private st: TraderState = { supervised: true, running: false, stopping: false, mode: "autonomous", engine: "llm", model: "sonnet", cycleSeconds: 120, toolsAllowed: 0, startedAt: null, cycles: 0, lastCycle: null, lastError: null };
+  private st: TraderState = { supervised: true, running: false, stopping: false, mode: "autonomous", engine: "llm", model: DEFAULT_MODEL, runtime: "sdk", cycleSeconds: 120, toolsAllowed: 0, startedAt: null, cycles: 0, lastCycle: null, lastError: null };
   private stopFns: (() => void | Promise<void>)[] = [];
   private runner: { idle(): Promise<void>; stopTimer(): void } | null = null;
   private token: string | null = null;
@@ -107,13 +114,16 @@ class TraderSupervisor {
     if (this.st.running) await this.stop(false);
     const mode: TraderMode = b.mode === "propose" ? "propose" : "autonomous";
     const engine = b.engine === "rules" ? "rules" : "llm";
-    const model = typeof b.model === "string" && /^[A-Za-z0-9._-]{1,64}$/.test(b.model) ? b.model : "sonnet";
+    if (isAiModel(b.model) && b.model !== this.o.ai.config.model) this.o.ai.setConfig({ model: b.model });
+    const model = this.o.ai.config.model;
+    const viaCli = engine === "llm" && this.o.ai.config.engine === "claude-code";
+    if (engine === "llm" && !viaCli && !this.o.ai.available()) throw Object.assign(new Error("No Anthropic credentials: paste an API key in Settings (or run on the rules engine)"), { status: 409, code: "ATE_CONFIG_INVALID" });
     const cycleSeconds = Math.max(30, Math.min(3600, Number(b.cycleSeconds) || 120));
     const name = "@ate/trader";
     const t = (await import(name)) as Trader;
     const dryRun = mode === "propose";
+    // the WS subscription for cycle.requested (and the optional Claude Code CLI engine's MCP proxy) use this token
     this.token = this.o.tokens.mint({ scope: "agent", ...(engine === "rules" ? { engine: "rules" as const } : {}) });
-    const mcp = chatMcpSpec(this.o.home, this.token);
     const log = (m: string) => {
       this.o.log?.(`trader: ${m}`);
       try {
@@ -122,18 +132,33 @@ class TraderSupervisor {
         /* best effort */
       }
     };
-    let tools: Awaited<ReturnType<Trader["connectAte"]>> | null = null;
-    const getTools = async () => (tools ??= await t.connectAte(mcp));
+    // in-process tools: the agent scope of this daemon, no stdio proxy
+    const svc = this.o.service;
+    const label = engine === "rules" ? ({ engine: "rules" } as const) : ({ engine: "llm" } as const);
+    const inProc = {
+      call: async (n: string, a: unknown) => {
+        try {
+          return await svc.callTool("agent", n, a, label);
+        } catch (e) {
+          return { ok: false, error: { code: "ATE_INVALID_PARAMS", message: (e as Error).message } };
+        }
+      },
+      close: async () => {},
+    } as unknown as Awaited<ReturnType<Trader["connectAte"]>>;
+    const getTools = async () => inProc;
     const markets = [...MARKET_IDS];
-    const profiles = markets.map((m) => `${MARKETS[m].asset}=${this.o.service.strategy.markets[m]?.profile ?? "default"}`);
+    const profiles = markets.map((m) => `${MARKETS[m].asset}=${svc.strategy.markets[m]?.profile ?? "default"}`);
     const context = [
       `Profiles: ${profiles.join(", ")}${profiles.some((p) => p.endsWith("=demo")) ? " (demo: rebalance edge gate waived, $5 size; label trades profile=demo, never call them arbitrage)" : ""}.`,
       `Markets enabled for this runner: ${markets.map((m) => MARKETS[m].label).join(", ")}.`,
     ];
+    const toolNames = svc.listTools("agent").filter((n) => !(dryRun && n === "ate_execute"));
     const executor =
       engine === "rules"
         ? t.createRulesExecutor(getTools, { markets, dryRun, log })
-        : t.createClaudeExecutor({ promptFile: t.TRADER_PROMPT_PATH, mcp, dryRun, context, model, effort: "low", log });
+        : viaCli
+          ? t.createClaudeExecutor({ promptFile: t.TRADER_PROMPT_PATH, mcp: chatMcpSpec(this.o.home, this.token), dryRun, context, model, effort: this.o.ai.config.traderEffort === "high" ? "high" : this.o.ai.config.traderEffort, log })
+          : createSdkTraderExecutor({ ai: this.o.ai, service: svc, promptFile: t.TRADER_PROMPT_PATH, toolNames, dryRun, context, log });
     const cyclesFile = join(this.o.home, "trader-cycles.jsonl");
     const runner = new t.TraderRunner({
       executor,
@@ -168,9 +193,9 @@ class TraderSupervisor {
       log,
       onRequest: (r) => log(`cycle.requested (${r}) → ${runner.trigger(r === "gap" ? "scan" : r === "strategy_change" ? "strategy_change" : "manual")}`),
     });
-    this.stopFns = [() => clearInterval(scanTimer), () => sub.close(), async () => void (await (tools as { close(): Promise<void> } | null)?.close().catch(() => {}))];
+    this.stopFns = [() => clearInterval(scanTimer), () => sub.close()];
     this.runner = runner;
-    this.st = { ...this.st, running: true, stopping: false, mode, engine, model, cycleSeconds, toolsAllowed: engine === "llm" ? t.allowedTools(dryRun).length : 0, startedAt: nowSec(), lastError: null };
+    this.st = { ...this.st, running: true, stopping: false, mode, engine, model, runtime: engine === "rules" ? "rules" : viaCli ? "claude-code" : "sdk", cycleSeconds, toolsAllowed: engine === "llm" ? toolNames.length : 0, startedAt: nowSec(), lastError: null };
     runner.startTimer(cycleSeconds * 1000);
     this.save({ wanted: true, mode, engine, model, cycleSeconds });
     log(`started (supervised by the daemon): engine=${engine} mode=${mode} model=${model} cycle=${cycleSeconds}s`);
@@ -486,6 +511,32 @@ export function registerAppRoutes(o: AppRoutesOptions): { trader: TraderSupervis
       guard(json, async () => {
         await trader.stop();
         return trader.state();
+      }),
+  });
+
+  // ---- in-app agent engine (Anthropic SDK): health, credentials, model (D2 Setup/Settings call these too)
+  const ai = o.ai;
+  r.register({ method: "GET", path: "/ai", scopes: ["ui", "view"], handler: ({ json }) => json(200, ai.health()) });
+  r.register({ method: "POST", path: "/ai/check", scopes: ["ui"], handler: ({ json }) => guard(json, () => ai.check()) });
+  r.register({
+    method: "POST",
+    path: "/ai/key",
+    scopes: ["ui"],
+    handler: ({ body, json }) => guard(json, () => ai.setKey(String((body as { apiKey?: unknown })?.apiKey ?? ""))),
+  });
+  r.register({ method: "POST", path: "/ai/key/clear", scopes: ["ui"], handler: ({ json }) => json(200, ai.clearKey()) });
+  r.register({
+    method: "POST",
+    path: "/ai/config",
+    scopes: ["ui"],
+    handler: ({ body, json }) =>
+      guard(json, async () => {
+        const before = ai.config;
+        ai.setConfig((body ?? {}) as Partial<AiConfig>);
+        // a running LLM trader picks up a new model / engine on restart
+        const st = trader.state();
+        if (st.running && st.engine === "llm" && (before.model !== ai.config.model || before.engine !== ai.config.engine)) await trader.start({ mode: st.mode, engine: "llm", cycleSeconds: st.cycleSeconds });
+        return ai.health();
       }),
   });
 

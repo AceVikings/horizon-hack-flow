@@ -7,6 +7,7 @@ export * from "./txqueue.js";
 export * from "./positions.js";
 export * from "./strategy-stub.js";
 export * from "./rogue.js";
+export * from "./engine.js";
 export { daemonStart, mcpServe, unlockCmd, keygenCmd, doctorCmd, smokeCmd, type Ctx } from "./cli.js";
 import { daemonStart, mcpServe } from "./cli.js";
 

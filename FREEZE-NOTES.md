@@ -169,3 +169,34 @@ Lanes may **add** to frozen artifacts; changing anything here needs a lead-appro
    EAS plus overhead).
 10. **Dev/fork only:** `ATE_AGENT_PRIVATE_KEY` + `ATE_ALLOW_RAW_KEY=1` unlock without the keystore; `ATE_AGENT_PASSPHRASE` auto-unlocks
     headless; `ATE_KEYSTORE=file|keychain`; `ATE_HOME`, `ATE_DB`, `ATE_DEPLOYMENTS`, `ATE_STRATEGY_STUB=1`.
+
+## D3. Flow v1 lane D3 — in-app agent engine, supervised trader, proof suite (additive)
+
+1. **In-app agent engine** (`apps/daemon/src/engine.ts`, `engine-agents.ts`): the trader and the chat agent run inside the
+   daemon on `@anthropic-ai/sdk` (manual streaming tool-use loop; tools 1:1 with the MCP tools: agent scope for the trader,
+   `CHAT_TOOL_ALLOWLIST` for chat; every call still goes through `AteService.callTool`, so the guard, candidate binding and
+   loosening approvals are unchanged). Default model `claude-opus-5-5`; `claude-sonnet-5-5` / `claude-haiku-5-5` selectable.
+   `output_config.effort` "low" for both (set explicitly), `tool_choice: auto` + `strict: true` tools, frozen cached system
+   prompt, `fallbacks: "default"` (beta `server-side-fallback-2026-07-01`; not on Haiku), refusal / max_tokens checked before any
+   tool runs. The Claude Code CLI engine is an optional fallback (`engine: "claude-code"`); with no credentials chat uses rules.
+2. **Credentials:** `new Anthropic()` (ANTHROPIC_API_KEY / ANTHROPIC_AUTH_TOKEN / `ant auth login` profile), or a key pasted
+   in-app, stored in the macOS keychain (service `ate-anthropic-api-key`, account `ate`; `<home>/keys/anthropic-api-key` 0600
+   with `ATE_KEYSTORE=file`). Never in config, logs, health output or the renderer state.
+3. **Routes for D2 (Setup "AI model reachable", Settings)** — ui scope (`GET /ai` also view):
+   - `GET /ai` → `{ engine, model, modelLabel, models[], credential: keychain|file|env|profile|none, traderEffort, chatEffort,
+     lastCheck: { at, reachable, error?: { kind, message } } | null, lastUsage }` (no network call).
+   - `POST /ai/check` → same shape after a live `models.retrieve(model)` (no tokens). `reachable: false` + `error.kind`
+     ∈ auth | permission | model | rate_limit | offline | no_credentials | api.
+   - `POST /ai/key { apiKey }` → validates against the API, stores in the keychain, returns the health (400 on a bad key).
+   - `POST /ai/key/clear` → removes the stored key.  `POST /ai/config { model?, engine?, traderEffort?, chatEffort? }`
+     (persisted in `<home>/ai.json`; a running LLM trader restarts on a model/engine change).
+   Bridge: `window.ate.ai.{health, check, setKey, clearKey, config}`.
+4. **Supervised trader:** `GET /trader`, `POST /trader/start { mode: autonomous|propose, engine: llm|rules, model?,
+   cycleSeconds? }`, `POST /trader/stop`. In-process `TraderRunner` (no overlap, 90 s kill → no_trade(timeout)); wanted state in
+   `<home>/trader.json` resumes on daemon restart (`ATE_TRADER_RESUME=0` disables). Status adds `runtime: sdk|claude-code|rules`.
+5. **Approvals:** `GET /strategy/pending` (list), `POST /strategy/reject { changeId }`. A chat change that sells now (drops a
+   target asset / 0% allocation) is held as a pending change with `confirm: "sells_now"` and approved through the existing
+   `/strategy/approve` (Touch ID).
+6. **Proof:** `GET /proof` (ui|view), `POST /proof/run { market?, waitPauseSec? }` (testnet 133 only, 403 elsewhere),
+   `POST /proof/stop`. Same engine as `ate rogue` (moved to `apps/daemon/src/rogue.ts`, re-exported by the CLI) with an
+   ephemeral rogue token per run. Chat-scope MCP calls emit `chat.tool { args, result }`.
