@@ -34,7 +34,14 @@ apps/approve/bin/
 # Agent / tooling workspaces and private infra
 .context/
 .tokensave/
-infra/aws/
+infra/
 
 # Fork-only deployment records
 deployments/*-fork.json
+
+# Infrastructure-as-code and ops runbooks (kept local in .context/)
+*.tf
+*.tfstate*
+*.tfvars
+cdk.out/
+docs/aws-*.md
