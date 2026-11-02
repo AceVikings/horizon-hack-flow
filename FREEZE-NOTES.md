@@ -315,3 +315,17 @@ Lanes may **add** to frozen artifacts; changing anything here needs a lead-appro
    the owner service (gets `ATE_OWNER_*`) and the daemon (`ATE_OWNER_*` stripped, gets `ATE_AGENT_*`), serves the
    renderer with a web bridge (`window.ate` over HTTPS + WebSocket), and owns auth (passkey first, password fallback,
    httpOnly Secure SameSite=Strict session cookie, CSRF header, rate limits). `GET /healthz` is the health check.
+
+## E2E. Lane E2E — desktop app on testnet 133 (fixes in other lanes' files; details in docs/E2E-TESTNET.md)
+
+1. **D3 `engine.ts` / D2 `StepStart.tsx` (`c58fd15`, `d1899d8`):** `AiHealth.claudeCli: string | null` (additive): the path of
+   the Claude Code CLI (`ATE_CLAUDE_BIN`, `PATH`, `~/.local/bin`, `~/.claude/local`, Homebrew). With `engine: "claude-code"`,
+   `POST /ai/check` only checks that the CLI is installed. `setConfig({ engine: "claude-code" })` without a provider switches to
+   `anthropic`. Both CLI executors get `claudeBin` explicitly, so an app opened from Finder finds it. Start step: "Use Claude Code on
+   this Mac" when there is no credential and the CLI is present.
+2. **Renderer (`b0d2525`):** `aiMissing(health)` in `shared/bridge.ts` is the one test for "no AI". Use it instead of
+   `credential === "none"`, because a claude-code engine has no credential yet runs the LLM.
+3. **`app.tsx` (`ea94ed5`):** `ate_pause` locks the agent key. When status shows `locked` and no vault paused, the app calls
+   `setup.unlock()` (sealed passphrase, no prompt). The `daemon.locked` toast with reason `ate_pause` is informational.
+4. **Shared testnet keys:** run one app or trader per agent key. Two homes with the same agent key race on the same candidate,
+   and the second execute reverts. The owner key is shared with the CLOUD owner service, so owner `cast send`s can clash on nonces.
