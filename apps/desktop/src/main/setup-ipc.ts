@@ -28,7 +28,7 @@ function approveAvailable(): boolean {
 }
 const canTouchId = (): boolean => process.platform === "darwin" && process.env.FLOW_TOUCH_ID !== "off" && systemPreferences.canPromptTouchID();
 
-export function registerSetupIpc(o: { ipcMain: IpcMain; daemon: DaemonClient; appPath: string; win: () => BrowserWindow | null; fixtures: boolean }): { boot(): Promise<void>; shutdown(): Promise<void> } {
+export function registerSetupIpc(o: { ipcMain: IpcMain; daemon: DaemonClient; appPath: string; win: () => BrowserWindow | null; fixtures: boolean }): { boot(): Promise<void>; restart(): Promise<void>; shutdown(): Promise<void> } {
   const { daemon } = o;
   const sup = new DaemonSupervisor(o.appPath, () => {
     if (phase !== "stopped") setPhase("error", `daemon exited${sup.lastError ? `: ${sup.lastError}` : ""}`);
@@ -413,6 +413,8 @@ export function registerSetupIpc(o: { ipcMain: IpcMain; daemon: DaemonClient; ap
   }
   return {
     boot,
+    /** Additive (CLOUD): the owner service restarts the daemon after it points the config at new vaults. */
+    restart: () => restart(),
     shutdown: async () => {
       setPhase("stopped");
       daemon.close();

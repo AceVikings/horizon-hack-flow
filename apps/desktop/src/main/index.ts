@@ -8,6 +8,7 @@ import { DaemonClient } from "./daemon";
 import { signApproval } from "./approve";
 import type { ApprovalPayload } from "@ate/approve";
 import { registerSetupIpc } from "./setup-ipc";
+import { DesktopOwner } from "./owner";
 import { approvePayment, approveStrategy, approveTrade, denyPayment, listPayments, rememberPending } from "./live";
 
 const FIXTURES = process.env.ATE_FIXTURES === "1";
@@ -314,6 +315,10 @@ app.whenReady().then(async () => {
   for (const m of IPC_METHODS) ipcMain.handle(`ate:${m}`, (_e, a, b) => (FIXTURES && m !== "connection" ? bad("fixtures mode") : invoke(m, a, b)));
   // Lane D2: the app owns the daemon (start/attach/unlock, no CLI); the renderer waits on #/unlock until it is ready.
   const setup = registerSetupIpc({ ipcMain, daemon, appPath: app.getAppPath(), win: () => win, fixtures: FIXTURES });
+  // CLOUD lane: Flow-managed owner key in its own process (window.ate.owner, FREEZE-NOTES CLOUD.3).
+  const owner = new DesktopOwner(app.getAppPath(), daemon, () => setup.restart());
+  for (const [k, fn] of Object.entries(owner.api)) ipcMain.handle(`ate:owner.${k}`, (_e, a, b) => (FIXTURES ? bad("fixtures mode") : (fn as (a: unknown, b: unknown) => Promise<unknown>)(a, b)));
+  app.on("will-quit", () => owner.stop());
   app.on("before-quit", () => void (process.env.FLOW_KEEP_DAEMON === "1" ? undefined : setup.shutdown()));
   for (const sig of ["SIGTERM", "SIGINT"] as const) process.once(sig, () => void setup.shutdown().finally(() => app.exit(0)));
   createWindow();
