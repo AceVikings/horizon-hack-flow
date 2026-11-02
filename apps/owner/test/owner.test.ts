@@ -30,14 +30,14 @@ function fakeChain() {
   };
 }
 
-function setup() {
+function setup(o: { exportKey?: () => Hex } = {}) {
   const home = mkdtempSync(join(tmpdir(), "flow-owner-"));
   const { privateKey, publicKey } = generateKeyPairSync("ec", { namedCurve: "P-256" });
   const jwk = publicKey.export({ format: "jwk" }) as { x: string; y: string };
   const pub = `04${Buffer.from(jwk.x, "base64url").toString("hex")}${Buffer.from(jwk.y, "base64url").toString("hex")}`;
   writeFileSync(join(home, "pin.json"), JSON.stringify({ publicKey: pub }));
   const f = fakeChain();
-  const svc = new OwnerService({ chain: f.chain as never, approver: new Approver({ passkeysPath: join(home, "passkeys.json"), pinnedKeyPath: join(home, "pin.json") }), home });
+  const svc = new OwnerService({ chain: f.chain as never, approver: new Approver({ passkeysPath: join(home, "passkeys.json"), pinnedKeyPath: join(home, "pin.json") }), home, ...o });
   const touchId = (payloadB64: string) => {
     const s = createSign("sha256");
     s.update(payloadBytes(decodePayload(payloadB64)));
@@ -91,6 +91,17 @@ describe("owner service", () => {
     const k = (n: string) => ({ id: n.repeat(20), publicKey: "A".repeat(80) });
     expect(await svc.addPasskey(k("a"))).toMatchObject({ added: true });
     expect("needsApproval" in (await svc.addPasskey(k("b")))).toBe(true);
+  });
+
+  it("exportKey shows the key only after an approval, and never for a key it cannot read", async () => {
+    const KEY = `0x${"11".repeat(32)}` as Hex;
+    const { svc, touchId, f } = setup({ exportKey: () => KEY });
+    const r = await svc.request({ op: "exportKey" });
+    if (!("needsApproval" in r)) throw new Error("expected approval");
+    expect(JSON.stringify(r)).not.toContain(KEY.slice(2));
+    expect(await svc.request({ nonce: r.nonce, approval: { signature: touchId(r.payload) } })).toMatchObject({ done: true, approvedBy: "touch-id", result: { privateKey: KEY } });
+    expect(f.calls).toEqual([]);
+    await expect(setup().svc.request({ op: "exportKey" })).rejects.toThrow(/cannot be exported/);
   });
 });
 

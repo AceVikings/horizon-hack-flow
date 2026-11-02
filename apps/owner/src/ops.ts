@@ -117,9 +117,10 @@ export type OwnerOp =
   | { op: "unpause"; vaults: Address[] }
   | { op: "withdraw"; vault: Address; token: Address; amount: bigint; to: Address }
   | { op: "fundAgent"; agent: Address; wei: bigint }
-  | { op: "seed"; vaults: Address[] };
+  | { op: "seed"; vaults: Address[] }
+  | { op: "exportKey" };
 
-export const OP_NAMES = ["deploy", "setLimits", "setAgent", "setGuardian", "pause", "unpause", "withdraw", "fundAgent", "seed"] as const;
+export const OP_NAMES = ["deploy", "setLimits", "setAgent", "setGuardian", "pause", "unpause", "withdraw", "fundAgent", "seed", "exportKey"] as const;
 
 export class OwnerError extends Error {
   constructor(

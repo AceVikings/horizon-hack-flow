@@ -35,7 +35,7 @@ const addr = (x: unknown, what: string): Address => {
 export class OwnerService {
   private pending = new Map<string, { payload: ConfigApproval; run: (by: "touch-id" | "passkey") => Promise<OpResult> }>();
   constructor(
-    private readonly o: { chain: ChainLike; approver: Approver; home: string; env?: NodeJS.ProcessEnv; log?: (m: string) => void; now?: () => number },
+    private readonly o: { chain: ChainLike; approver: Approver; home: string; env?: NodeJS.ProcessEnv; exportKey?: () => Hex; log?: (m: string) => void; now?: () => number },
   ) {}
 
   private now() {
@@ -175,6 +175,11 @@ export class OwnerService {
         if (typeof b.wei !== "string" || !/^[0-9]{1,30}$/.test(b.wei) || BigInt(b.wei) === 0n) throw new OwnerError(400, "wei: positive integer string");
         return { op: { op: "fundAgent", agent, wei: BigInt(b.wei) }, raisesRisk: true, changes: [{ key: `gas to agent ${short(agent)}`, before: "0", after: `${formatEther(BigInt(b.wei))} HSK` }], summary: "Send gas to the agent" };
       }
+      case "exportKey": {
+        // Backup: always behind an approval; only a keystore-backed key can be shown (a KMS key never leaves the KMS).
+        if (!this.o.exportKey) throw new OwnerError(409, "this owner key cannot be exported (it is held by a key service)");
+        return { op: { op: "exportKey" }, raisesRisk: true, changes: [{ key: "owner key", before: "hidden", after: "shown once for backup" }], summary: "Show the owner key once to back it up" };
+      }
       case "seed": {
         if (this.o.chain.dep.chainId !== 133) throw new OwnerError(403, "seeding with test tokens is testnet only");
         const vs = await this.ownVaults(b.vaults);
@@ -286,6 +291,10 @@ export class OwnerService {
           break;
         case "fundAgent":
           txs.push(await c.send("gas to agent", op.agent, "0x", op.wei));
+          break;
+        case "exportKey":
+          if (!approvedBy) throw new OwnerError(403, "showing the owner key needs an approval");
+          result = { address: c.address, privateKey: this.o.exportKey!() };
           break;
         case "seed": {
           const known = this.knownVaults();

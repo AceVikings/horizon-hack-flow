@@ -7,7 +7,7 @@
 import { createInterface } from "node:readline";
 import { join } from "node:path";
 import { homedir } from "node:os";
-import { encryptKey, loadEncryptedKey, signerFromEnv, signerFromSecret, signerKind, FileKeyStore } from "@ate/wallet";
+import { decryptKey, encryptKey, loadEncryptedKey, signerFromEnv, signerFromSecret, signerKind, FileKeyStore } from "@ate/wallet";
 import { Approver } from "./approvals.js";
 import { OwnerChain, loadDeployment } from "./chain.js";
 import { createOwnerServer } from "./server.js";
@@ -25,13 +25,15 @@ async function firstLine(): Promise<string | null> {
   return null;
 }
 
+/** The signer, and (keystore backend only) a way to read the key back for the approval-gated backup. */
 async function ownerSigner(home: string) {
   const kind = signerKind("owner", env);
-  if (kind === "secret" || kind === "kms") return (await signerFromEnv("owner", env))!;
+  if (kind === "secret" || kind === "kms") return { signer: (await signerFromEnv("owner", env))!, exportKey: undefined };
   const id = env.ATE_OWNER_KEY_ID ?? "owner";
   const found = loadEncryptedKey(id, [new FileKeyStore(join(home, "owner-keys"))]);
-  if (!found || !env.ATE_OWNER_KEY_SECRET) throw new Error(`owner key ${id} not found in ${home}/owner-keys (or ATE_OWNER_KEY_SECRET unset)`);
-  return signerFromSecret("owner", found.blob, env.ATE_OWNER_KEY_SECRET);
+  const secret = env.ATE_OWNER_KEY_SECRET;
+  if (!found || !secret) throw new Error(`owner key ${id} not found in ${home}/owner-keys (or ATE_OWNER_KEY_SECRET unset)`);
+  return { signer: signerFromSecret("owner", found.blob, secret), exportKey: () => decryptKey(found.blob, secret, "owner") };
 }
 
 async function main() {
@@ -51,14 +53,14 @@ async function main() {
   if (!token) throw new Error("no supervisor token (stdin { token } with FLOW_OWNER_STDIN=1, or FLOW_OWNER_TOKEN)");
   const chainId = Number(env.FLOW_CHAIN_ID ?? 133);
   const dep = loadDeployment(chainId, env);
-  const signer = await ownerSigner(home);
+  const { signer, exportKey } = await ownerSigner(home);
   const chain = new OwnerChain(signer.account, dep, env.FLOW_RPC_URL);
   const approver = new Approver({
     passkeysPath: join(home, "passkeys.json"),
     ...(env.ATE_APPROVE_PUBKEY ? { pinnedKeyPath: env.ATE_APPROVE_PUBKEY } : {}),
     webauthn: env.FLOW_ORIGIN && env.FLOW_RP_ID ? { origin: env.FLOW_ORIGIN, rpId: env.FLOW_RP_ID } : null,
   });
-  const svc = new OwnerService({ chain, approver, home, env, log });
+  const svc = new OwnerService({ chain, approver, home, env, log, ...(exportKey ? { exportKey } : {}) });
   const port = await createOwnerServer(svc, token, log).listen(Number(env.FLOW_OWNER_PORT ?? 0));
   process.stdout.write(`${JSON.stringify({ type: "owner.ready", port, owner: signer.account.address, backend: signer.backend })}\n`);
   log(`owner ${signer.account.address} (${signer.backend}) on 127.0.0.1:${port}, chain ${chainId}`);
