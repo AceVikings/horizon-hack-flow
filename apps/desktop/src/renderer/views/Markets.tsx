@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { MARKETS, MARKET_WBTC, MARKET_WHSK, reasonName, type Candidate, type JournalEntry, type MarketId, type MarketView, type ProposeOutput, type Quote, type Side } from "@ate/core";
 import type { ViewProps } from "./registry";
 import { useApp, useNow, useRemote } from "../src/app";
-import { ContextPanel, Inspector, PageHead, useNav } from "../src/shell";
+import { ContextPanel, Inspector, PageHead, useMode, useNav } from "../src/shell";
 import { Badge, Banner, Btn, Card, Empty, ErrorBox, Eyebrow, Gauge, KV, Link, Seg, Skeleton, StatPill, Table, TxLink } from "../src/ui";
 import { age, explorer, fmtUnits, money, price8, tokenAmt, usdE8Short } from "../src/format";
 import { centsE8, vaultRisk } from "../src/risk";
@@ -17,7 +17,56 @@ const byLabel = (s?: string): MarketId => ORDER.find((m) => MARKETS[m].label.toL
 /** CEX mid vs pool, bps; positive = pool below HashKey Global. */
 const gapBps = (mv: MarketView): number | null => (mv.cex ? Math.round(((Number(mv.cex.mid) - Number(mv.pool.price)) / Number(mv.pool.price)) * 10_000) : null);
 
-export default function Markets({ params }: ViewProps) {
+export default function Trade(props: ViewProps) {
+  const [mode] = useMode();
+  return mode === "pro" ? <Markets {...props} /> : <SimpleTrade {...props} />;
+}
+
+/** Trade (SIMPLIFY.md): prices in dollars and one plain sentence per market, a chart, the manual order collapsed. */
+function SimpleTrade({ params }: ViewProps) {
+  const { ate, mkOk, stale } = useApp();
+  const go = useNav();
+  const now = useNow();
+  const market = byLabel(params[0]);
+  const mkd = MARKETS[market];
+  const hist = useRemote(() => ate.journal.list({ limit: 200, market }), [market]);
+  const mv = mkOk?.find((m) => m.market === market);
+  const g = mv ? gapBps(mv) : null;
+  const cost = FEE_BPS + (mv?.cex?.halfSpreadBps ?? 0) + 5;
+  const pct = (bps: number) => `${(Math.abs(bps) / 100).toFixed(2)}%`;
+  const line =
+    g === null
+      ? "HashKey Global has no price right now, so the agent waits."
+      : g > cost
+        ? `The pool is ${pct(g)} cheaper than HashKey Global. That beats the ${pct(cost)} trading cost, so buying can pay.`
+        : g > 0
+          ? `The pool is ${pct(g)} cheaper than HashKey Global. Costs are about ${pct(cost)}, so there's no edge yet.`
+          : `The pool is ${pct(g)} dearer than HashKey Global. No reason to buy here now.`;
+  return (
+    <div className="page1">
+      <PageHead title="Trade" sub="Prices, what they mean, and an order panel if you want to trade yourself" acts={<Seg label="Market" value={mkd.label} onChange={(l) => go(`trade/${l.toLowerCase()}`)} options={[{ id: "BTC", label: "BTC" }, { id: "HSK", label: "HSK" }]} />} />
+      {!mv ? (
+        <MarketsLoading />
+      ) : (
+        <div className="col" style={{ gap: 16 }}>
+          {mv.vault.paused && <Banner tone="paused" icon="❚❚" title="Trading is paused" sub="Prices keep updating. Orders wait until you resume." action={<Btn kind="pri" onClick={() => go("home")}>Resume on owner device</Btn>} />}
+          <section className={`card${stale ? " dim" : ""}`} style={{ padding: "22px 24px" }} aria-label={`${mkd.base} price`}>
+            <div className="lbl">{mkd.base} price on HashKey Global</div>
+            <div className="huge num" style={{ marginTop: 10 }}>{mv.cex ? price8(mv.cex.mid) : price8(mv.pool.price)}</div>
+            <p style={{ fontSize: 15, marginTop: 12, maxWidth: 640 }}>{line}</p>
+            <p className="sm fg2" style={{ marginTop: 6 }}>Pool {price8(mv.pool.price)} · oracle {price8(mv.oracle.price)}, updated {age(mv.oracle.ageSec + Math.max(0, now - mv.at))} ago</p>
+          </section>
+          <Card title="Price gap · last 6 hours" right={<span className="xs fg2">dashed line = trading cost</span>} className="chart">
+            <GapChart entries={hist.last?.entries ?? []} market={market} now={now} cost={cost} live={g} />
+          </Card>
+          <ManualOrder mv={mv} disabled={mv.vault.paused} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Markets({ params }: ViewProps) {
   const { ate, mkOk, mk, refresh, stale } = useApp();
   const go = useNav();
   const now = useNow();
@@ -84,7 +133,7 @@ export default function Markets({ params }: ViewProps) {
             const cost = c ? Math.round(c.costBps) : FEE_BPS + (v?.cex?.halfSpreadBps ?? 0) + 5;
             const on = m === market;
             return (
-              <button key={m} role="radio" aria-checked={on} className={`card tight mbtn${on ? " on" : ""}`} style={{ textAlign: "left", opacity: enabledAny ? 1 : 0.5 }} onClick={() => go(`markets/${MARKETS[m].label.toLowerCase()}`)}>
+              <button key={m} role="radio" aria-checked={on} className={`card tight mbtn${on ? " on" : ""}`} style={{ textAlign: "left", opacity: enabledAny ? 1 : 0.5 }} onClick={() => go(`trade/${MARKETS[m].label.toLowerCase()}`)}>
                 <div className="row sb">
                   <span className="h3">{MARKETS[m].base}/{MARKETS[m].quote}</span>
                   {g !== null && <Badge glyph="" y={on && g > cost}>{g > 0 ? "+" : g < 0 ? "−" : ""}{Math.abs(g)}</Badge>}
@@ -133,7 +182,7 @@ export default function Markets({ params }: ViewProps) {
         readErr ? <ErrorBox code={readErr.code} message="Can't read market data" hint={readErr.message} action={<Btn kind="solid" onClick={refresh}>Retry</Btn>} /> : <MarketsLoading />
       ) : (
         <div className="col" style={{ gap: 16 }}>
-          {paused && <Banner tone="paused" icon="❚❚" title="Vaults paused · candidates are not traded" sub="Prices keep updating. Manual orders are disabled until the owner unpauses." action={<Btn kind="pri" onClick={() => go("overview")}>Unpause on owner device</Btn>} />}
+          {paused && <Banner tone="paused" icon="❚❚" title="Vaults paused · candidates are not traded" sub="Prices keep updating. Manual orders are disabled until the owner unpauses." action={<Btn kind="pri" onClick={() => go("home")}>Unpause on owner device</Btn>} />}
           {!paused && oracleStale && (
             <Banner tone="bad" icon="!" title={`Supra ${mkd.label}/USD is ${age(oracleAge)} old: over the vault's ${Math.round(mv.vault.limits.maxOracleAge / 3600)} h limit`} sub="Buys are refused on-chain (OracleStale) until it refreshes; the daemon pull-refreshes Supra before a trade. Exits still use the min(oracle, TWAP) floor." action={<Btn kind="solid" onClick={() => { refresh(); cands.reload(); }}>Refresh prices</Btn>} />
           )}

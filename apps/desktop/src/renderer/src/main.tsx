@@ -3,13 +3,13 @@ import { createRoot } from "react-dom/client";
 import { AppProvider } from "./app";
 import { PageHead, Shell } from "./shell";
 import { Skeleton } from "./ui";
-import { VIEWS, type ViewDef, type ViewProps } from "../views/registry";
+import { ALIASES, VIEWS, type ViewDef, type ViewProps } from "../views/registry";
 import "./styles.css";
 
 /** `#/decisions/exec_1` → { id: "decisions", params: ["exec_1"] }. */
 function parseHash(): { id: string; params: string[] } {
   const [id = "", ...params] = location.hash.replace(/^#\/?/, "").split("/").map(decodeURIComponent);
-  return { id: id || "overview", params };
+  return { id: ALIASES[id] ?? (id || "home"), params };
 }
 
 function NotBuilt({ id }: { id: string }) {

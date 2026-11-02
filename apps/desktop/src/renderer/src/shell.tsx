@@ -1,16 +1,14 @@
-// App shell (board "FRAME SHELL"): 76 px dark rail | [236 context] main [320 dark inspector] | evidence footer.
-// Views fill the optional columns through <ContextPanel>/<Inspector> portals; empty columns collapse.
-// Shared APIs (stable): PageHead, ContextPanel, Inspector, useKillSwitch, useNav.
+// App shell (SIMPLIFY.md): 76 px dark rail (Home · Ask · Trade · Activity + ⋯ menu) | [236 context] main [320 dark
+// inspector, Pro mode only]. No footer of any kind: status lives in Home's sentence and the ⋯ menu.
+// Shared APIs (stable): PageHead, ContextPanel, Inspector, useKillSwitch, useNav, useMode, useEvidence.
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { MARKETS, type JournalEntry, type MarketId } from "@ate/core";
-import { NAV, type NavId } from "../views/registry";
-import { useApp, useNow, useTraderState, type TraderState } from "./app";
-import { dur, clock, explorer, group, int, money, networkName, short, usdE8Short } from "./format";
-import { FlowMark, Link } from "./ui";
+import type { JournalEntry } from "@ate/core";
+import { MENU, NAV } from "../views/registry";
+import { useApp, useTraderState, type TraderState } from "./app";
+import { dur, clock, explorer, group, networkName, short } from "./format";
+import { FlowMark, Link, Seg } from "./ui";
 import { KillSwitchDialog } from "./killswitch";
-import { worstCase } from "@ate/core";
-import { centsE8 } from "./risk";
 
 const Slots = createContext<{ ctx: HTMLElement | null; insp: HTMLElement | null }>({ ctx: null, insp: null });
 
@@ -41,17 +39,25 @@ export function PageHead({ title, hl, sub, acts, crumb }: { title: ReactNode; hl
   );
 }
 
-// ---------------------------------------------------------------- navigation + kill switch context
+// ---------------------------------------------------------------- navigation, mode, kill switch
 
+export type Mode = "simple" | "pro";
 interface ShellCtx {
   go(path: string): void;
   openKill(): void;
+  mode: Mode;
+  setMode(m: Mode): void;
 }
-const ShellC = createContext<ShellCtx>({ go: () => {}, openKill: () => {} });
-/** Navigate: `go("decisions/exec_…")`. */
+const ShellC = createContext<ShellCtx>({ go: () => {}, openKill: () => {}, mode: "simple", setMode: () => {} });
+/** Navigate: `go("activity/exec_…")`. */
 export const useNav = (): ((path: string) => void) => useContext(ShellC).go;
 /** Open the kill-switch confirm dialog (also ⌘⇧K anywhere). */
 export const useKillSwitch = (): (() => void) => useContext(ShellC).openKill;
+/** Simple (default) or Pro (dense v1 panels). Persisted per user (localStorage "flow.mode"). */
+export const useMode = (): [Mode, (m: Mode) => void] => {
+  const c = useContext(ShellC);
+  return [c.mode, c.setMode];
+};
 
 const ICON: Record<string, ReactNode> = {
   home: <><path d="M4 11.5 12 4l8 7.5" /><path d="M6 10v10h12V10" /><path d="M10 20v-5h4v5" /></>,
@@ -63,6 +69,9 @@ const ICON: Record<string, ReactNode> = {
   shield: <><path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6z" /><path d="M8.5 12l2.5 2.5 4.5-5" /></>,
   card: <><rect x="3" y="6" width="18" height="13" rx="2" /><path d="M3 10h18M7 15h4" /></>,
   settings: <><path d="M4 7h9M17 7h3M4 17h3M11 17h9" /><circle cx="15" cy="7" r="2" /><circle cx="9" cy="17" r="2" /></>,
+  book: <><path d="M5 4h10a4 4 0 0 1 4 4v12H9a4 4 0 0 1-4-4z" /><path d="M9 8h6M9 12h6" /></>,
+  key: <><circle cx="8" cy="14" r="4" /><path d="M11 11l8-8M16 6l2 2M14 8l2 2" /></>,
+  more: <><circle cx="5" cy="12" r="1.4" /><circle cx="12" cy="12" r="1.4" /><circle cx="19" cy="12" r="1.4" /></>,
 };
 const Icon = ({ k }: { k: string }) => (
   <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -71,61 +80,97 @@ const Icon = ({ k }: { k: string }) => (
 );
 
 const TSTAT: Record<TraderState, [string, string]> = {
-  running: ["running", "Trader running"],
-  idle: ["setup", "Trader idle"],
-  paused: ["paused", "Vaults paused"],
+  running: ["running", "Agent running"],
+  idle: ["setup", "Agent stopped"],
+  paused: ["paused", "Trading paused"],
   offline: ["paused", "Offline"],
   loading: ["setup", "Connecting"],
   setup: ["setup", "Setting up"],
 };
 
-function Rail({ nav, go, pending }: { nav: NavId | string; go(p: string): void; pending?: boolean }) {
+function Rail({ nav, go, mode, setMode }: { nav: string; go(p: string): void; mode: Mode; setMode(m: Mode): void }) {
   const st = useTraderState();
   const [cls, txt] = TSTAT[st];
+  const [open, setOpen] = useState(false);
+  const inMenu = MENU.some((m) => m.id === nav);
+  useEffect(() => {
+    if (!open) return;
+    const k = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    const c = (e: MouseEvent) => !(e.target as HTMLElement).closest(".menu, .ri.more") && setOpen(false);
+    window.addEventListener("keydown", k);
+    window.addEventListener("mousedown", c);
+    return () => {
+      window.removeEventListener("keydown", k);
+      window.removeEventListener("mousedown", c);
+    };
+  }, [open]);
   return (
     <nav className="rail" aria-label="Main">
-      <div className="lights drag" aria-hidden="true">
-        <i /><i /><i />
-      </div>
+      <div className="titlebar drag" aria-hidden="true" />
       <div className="logo"><FlowMark size={40} /></div>
-      {NAV.map((n, i) => {
-        const soon = "soon" in n && n.soon;
-        return (
-          <button
-            key={n.id}
-            className={`ri${nav === n.id ? " on" : ""}${soon ? " off" : ""}`}
-            aria-current={nav === n.id ? "page" : undefined}
-            aria-disabled={soon || undefined}
-            title={soon ? "Payments: HSP is coming soon" : `${n.name} (⌘${i + 1})`}
-            onClick={() => !soon && go(n.id)}
-          >
-            <Icon k={n.icon} />
-            <span>{n.name}</span>
-            {soon && <b className="soon">SOON</b>}
-            {n.id === "agent" && pending && <i className="dotc" aria-label="approval waiting" />}
-          </button>
-        );
-      })}
+      {NAV.map((n, i) => (
+        <button key={n.id} className={`ri${nav === n.id ? " on" : ""}`} aria-current={nav === n.id ? "page" : undefined} title={`${n.name} (⌘${i + 1})`} onClick={() => go(n.id)}>
+          <Icon k={n.icon} />
+          <span>{n.name}</span>
+        </button>
+      ))}
+      <button className={`ri more${inMenu || open ? " on" : ""}`} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)} title="More">
+        <Icon k="more" />
+        <span>More</span>
+      </button>
+      {open && (
+        <div className="menu" role="menu" aria-label="More">
+          <MenuStatus />
+          <div className="mdiv" />
+          {MENU.map((m) => {
+            const soon = "soon" in m && m.soon;
+            return (
+              <button
+                key={m.id}
+                role="menuitem"
+                className={`mi${nav === m.id ? " on" : ""}`}
+                aria-disabled={soon || undefined}
+                title={soon ? "HSP payments are coming soon" : undefined}
+                onClick={() => {
+                  if (soon) return;
+                  setOpen(false);
+                  go(m.id);
+                }}
+              >
+                <Icon k={m.icon} />
+                <span className="grow">{m.name}</span>
+                {soon && <b className="soon2">soon</b>}
+              </button>
+            );
+          })}
+          <div className="mdiv" />
+          <div className="row sb" style={{ padding: "6px 10px" }}>
+            <span className="sm">View</span>
+            <Seg<Mode> label="Simple or Pro view" value={mode} onChange={setMode} options={[{ id: "simple", label: "Simple" }, { id: "pro", label: "Pro" }]} />
+          </div>
+        </div>
+      )}
       <div className="sp" />
       <div className={`tstat ${cls}`} role="status" aria-live="polite">
         <i aria-hidden="true" />
         {txt.split(" ").map((w, i) => (
-          <span key={i} style={{ display: "block" }}>{w}</span>
+          <span key={i}>{w}</span>
         ))}
       </div>
-      <button className={`ri${nav === "settings" ? " on" : ""}`} aria-current={nav === "settings" ? "page" : undefined} onClick={() => go("settings")} title="Settings (⌘,)">
-        <Icon k="settings" />
-        <span>Settings</span>
-      </button>
     </nav>
   );
 }
 
-export function Shell({ nav, chrome = "app", setupStep, children }: { nav: string; chrome?: "app" | "setup"; setupStep?: number; children: ReactNode }) {
+export function Shell({ nav, chrome = "app", children }: { nav: string; chrome?: "app" | "setup"; setupStep?: number; children: ReactNode }) {
   const { conn, toasts, dismiss } = useApp();
   const [ctx, setCtx] = useState<HTMLElement | null>(null);
   const [insp, setInsp] = useState<HTMLElement | null>(null);
   const [kill, setKill] = useState(false);
+  const [mode, setModeS] = useState<Mode>(() => (localStorage.getItem("flow.mode") === "pro" ? "pro" : "simple"));
+  const setMode = useCallback((m: Mode) => {
+    localStorage.setItem("flow.mode", m);
+    setModeS(m);
+  }, []);
   const go = useCallback((p: string) => (location.hash = "#/" + p.replace(/^#?\/?/, "")), []);
   const openKill = useCallback(() => setKill(true), []);
   useEffect(() => {
@@ -135,7 +180,7 @@ export function Shell({ nav, chrome = "app", setupStep, children }: { nav: strin
       if (e.shiftKey && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setKill(true);
-      } else if (!e.shiftKey && /^[1-7]$/.test(e.key)) {
+      } else if (!e.shiftKey && /^[1-4]$/.test(e.key)) {
         e.preventDefault();
         go(NAV[Number(e.key) - 1]!.id);
       } else if (e.key === ",") {
@@ -146,21 +191,21 @@ export function Shell({ nav, chrome = "app", setupStep, children }: { nav: strin
     window.addEventListener("keydown", k);
     return () => window.removeEventListener("keydown", k);
   }, [go]);
+  const pro = mode === "pro";
   return (
-    <ShellC.Provider value={{ go, openKill }}>
-      <Slots.Provider value={{ ctx, insp }}>
-        <div className={`frame${chrome === "setup" ? " norail" : ""}`}>
-          {chrome === "app" && <Rail nav={nav} go={go} />}
+    <ShellC.Provider value={{ go, openKill, mode, setMode }}>
+      <Slots.Provider value={{ ctx, insp: pro ? insp : null }}>
+        <div className={`frame${chrome === "setup" ? " norail" : ""}${pro ? " pro" : " simple"}`}>
+          {chrome === "app" && <Rail nav={nav} go={go} mode={mode} setMode={setMode} />}
           {chrome === "app" ? (
             <div className="body shellbody">
               <aside className="ctx" ref={setCtx} aria-label="Filters" />
               <main className="main" id="main">{children}</main>
-              <aside className="insp" ref={setInsp} aria-label="Inspector" />
+              {pro && <aside className="insp" ref={setInsp} aria-label="Inspector" />}
             </div>
           ) : (
             <div className="body">{children}</div>
           )}
-          <Footer setupStep={chrome === "setup" ? (setupStep ?? 0) : undefined} />
         </div>
         <div className="toasts" aria-live="polite">
           {toasts.map((t) => (
@@ -212,67 +257,24 @@ export function useEvidence(): { head: { seq: number; hash: string } | null; las
   return s;
 }
 
-const FI = ({ k, children, mut }: { k: string; children: ReactNode; mut?: boolean }) => (
-  <span className={`fi${mut ? " mut" : ""}`}>
-    <b>{k}</b>
-    {children}
-  </span>
-);
-
-function Footer({ setupStep }: { setupStep?: number }) {
-  const { vsOk, mkOk, fetchedAt, stale } = useApp();
-  const now = useNow();
+/** Status lives in Home's sentence and here (no footer, per SIMPLIFY.md): network, vaults, agent, chain head. */
+function MenuStatus() {
+  const { vsOk, stale } = useApp();
   const ev = useEvidence();
   const st = vsOk?.status;
-  const vault = (m: MarketId) => st?.vaults.find((v) => v.market === m);
-  const lim = mkOk?.[0]?.vault.limits;
-  const wc = mkOk?.length ? worstCase(mkOk.map((m) => m.vault.limits)) : null;
-  const paused = st?.vaults.some((v) => v.paused);
-  const up = st ? st.uptimeSec + Math.max(0, now - fetchedAt) : 0;
-  const chip = stale ? (
-    <><span className="up gr">RECONNECTING</span> last read {dur(now - fetchedAt).replace(/^0h /, "")} ago</>
-  ) : setupStep !== undefined ? (
-    <span className="up gr">SETUP {setupStep} / 6</span>
-  ) : paused ? (
-    <><span className="up red">PAUSED{ev.lastPause ? " " + clock(ev.lastPause.at) : ""}</span> {st ? `${int(st.cycles)} cycles · ${int(st.trades)} trades` : ""}</>
-  ) : st ? (
-    <><span className="up">{st.trader.running ? `RUNNING ${dur(up).toUpperCase()}` : "IDLE"}</span> {int(st.cycles)} cycles · {int(st.trades)} trades</>
-  ) : (
-    <span className="up gr">CONNECTING</span>
+  const paused = st?.vaults.filter((v) => v.paused).length ?? 0;
+  const dot = (tone: "ok" | "bad" | "warn", t: ReactNode) => (
+    <div className={`sbi ${tone}`}>
+      <i aria-hidden="true" />
+      {t}
+    </div>
   );
   return (
-    <footer className="foot" aria-label="Evidence">
-      <div className="frow">
-        {(Object.keys(MARKETS) as MarketId[]).map((m) => {
-          const v = vault(m);
-          return v ? (
-            <FI key={m} k={`Vault-${MARKETS[m].label}`}><Link href={explorer.address(v.address)} mono>{v.address}</Link></FI>
-          ) : (
-            <FI key={m} k={`Vault-${MARKETS[m].label}`} mut>not connected</FI>
-          );
-        })}
-        {setupStep === undefined && (
-          <FI k="Chain head">
-            <span className="mono" title={ev.head?.hash}>{ev.head ? short(ev.head.hash, 10, 8) : "—"}</span>
-            {ev.head && <span style={{ color: "var(--sage)" }}> #{group(String(ev.head.seq))}</span>}
-          </FI>
-        )}
-        <span className="sp" />
-        {setupStep === undefined && <FI k="Last trade">{ev.lastTx?.execution ? <Link href={explorer.tx(ev.lastTx.execution.txHash)} mono>{short(ev.lastTx.execution.txHash, 10, 8)}</Link> : "—"}</FI>}
-      </div>
-      <div className="frow">
-        <FI k="Limits">
-          {lim && wc ? `${usdE8Short(lim.maxTradeUsdE8)}/trade · ${usdE8Short(lim.maxEpochUsdE8)}/${lim.epochDuration === 86_400 ? "UTC day" : `${lim.epochDuration / 3600} h`} · ${usdE8Short(lim.maxExposureUsdE8)} exposure · max loss ${centsE8(wc.maxLossUsdE8)}/day` : <span style={{ color: "var(--sage)" }}>read from the vaults…</span>}
-        </FI>
-        <span className="fi">{chip}</span>
-        {st && setupStep === undefined && <FI k="HSKSwap">{int(st.hskswapTrades)} trades routed · {money(Number(st.routedUsd))}</FI>}
-        <span className="sp" />
-        {st && <FI k={networkName(st.chainId)}>block {group(st.blockNumber)}</FI>}
-        <span className="fi">
-          <Link href="https://flowverse.cloud/proof">flowverse.cloud/proof</Link>
-        </span>
-      </div>
-    </footer>
+    <div className="mstat" role="status">
+      {st ? dot("ok", `${networkName(st.chainId)} · block ${group(st.blockNumber)}`) : dot("warn", "Connecting…")}
+      {stale ? dot("bad", "Engine unreachable · limits still hold on-chain") : st && dot(paused ? "bad" : "ok", paused ? (paused === st.vaults.length ? "Both vaults paused" : `${paused} vault paused`) : `${st.vaults.length === 2 ? "Both vaults" : "Vault"} OK`)}
+      {st && !stale && dot(st.trader.running ? "ok" : "warn", st.trader.running ? `Agent running · ${dur(st.uptimeSec)}` : "Agent stopped")}
+      {ev.lastTx?.execution && <div className="xs fg2" style={{ paddingLeft: 14 }}>Last trade <Link href={explorer.tx(ev.lastTx.execution.txHash)} mono>{short(ev.lastTx.execution.txHash, 6, 4)}</Link> · {clock(ev.lastTx.at).slice(0, 5)}</div>}
+    </div>
   );
 }
-

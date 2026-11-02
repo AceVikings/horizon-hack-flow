@@ -151,7 +151,7 @@ function Timeline() {
               <h2 className="dayh">{g.key === todayKey ? "Today · " : ""}{dayName(g.at)}</h2>
               <div className="tl" role="listbox" aria-label={`Decisions ${dayName(g.at)}`}>
                 {g.rows.map((e) => (
-                  <TRow key={e.id} e={e} sel={selected?.id === e.id} onSelect={() => setSel(e.id)} onOpen={() => go("decisions/" + e.id)} />
+                  <TRow key={e.id} e={e} sel={selected?.id === e.id} onSelect={() => setSel(e.id)} onOpen={() => go("activity/" + e.id)} />
                 ))}
               </div>
             </section>
@@ -164,7 +164,7 @@ function Timeline() {
         </div>
       )}
 
-      <Inspector>{selected ? <SelectedRecord e={selected} entries={entries} onOpen={() => go("decisions/" + selected.id)} /> : <span className="sm" style={{ color: "var(--sage)" }}>Select a record.</span>}</Inspector>
+      <Inspector>{selected ? <SelectedRecord e={selected} entries={entries} onOpen={() => go("activity/" + selected.id)} /> : <span className="sm" style={{ color: "var(--sage)" }}>Select a record.</span>}</Inspector>
     </>
   );
 }
@@ -295,7 +295,7 @@ function Record({ id }: { id: string }) {
   const r = useRemote(() => ate.journal.get(id), [id], { onEvents: false });
   const strat = useRemote(() => ate.strategy.get(), [], { onEvents: false });
   const e = r.last;
-  if (r.res && !r.res.ok) return <><PageHead title="Record" crumb={<><button className="linkbtn" onClick={() => go("decisions")}>Decisions</button> / {id}</>} /><ErrorBox code={r.res.error.code} message="Can't read this record" hint={r.res.error.message} /></>;
+  if (r.res && !r.res.ok) return <><PageHead title="Record" crumb={<><button className="linkbtn" onClick={() => go("activity")}>Decisions</button> / {id}</>} /><ErrorBox code={r.res.error.code} message="Can't read this record" hint={r.res.error.message} /></>;
   if (!e) return <div aria-busy="true" style={{ paddingTop: 26 }}><Skeleton w={420} h={52} /><Skeleton h={150} style={{ marginTop: 24, borderRadius: 14 }} /></div>;
 
   const m = marketOf(e);
@@ -343,7 +343,7 @@ function Record({ id }: { id: string }) {
   return (
     <>
       <PageHead
-        crumb={<><button className="linkbtn" onClick={() => go("decisions")}>Decisions</button> / {clock(e.at)} · {mk ? `${mk.base}/${mk.quote}` : "portfolio"} · {e.id}</>}
+        crumb={<><button className="linkbtn" onClick={() => go("activity")}>Decisions</button> / {clock(e.at)} · {mk ? `${mk.base}/${mk.quote}` : "portfolio"} · {e.id}</>}
         title={headline(e).replace(/ \S+$/, "")}
         hl={headline(e).split(" ").pop()}
         sub={subline(e, mk?.label)}
@@ -455,10 +455,10 @@ function Record({ id }: { id: string }) {
           </div>
         )}
         <div style={{ marginTop: "auto", paddingTop: 16 }} className="col g8">
-          <Btn style={{ width: "100%" }} onClick={() => go(`chat/${encodeURIComponent(`Why did you make decision ${e.id}?`)}`)}>Ask in Chat: “why this {e.kind === "execution" ? "trade" : "decision"}?”</Btn>
+          <Btn style={{ width: "100%" }} onClick={() => go(`ask/${encodeURIComponent(`Why did you make decision ${e.id}?`)}`)}>Ask in Chat: “why this {e.kind === "execution" ? "trade" : "decision"}?”</Btn>
           <div className="row g8">
-            <Btn size="sm" className="grow" disabled={!prev} onClick={() => prev && go("decisions/" + prev.id)}>← Previous</Btn>
-            <Btn size="sm" className="grow" disabled={!next} onClick={() => next && go("decisions/" + next.id)}>Next →</Btn>
+            <Btn size="sm" className="grow" disabled={!prev} onClick={() => prev && go("activity/" + prev.id)}>← Previous</Btn>
+            <Btn size="sm" className="grow" disabled={!next} onClick={() => next && go("activity/" + next.id)}>Next →</Btn>
           </div>
         </div>
       </Inspector>

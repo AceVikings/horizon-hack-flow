@@ -5,7 +5,7 @@ import { useState } from "react";
 import { MARKETS, MARKET_IDS, type JournalEntry, type MarketId, type MarketView, type MarketPosition } from "@ate/core";
 import type { ViewProps } from "./registry";
 import { useApp, useNow, useRemote, useTraderState } from "../src/app";
-import { PageHead, Inspector, useEvidence, useKillSwitch, useNav } from "../src/shell";
+import { PageHead, Inspector, useEvidence, useKillSwitch, useMode, useNav } from "../src/shell";
 import { AddrLink, Badge, Banner, Btn, Card, Check, Dialog, Empty, Eyebrow, KV, Meter, NetPill, QR, Skeleton, StatPill, TxLink } from "../src/ui";
 import { age, ago, clock, dayName, dur, e8n, hm, int, money, networkName, short, tokenAmt } from "../src/format";
 import { centsE8, portfolioRisk, vaultRisk } from "../src/risk";
@@ -13,7 +13,122 @@ import { result, summary, tag } from "../src/journal";
 
 const UTC_DAY = 86_400;
 
-export default function Overview(_: ViewProps) {
+export default function Home(props: ViewProps) {
+  const [mode] = useMode();
+  return mode === "pro" ? <Overview {...props} /> : <SimpleHome />;
+}
+
+const START = [
+  { id: "agent", title: "Let the agent trade", desc: "Pick how bold it is. It stays inside your limits.", icon: <><rect x="4" y="7" width="16" height="12" rx="3" /><path d="M12 3v4" /><circle cx="9" cy="13" r="1.2" /><circle cx="15" cy="13" r="1.2" /></> },
+  { id: "ask", title: "Ask the agent", desc: "“How am I doing?” “Go to cash on HSK.”", icon: <><path d="M4 5h16v11H9l-5 4z" /><path d="M8 10h8" /></> },
+  { id: "trade", title: "Trade it myself", desc: "See prices and place an order by hand.", icon: <><path d="M3 20h18" /><path d="M5 16l4.5-5 3.5 3 6-7" /><path d="M15 7h4v4" /></> },
+  { id: "proof", title: "Check safety", desc: "See what the vault refuses, with proof.", icon: <><path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6z" /><path d="M8.5 12l2.5 2.5 4.5-5" /></> },
+];
+
+/** Home (SIMPLIFY.md): one sentence, one control, four start actions; details on request. */
+function SimpleHome() {
+  const { ate, vsOk, mkOk, stale, toast, refresh } = useApp();
+  const kill = useKillSwitch();
+  const go = useNav();
+  const [details, setDetails] = useState(false);
+  const [unpause, setUnpause] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const j = useRemote(() => ate.journal.list({ limit: 40 }), []);
+  if (!vsOk || !mkOk) return <div className="page1" style={{ paddingTop: 40 }} aria-busy="true"><Skeleton w={220} h={44} /><Skeleton h={32} style={{ marginTop: 28 }} /><Skeleton h={64} w={260} style={{ marginTop: 28, borderRadius: 99 }} /></div>;
+  const st = vsOk.status;
+  const risk = portfolioRisk(mkOk.map((m) => m.vault));
+  const paused = st.vaults.some((v) => v.paused);
+  const running = st.trader.running;
+  const today = Number(vsOk.positions.portfolio.realisedUsd);
+  const todayTxt = `${today > 0 ? "+" : ""}${money(today)}`;
+  const sentence = stale ? (
+    <>Flow can't reach its engine right now. <b>Your vaults still enforce every limit.</b></>
+  ) : paused ? (
+    <>Trading is <b>paused</b>. Nothing can trade until you resume on your owner device.</>
+  ) : running ? (
+    <>Your agent is trading. Today: <b className={today < 0 ? "bad" : today > 0 ? "ok" : ""}>{todayTxt}</b>. It can lose at most <b>{centsE8(risk.maxE8)}</b> today.</>
+  ) : (
+    <>Your agent is stopped. Your money is safe in the vaults; at most <b>{centsE8(risk.maxE8)}</b> a day can be lost while it trades.</>
+  );
+  const startAgent = async () => {
+    if (!ate.trader) return go("agent");
+    setStarting(true);
+    const r = await ate.trader.start({});
+    setStarting(false);
+    if (!r.ok) toast({ kind: "error", text: `Couldn't start the agent: ${r.error.code}`, sub: r.error.message });
+    refresh();
+  };
+  const last = (j.last?.entries ?? []).filter((e) => e.kind !== "attestation" && e.kind !== "oracle_refresh").slice(0, 3);
+  return (
+    <div className="page1">
+      <PageHead title="Home" />
+      <p className="sentence" role="status">{sentence}</p>
+      <div className="row g18" style={{ marginTop: 26 }}>
+        {paused ? (
+          <button className="bigctl resume" onClick={() => setUnpause(true)}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l11 7-11 7z" /></svg>Resume trading
+          </button>
+        ) : running ? (
+          <button className="bigctl pause" onClick={kill} title="⌘⇧K">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v8" /><path d="M6.3 6.8a8 8 0 1 0 11.4 0" /></svg>Pause trading
+          </button>
+        ) : (
+          <button className="bigctl resume" onClick={() => void startAgent()} disabled={starting || !!stale}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l11 7-11 7z" /></svg>{starting ? "Starting…" : "Start trading"}
+          </button>
+        )}
+        <span className="sm fg2" style={{ maxWidth: 300 }}>{paused ? "Resuming needs your owner device. Flow shows a QR code." : running ? "Pausing stops both vaults on-chain. You hold to confirm." : "The agent trades only inside the limits set on your vaults."}</span>
+      </div>
+
+      <div className="starts" style={{ marginTop: 40 }}>
+        {START.map((c) => (
+          <button key={c.id} className="start" onClick={() => go(c.id)}>
+            <span className="si"><svg viewBox="0 0 24 24" aria-hidden="true">{c.icon}</svg></span>
+            <span>
+              <span className="st" style={{ display: "block" }}>{c.title}</span>
+              <span className="sd" style={{ display: "block" }}>{c.desc}</span>
+            </span>
+          </button>
+        ))}
+      </div>
+
+      <button className="disclose" style={{ marginTop: 30 }} aria-expanded={details} onClick={() => setDetails((d) => !d)}>
+        <span aria-hidden="true">{details ? "▾" : "▸"}</span> {details ? "Hide details" : "Show details"}
+      </button>
+      {details && (
+        <div className="col" style={{ gap: 14, marginTop: 8 }}>
+          <section className="card" style={{ padding: "18px 22px" }} aria-label="Most you can lose today">
+            <div className="row sb base">
+              <span className="sm b5">Most you can still lose today</span>
+              <span className="sm fg2">{centsE8(risk.usedE8)} of {centsE8(risk.maxE8)} already at risk</span>
+            </div>
+            <Meter value={Number(risk.usedE8)} max={Number(risk.maxE8)} label="Worst-case loss used today" size="thick" style={{ marginTop: 10 }} />
+            <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 18, marginTop: 16 }}>
+              {mkOk.map((m) => {
+                const v = m.vault;
+                const used = e8n(v.epoch.spentUsdE8);
+                const cap = e8n(v.limits.maxEpochUsdE8);
+                return (
+                  <div key={m.market}>
+                    <div className="row sb sm"><b>{MARKETS[m.market].base} vault</b><span className="fg2">{money(used)} of {money(cap, 0)} traded today</span></div>
+                    <Meter value={used} max={cap} label={`${MARKETS[m.market].base} daily budget used`} style={{ marginTop: 6 }} />
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+          <section className="card" style={{ padding: "12px 22px" }} aria-label="Last decisions">
+            {last.length === 0 ? <p className="sm fg2" style={{ padding: "8px 0" }}>No decisions yet.</p> : last.map((e) => <DecRow key={e.id} e={e} onOpen={() => go("activity/" + e.id)} />)}
+            <button className="linkbtn sm" style={{ margin: "10px 0 4px" }} onClick={() => go("activity")}>All activity →</button>
+          </section>
+        </div>
+      )}
+      <UnpauseDialog open={unpause} onClose={() => setUnpause(false)} />
+    </div>
+  );
+}
+
+function Overview(_: ViewProps) {
   const { ate, vsOk, mkOk, stale, refresh, fetchedAt } = useApp();
   const now = useNow();
   const state = useTraderState();
@@ -163,7 +278,7 @@ export default function Overview(_: ViewProps) {
         <div className={`grid fill${stale ? " dim" : ""}`} style={{ gridTemplateColumns: "minmax(0,1fr) 300px", marginTop: 16 }}>
           <Card
             title="Last decisions"
-            right={visible.length ? <button className="linkbtn sm" onClick={() => go("decisions")}>All decisions →</button> : undefined}
+            right={visible.length ? <button className="linkbtn sm" onClick={() => go("activity")}>All decisions →</button> : undefined}
             style={{ padding: "14px 20px 8px" }}
             headStyle={{ marginBottom: 4 }}
           >
@@ -174,7 +289,7 @@ export default function Overview(_: ViewProps) {
             ) : visible.length === 0 ? (
               <Empty title="No decisions yet">The first cycle reads three prices and decides in about {strat.last ? strat.last.strategy.portfolio.scanSeconds ?? 20 : 20} s. Skipped trades show up here too.</Empty>
             ) : (
-              visible.slice(0, 4).map((e) => <DecRow key={e.id} e={e} onOpen={() => go("decisions/" + e.id)} />)
+              visible.slice(0, 4).map((e) => <DecRow key={e.id} e={e} onOpen={() => go("activity/" + e.id)} />)
             )}
           </Card>
           <section className="card dk" style={{ padding: "14px 20px" }} aria-label="AI scoreboard">

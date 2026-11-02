@@ -181,9 +181,11 @@ function createWindow(): void {
     height: 920,
     minWidth: 1100,
     minHeight: 680,
-    backgroundColor: "#0b0d10",
-    title: "ATE",
+    backgroundColor: "#171e19",
+    title: "Flow",
+    // macOS: native traffic lights inset over the dark rail (no separate title bar); the rail's top strip is the drag region.
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
+    ...(process.platform === "darwin" ? { trafficLightPosition: { x: 16, y: 16 } } : {}),
     show: !process.env.ATE_SCREENSHOT_DIR,
     webPreferences: {
       preload: join(__dirname, "../preload/index.js"),
