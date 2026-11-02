@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Flow: let an AI agent trade, cap what it can lose</title>
+  <meta name="description" content="Flow lets an AI agent trade on HSKSwap by itself while a vault contract on HashKey Chain caps what it can lose: $100 per trade, $250 a day, $150 exposure per vault." />
+  <meta name="theme-color" content="#171e19" />
+  <link rel="canonical" href="https://flowverse.cloud/" />
+  <link rel="icon" type="image/svg+xml" href="../../packages/ui/brand/flow-mark.svg" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://flowverse.cloud/" />
+  <meta property="og:title" content="Flow: let an AI agent trade, cap what it can lose" />
+  <meta property="og:description" content="An AI agent trades on HSKSwap by itself. A vault contract on HashKey Chain checks every trade, so a bad prompt or a stolen key can't cost more than the limit you set." />
+  <meta property="og:image" content="https://flowverse.cloud/og.svg" />
+  <meta property="og:image:type" content="image/svg+xml" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="Flow. Let your agent trade. Cap what it can lose." />
+  <meta name="twitter:card" content="summary_large_image" />
+  <script type="module" src="/src/main.ts"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <!-- ============================== NAV ============================== -->
+  <header class="nav" id="top">
+    <div class="wrap nav-row">
+      <a class="nav-logo" href="#top" aria-label="Flow, back to top">
+        <img src="../../packages/ui/brand/flow-lockup.svg" alt="Flow" width="116" height="36" />
+      </a>
+      <nav class="nav-links" id="nav-links" aria-label="Main">
+        <a href="#how">How it works</a>
+        <a href="#proof">Proof</a>
+        <a href="#use">Use cases</a>
+        <a href="https://github.com/AceVikings/horizon-hack-flow#readme">Docs</a>
+        <a class="nav-only-menu" href="https://github.com/AceVikings/horizon-hack-flow/releases/latest">Download for macOS</a>
+      </nav>
+      <div class="nav-end">
+        <a class="nav-text" href="https://github.com/AceVikings/horizon-hack-flow">GitHub</a>
+        <a class="nav-pill" href="https://github.com/AceVikings/horizon-hack-flow/releases/latest">Download</a>
+        <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="nav-links">
+          <span class="sr-only">Menu</span>
+          <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><path d="M3 6h16M3 11h16M3 16h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- ============================== HERO ============================== -->
+    <section class="hero ate-grid-bg" aria-labelledby="hero-title">
+      <div class="wrap hero-inner">
+        <p class="badge"><span class="dot" aria-hidden="true"></span>Running on HashKey Chain testnet</p>
+        <h1 id="hero-title" class="display hero-title"><span class="ln">Let your agent trade.</span> <span class="ln">Cap what it can <span class="ate-hl">lose.</span></span></h1>
+        <p class="hero-sub">Flow lets an AI agent trade on HSKSwap by itself. Your money sits in a vault contract that checks every trade, so a bad prompt or a stolen key can't cost more than the limits you set.</p>
+        <div class="hero-cta">
+          <a class="btn-big" href="https://github.com/AceVikings/horizon-hack-flow/releases/latest">
+            <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M16.37 12.6c-.02-2.3 1.88-3.4 1.96-3.46-1.07-1.56-2.73-1.78-3.32-1.8-1.41-.14-2.76.83-3.47.83-.72 0-1.82-.81-3-.79-1.54.02-2.96.9-3.76 2.27-1.6 2.78-.41 6.9 1.15 9.15.76 1.1 1.67 2.34 2.86 2.3 1.15-.05 1.58-.74 2.97-.74 1.38 0 1.78.74 2.99.72 1.24-.02 2.02-1.12 2.77-2.23.88-1.28 1.24-2.52 1.26-2.59-.03-.01-2.4-.92-2.41-3.66ZM14.1 5.86c.63-.77 1.06-1.83.94-2.89-.91.04-2.02.61-2.67 1.37-.58.67-1.1 1.76-.96 2.8 1.02.08 2.06-.52 2.69-1.28Z"/></svg>
+            Download for macOS
+          </a>
+          <a class="btn-line" href="https://github.com/AceVikings/horizon-hack-flow#readme">Read the docs <span aria-hidden="true">→</span></a>
+        </div>
+        <p class="hero-note">Free and open source (Apache-2.0). Testnet today, mainnet next.</p>
+
+        <dl class="stats">
+          <div><dt>Per trade</dt><dd>$100</dd></div>
+          <div><dt>Per day, per vault</dt><dd>$250</dd></div>
+          <div><dt>Held per vault</dt><dd>$150</dd></div>
+          <div class="stat-key"><dt>Max loss / day</dt><dd>≤ $51.50</dd></div>
+        </dl>
+        <p class="stats-foot">Default limits, enforced on-chain. The $51.50 bound is for both vaults together and covers every trade path while the Supra price feed is live. Price moves on what the vault holds are handled by the stop-loss, not the contract.</p>
+      </div>
+
+      <!-- abstract UI mockup -->
+      <div class="wrap">
+        <figure class="mock" aria-label="Illustration of the Flow desktop app: the agent proposes a trade and the vault checks it against the limits">
+          <div class="mock-bar" aria-hidden="true">
+            <span class="lights"><i></i><i></i><i></i></span>
+            <span class="mock-title">Flow · Decisions</span>
+            <span class="mock-net">Testnet 133</span>
+          </div>
+          <div class="mock-body" aria-hidden="true">
+            <aside class="mock-side">
+              <img src="../../packages/ui/brand/flow-mark.svg" alt="" width="28" height="28" />
+              <ul>
+                <li>Overview</li>
+                <li class="on">Decisions</li>
+                <li>Trade</li>
+                <li>Positions</li>
+                <li>Agents</li>
+                <li>Chat</li>
+              </ul>
+              <div class="side-foot"><span class="live"></span>Supra price live</div>
+            </aside>
+            <div class="mock-canvas">
+              <div class="mock-card">
+                <div class="mc-head">
+                  <span class="mc-eb">Agent proposal · Vault-BTC</span>
+                  <span class="chip ok">✓ Passed</span>
+                </div>
+                <div class="mc-trade"><span class="display">Buy WBTC</span><span class="display mc-amt">$25.00</span></div>
+                <p class="mc-why">Pool sits 132.9 bps under the exchange mid. Net edge after costs: +68.9 bps.</p>
+                <ul class="mc-checks">
+                  <li><span>Trade size</span><b>$25 of $100</b><i>✓</i></li>
+                  <li><span>Used today</span><b>$25 of $250</b><i>✓</i></li>
+                  <li><span>Held after trade</span><b>$25 of $150</b><i>✓</i></li>
+                  <li><span>Price vs Supra</span><b>within 250 bps</b><i>✓</i></li>
+                </ul>
+                <div class="mc-foot"><span>TradeExecuted · 0x4ff2…9c0d</span><span>EAS ✓</span></div>
+              </div>
+              <div class="cursor"><svg width="18" height="18" viewBox="0 0 18 18"><path d="M2 1l13 7-6 1.5L6.5 16z" fill="#171e19" stroke="#fff" stroke-width="1.2" stroke-linejoin="round"/></svg><span>Claude · agent</span></div>
+            </div>
+            <aside class="mock-props">
+              <p class="mp-title display">Limits</p>
+              <dl>
+                <div><dt>Per trade</dt><dd>$100</dd></div>
+                <div><dt>Per day</dt><dd>$250</dd></div>
+                <div><dt>Exposure</dt><dd>$150</dd></div>
+                <div><dt>Slippage</dt><dd>250 bps</dd></div>
+                <div><dt>Cooldown</dt><dd>60 s</dd></div>
+              </dl>
+              <p class="mp-title display">Profile</p>
+              <div class="seg"><span class="on">Default</span><span>Demo</span></div>
+              <p class="mp-title display">Keys</p>
+              <ul class="keys">
+                <li><span class="sw y"></span>Agent: trade, pause</li>
+                <li><span class="sw"></span>Guardian: pause</li>
+                <li><span class="sw"></span>Owner: withdraw, limits</li>
+              </ul>
+            </aside>
+          </div>
+          <figcaption class="mock-cap">Illustration. Numbers from the real testnet WBTC trade on 2 Nov 2026 (staged pool gap).</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <!-- ============================== BUILT ON ============================== -->
+    <section class="built" aria-labelledby="built-title">
+      <div class="wrap built-row">
+        <h2 id="built-title" class="built-label">Built on</h2>
+        <ul class="marks">
+          <li class="mk mk-hsk">HashKey Chain</li>
+          <li class="mk mk-swap">HSKSwap</li>
+          <li class="mk mk-supra">Supra</li>
+          <li class="mk mk-eas">EAS</li>
+          <li class="mk mk-mcp">Claude <span>/ MCP</span></li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============================== OLD WAY / FLOW WAY ============================== -->
+    <section class="split" aria-label="Without Flow and with Flow">
+      <div class="split-half old">
+        <div class="split-inner">
+          <h2 class="display split-title">The old way</h2>
+          <p class="split-lede">Give the agent a hot wallet and hope.</p>
+          <ul class="list-x">
+            <li><span class="ico" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M5 5l10 10M15 5L5 15" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></span><span><b>One bad prompt can spend everything.</b> Nothing sits between the model and the wallet.</span></li>
+            <li><span class="ico" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M5 5l10 10M15 5L5 15" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></span><span><b>A stolen key can withdraw it all.</b> The key that trades is the key that owns the money.</span></li>
+            <li><span class="ico" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M5 5l10 10M15 5L5 15" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></span><span><b>Any price goes through.</b> A token allowance doesn't know what a fair price is.</span></li>
+            <li><span class="ico" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M5 5l10 10M15 5L5 15" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></span><span><b>No record of why.</b> After a bad night you have balances, not reasons.</span></li>
+          </ul>
+        </div>
+      </div>
+      <div class="split-half new">
+        <div class="split-inner">
+          <h2 class="display split-title">The Flow way</h2>
+          <p class="split-lede">Put the money in a vault that checks every trade.</p>
+          <ul class="list-ok">
+            <li><span class="ico" aria-hidden="true"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M6 10.3l2.7 2.6L14 7.6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span><b>Hard caps on-chain.</b> $100 a trade, $250 a day and $150 held, per vault. The agent can't raise them.</span></li>
+            <li><span class="ico" aria-hidden="true"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M6 10.3l2.7 2.6L14 7.6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span><b>The agent key can't withdraw.</b> It can trade inside the limits or pause. Only your owner key moves funds out.</span></li>
+            <li><span class="ico" aria-hidden="true"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M6 10.3l2.7 2.6L14 7.6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span><b>Bad prices revert.</b> Each trade is checked against the Supra oracle price, with one pool and one router fixed at deploy.</span></li>
+            <li><span class="ico" aria-hidden="true"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M6 10.3l2.7 2.6L14 7.6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span><b>Every decision is written down.</b> Trades and skipped trades go in a journal; each trade's reason hash goes on-chain.</span></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================== BENTO ============================== -->
+    <section class="bento-sec" id="features" aria-labelledby="bento-title">
+      <div class="wrap">
+        <p class="eyebrow">What you get</p>
+        <h2 id="bento-title" class="display sec-title">Autonomy with a <span class="ate-hl">ceiling.</span></h2>
+        <div class="bento">
+          <article class="cell cell-wide dark">
+            <h3 class="display cell-title">A stolen key can't drain it</h3>
+            <p class="cell-text">We took the real agent key and tried to break the vault. Every attack reverted on-chain with a named error.</p>
+            <div class="term" role="img" aria-label="Six attacks sent with the agent key, each reverted: TradeCap, Exposure, Slippage, PairNotAllowed, NotOwner, NotOwner">
+              <div class="term-head" aria-hidden="true"><span>agent key → Vault-HSK</span><span class="t-net">Testnet</span></div>
+              <ol aria-hidden="true">
+                <li><span>execute</span><span>$5,000 buy</span><b>✕ TradeCap</b></li>
+                <li><span>execute</span><span>buy past $150 held</span><b>✕ Exposure</b></li>
+                <li><span>execute</span><span>minAmountOut = 1</span><b>✕ Slippage</b></li>
+                <li><span>execute</span><span>attacker's token</span><b>✕ PairNotAllowed</b></li>
+                <li><span>withdraw</span><span>all tUSDT to attacker</span><b>✕ NotOwner</b></li>
+                <li><span>setLimits</span><span>maxTrade = $1,000,000</span><b>✕ NotOwner</b></li>
+              </ol>
+            </div>
+          </article>
+
+          <article class="cell soft cell-num">
+            <h3 class="display cell-title">Know the worst day</h3>
+            <p class="big-num display"><span class="ate-hl">≤ $51.50</span></p>
+            <p class="cell-text">The most bad trades can cost across both vaults in one UTC day, on every path, while the Supra price is live. That's $25.75 per vault.</p>
+          </article>
+
+          <article class="cell soft">
+            <h3 class="display cell-title">Steer it in plain words</h3>
+            <p class="cell-text">Tell it what you want. Tightening applies at once; loosening asks you first.</p>
+            <div class="chat" aria-hidden="true">
+              <p class="bub you">Go to cash on HSK, keep the BTC.</p>
+              <p class="bub sys"><span class="chip ok">✓</span> Target assets: BTC only. Guard sold the HSK lot.</p>
+              <p class="bub you">Trade HSK again.</p>
+              <p class="bub sys"><span class="chip warn">!</span> Loosening. Confirm on this Mac.</p>
+            </div>
+          </article>
+
+          <article class="cell cell-wide">
+            <h3 class="display cell-title">Every decision on the record</h3>
+            <p class="cell-text">Trades, skips and vetoes go into a hash-chained journal. Each trade puts its reason hash on-chain and gets an EAS attestation, so anyone can match what happened to why.</p>
+            <div class="journal" role="table" aria-label="Sample journal rows from the testnet run">
+              <div role="row" class="jr jh"><span role="columnheader">Kind</span><span role="columnheader">Market</span><span role="columnheader">What happened</span><span role="columnheader">Proof</span></div>
+              <div role="row" class="jr"><span role="cell"><em class="k k-trade">trade</em></span><span role="cell">WBTC</span><span role="cell">Buy $25, net edge +68.9 bps</span><span role="cell">tx · EAS</span></div>
+              <div role="row" class="jr"><span role="cell"><em class="k">no_trade</em></span><span role="cell">WBTC</span><span role="cell">No signal, skipped</span><span role="cell">journal</span></div>
+              <div role="row" class="jr"><span role="cell"><em class="k k-veto">veto</em></span><span role="cell">HSK</span><span role="cell">Agent turned down a stale buy</span><span role="cell">journal</span></div>
+              <div role="row" class="jr"><span role="cell"><em class="k k-trade">trade</em></span><span role="cell">WBTC</span><span role="cell">Closed the lot, +70.11 bps</span><span role="cell">tx · EAS</span></div>
+            </div>
+          </article>
+
+          <article class="cell">
+            <h3 class="display cell-title">Pause from another device</h3>
+            <p class="cell-text">The guardian key lives off the agent's machine. It pauses the vault in one transaction. Only the owner can unpause.</p>
+            <div class="pulse" aria-hidden="true"><span class="pulse-dot"></span><span class="pulse-label display">Paused</span></div>
+          </article>
+
+          <article class="cell dark">
+            <h3 class="display cell-title">Bring your own agent</h3>
+            <p class="cell-text">Flow speaks MCP. Our trader runs on Claude; any MCP agent can use the same tools.</p>
+            <ul class="stack" aria-label="Works with">
+              <li>Claude Code</li><li>Codex</li><li>opencode</li><li>Any MCP client</li>
+            </ul>
+          </article>
+
+          <article class="cell soft">
+            <h3 class="display cell-title">Open, and tested</h3>
+            <p class="cell-text">Apache-2.0. The vault contract has 148 tests and fuzzed invariants, and the same source is verified on the explorer.</p>
+            <p class="big-num display small">148<span> tests</span></p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================== HOW IT WORKS ============================== -->
+    <section class="how" id="how" aria-labelledby="how-title">
+      <div class="wrap how-grid">
+        <div class="how-left">
+          <p class="eyebrow">How it works</p>
+          <h2 id="how-title" class="display how-title">Three steps. Then let it run.</h2>
+        </div>
+        <ol class="steps">
+          <li class="step">
+            <span class="step-num display" aria-hidden="true">01</span>
+            <div>
+              <h3 class="display step-title">Set the limits</h3>
+              <p>Flow deploys one vault per market (WHSK/USDT and WBTC/USDT) and you fund it. You choose the per-trade, per-day and exposure caps. The owner and guardian keys stay on your own devices, never on the agent's machine.</p>
+            </div>
+          </li>
+          <li class="step">
+            <span class="step-num display" aria-hidden="true">02</span>
+            <div>
+              <h3 class="display step-title">Let the agent trade</h3>
+              <p>Flow watches the HSKSwap pools, the Supra price and the HashKey Global order books, and lines up candidate trades. The agent picks one, sizes it down or skips. The vault checks the trade on-chain and swaps on HSKSwap. The output stays in the vault.</p>
+            </div>
+          </li>
+          <li class="step">
+            <span class="step-num display" aria-hidden="true">03</span>
+            <div>
+              <h3 class="display step-title">Check the record</h3>
+              <p>Every decision lands in the journal with its reason. Trades carry the reason hash on-chain and an EAS attestation. Stop-loss and take-profit run without asking the model, and you can pause any time.</p>
+            </div>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- ============================== PROOF ============================== -->
+    <section class="proof" id="proof" aria-labelledby="proof-title">
+      <div class="wrap">
+        <p class="eyebrow">Proof, not promises</p>
+        <h2 id="proof-title" class="display sec-title">It already ran on <span class="ate-hl">testnet.</span></h2>
+        <p class="proof-lede">These are real transactions on HashKey Chain testnet (chain 133) with test tokens, from 2 Nov 2026. Nobody else trades the test pools, so we moved two pool prices with our own swaps to create a gap; rows that depend on that say “staged”. Mainnet is next.</p>
+
+        <div class="proof-grid">
+          <article class="pcard">
+            <header><h3 class="display">The two vaults</h3><span class="tn">Testnet</span></header>
+            <ul class="plist">
+              <li><a href="https://testnet-explorer.hskchain.net/address/0xF80A74F4D9C17Db8a2a0F32558a9FC3A63e2Bcd2?tab=contract"><span>Vault-HSK · WHSK/USDT</span><code>0xF80A…Bcd2</code></a></li>
+              <li><a href="https://testnet-explorer.hskchain.net/address/0x6Da0c6EF7328d3aD6b0b8781770D941D065a6693?tab=contract"><span>Vault-BTC · WBTC/USDT</span><code>0x6Da0…6693</code></a></li>
+            </ul>
+            <p class="pnote">Same verified source on both. <code>limits()</code> reads $100 / $250 / $150.</p>
+          </article>
+
+          <article class="pcard">
+            <header><h3 class="display">A trade the AI decided</h3><span class="tn">Testnet</span></header>
+            <ul class="plist">
+              <li><a href="https://testnet-explorer.hskchain.net/tx/0x4ff2ad5176975fed3b45e5242894cce949b68b626051e82ec3d270474fde9c0d"><span>WBTC buy, $25 (staged gap)</span><code>0x4ff2…9c0d</code></a></li>
+              <li><a href="https://testnet-explorer.hskchain.net/tx/0x1f042937320537b9e3b749d327eb2648613aeb1c6319a476f48341bba0a798f8"><span>EAS attestation for it</span><code>0x1f04…98f8</code></a></li>
+              <li><a href="https://testnet-explorer.hskchain.net/tx/0xfb0a8f69cbab91888e03d5f33cfe9139be8a3ead5bc70e081498d6840081695b"><span>Closing sell, +70.11 bps</span><code>0xfb0a…695b</code></a></li>
+            </ul>
+            <p class="pnote">The trade event carries the journal record hash; the attestation repeats it.</p>
+          </article>
+
+          <article class="pcard pcard-wide">
+            <header><h3 class="display">Attacks with the agent key</h3><span class="tn">Testnet</span></header>
+            <ul class="plist cols">
+              <li><a href="https://testnet-explorer.hskchain.net/tx/0x7213dfc80d876804e3232bc572b2ecc99faae25f75e4457da71b8616ca091e24"><span>$5,000 buy</span><code>TradeCap</code></a></li>
+              <li><a href="https://testnet-explorer.hskchain.net/tx/0x39f56ce9b6e78e866ee74200d4cc87093f037098e842dbb5a2a6de5351f68856"><span>Buy past the $150 cap</span><code>Exposure</code></a></li>
+              <li><a href="https://testnet-explorer.hskchain.net/tx/0x0677fb8896195c736201374805876d0aa0122b0ea57ecdf08b5f78f40b531558"><span>“Take any price”</span><code>Slippage</code></a></li>
+              <li><a href="https://testnet-explorer.hskchain.net/tx/0xf3e465a59deb84b297f6e9a8c56eb6420e7b0a831fb2e22fe0056d8f549bcb04"><span>Attacker's token</span><code>PairNotAllowed</code></a></li>
+              <li><a href="https://testnet-explorer.hskchain.net/tx/0x6f5d929c9591a028c811eb7f841cc77bf435619f799b344f8ff4881cfb139a8c"><span>Withdraw everything</span><code>NotOwner</code></a></li>
+              <li><a href="https://testnet-explorer.hskchain.net/tx/0x83f807a8f22886a881e5d461156c9e415676b03c832b55baa0c51b202b737410"><span>Raise its own limits</span><code>NotOwner</code></a></li>
+            </ul>
+            <p class="pnote">Each link opens a failed transaction from the agent key, with the decoded error.</p>
+          </article>
+
+          <article class="pcard pcard-wide">
+            <header><h3 class="display">Kill switch</h3><span class="tn">Testnet</span></header>
+            <ol class="plist flow3">
+              <li><a href="https://testnet-explorer.hskchain.net/tx/0xaba62b83fd096241a703c4f4ced8b7a7eb4a3e9101a127c71c60e1c11c4a221a"><span>Guardian pauses</span><code>0xaba6…221a</code></a></li>
+              <li><a href="https://testnet-explorer.hskchain.net/tx/0x62f96834dfa5ff64bb0ddd378c56f2a42d5b83b96d951f7a0803ca6029b31a8b"><span>Agent trade refused</span><code>VaultPaused</code></a></li>
+              <li><a href="https://testnet-explorer.hskchain.net/tx/0x530bafc2456b50dd35ee58359f02b1c4b8e44c9719f154caff7e599680f9e949"><span>Owner unpauses</span><code>0x530b…9949</code></a></li>
+            </ol>
+          </article>
+        </div>
+        <p class="proof-more"><a href="https://github.com/AceVikings/horizon-hack-flow/blob/main/docs/JUDGE.md">Every testnet link, with what to look for <span aria-hidden="true">→</span></a></p>
+      </div>
+    </section>
+
+    <!-- ============================== USE CASES ============================== -->
+    <section class="use" id="use" aria-labelledby="use-title">
+      <div class="wrap">
+        <p class="eyebrow">Use cases</p>
+        <h2 id="use-title" class="display sec-title">What it does <span class="ate-hl">for you.</span></h2>
+        <p class="use-lede">Three people Flow is built for. These are use cases, not quotes from customers.</p>
+        <div class="use-grid">
+          <article class="ucard">
+            <span class="uico" aria-hidden="true"><svg viewBox="0 0 40 40"><path d="M13 12l-8 8 8 8M27 12l8 8-8 8M23 8l-6 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            <p class="utext">You built a trading agent and want to leave it running overnight. Connect it to Flow's MCP server. It gets candidates, quotes and an execute tool, and the vault decides what's allowed.</p>
+            <footer class="uwho"><span class="ava" aria-hidden="true">AB</span><span><b class="display">Agent builder</b><small>Use case</small></span></footer>
+          </article>
+          <article class="ucard mid">
+            <span class="uico" aria-hidden="true"><svg viewBox="0 0 40 40"><path d="M20 4l13 5v10c0 9-6 14.5-13 17C13 33.5 7 28 7 19V9z" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linejoin="round"/><path d="M14 20l4.5 4.5L27 16" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            <p class="utext">You want to know the worst case before you fund anything. Set the caps once. A bad prompt or a stolen key can't go past them, and you can pause from another device.</p>
+            <footer class="uwho"><span class="ava" aria-hidden="true">RO</span><span><b class="display">Risk-conscious operator</b><small>Use case</small></span></footer>
+          </article>
+          <article class="ucard">
+            <span class="uico" aria-hidden="true"><svg viewBox="0 0 40 40"><circle cx="17" cy="17" r="10" fill="none" stroke="currentColor" stroke-width="3.2"/><path d="M25 25l10 10" stroke="currentColor" stroke-width="3.6" stroke-linecap="round"/></svg></span>
+            <p class="utext">You need to check what happened and why. Each trade's ID matches a journal record, its reason hash is in the event, and an EAS attestation ties them together.</p>
+            <footer class="uwho"><span class="ava" aria-hidden="true">AU</span><span><b class="display">Auditor</b><small>Use case</small></span></footer>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================== FINAL CTA ============================== -->
+    <section class="cta" id="get" aria-labelledby="cta-title">
+      <div class="cta-bg display" aria-hidden="true"><span>Flow.</span><span>Flow.</span></div>
+      <div class="wrap cta-inner">
+        <h2 id="cta-title" class="display cta-title"><span class="ln">Let it trade.</span> <span class="ln">Know the worst case.</span></h2>
+        <p class="cta-sub">Flow runs on your Mac. It's free, open source and on testnet today.</p>
+        <div class="cta-btns">
+          <a class="btn-dark" href="https://github.com/AceVikings/horizon-hack-flow/releases/latest">Download for macOS</a>
+          <a class="btn-line on-y" href="https://github.com/AceVikings/horizon-hack-flow#readme">Read the docs <span aria-hidden="true">→</span></a>
+        </div>
+        <form class="wait" id="wait" action="mailto:hello@flowverse.cloud" method="get" enctype="text/plain">
+          <label for="wait-email" class="wait-label">Hear when mainnet is live</label>
+          <div class="wait-row">
+            <input id="wait-email" name="body" type="email" required autocomplete="email" placeholder="you@example.com" aria-describedby="wait-note" />
+            <input type="hidden" name="subject" value="Flow mainnet waitlist" />
+            <button type="submit" class="display">Notify me</button>
+          </div>
+          <p class="wait-note" id="wait-note">No sign-up server. This opens your email app with a short note to hello@flowverse.cloud. Nothing is stored or tracked on this site.</p>
+          <p class="wait-status" id="wait-status" role="status" aria-live="polite"></p>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <!-- ============================== FOOTER ============================== -->
+  <footer class="foot ate-dark">
+    <div class="wrap foot-grid">
+      <div class="foot-brand">
+        <img src="../../packages/ui/brand/flow-lockup-dark.svg" alt="Flow" width="129" height="40" />
+        <p>An AI agent trades on HSKSwap by itself. A vault contract on HashKey Chain caps what it can lose.</p>
+      </div>
+      <nav aria-label="Product">
+        <h2>Product</h2>
+        <ul>
+          <li><a href="#how">How it works</a></li>
+          <li><a href="#proof">Testnet proof</a></li>
+          <li><a href="https://github.com/AceVikings/horizon-hack-flow/releases/latest">Download for macOS</a></li>
+        </ul>
+      </nav>
+      <nav aria-label="Docs">
+        <h2>Docs</h2>
+        <ul>
+          <li><a href="https://github.com/AceVikings/horizon-hack-flow#readme">README</a></li>
+          <li><a href="https://github.com/AceVikings/horizon-hack-flow/blob/main/SPEC.md">Full design (SPEC)</a></li>
+          <li><a href="https://github.com/AceVikings/horizon-hack-flow/blob/main/docs/JUDGE.md">All testnet links</a></li>
+          <li><a href="https://github.com/AceVikings/horizon-hack-flow">Source on GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+    <div class="wrap foot-small">
+      <p>Apache-2.0 · Testnet today, mainnet next. Flow doesn't promise profit; the pools are thin. What it gives you is a hard, known limit on loss. Not financial advice.</p>
+      <p>No cookies, no analytics.</p>
+    </div>
+  </footer>
+</body>
+</html>
