@@ -18,7 +18,7 @@ export default function Welcome() {
   const lim = useSetupGet<Limits>("/setup/limits");
   // Defaults (SPEC §19): $250/day budget at 1030 bps per vault; replaced by the live vaults once readable.
   const def = worstCase([{ maxEpochUsdE8: 250_00000000n, maxSlippageBps: 250, maxOracleDeviationBps: 250, maxExitDiscountBps: 500 }, { maxEpochUsdE8: 250_00000000n, maxSlippageBps: 250, maxOracleDeviationBps: 250, maxExitDiscountBps: 500 }]);
-  const max = lim.data?.worstCase.maxLossUsd ?? (Number(def.maxLossUsdE8) / 1e8).toFixed(2);
+  const max = Number(lim.data?.worstCase.maxLossUsd ?? Number(def.maxLossUsdE8) / 1e8).toFixed(2);
   const exp = lim.data?.vaults[0]?.limits ? (Number(BigInt(lim.data.vaults[0].limits.maxExposureUsdE8)) / 1e8).toFixed(0) : "150";
   const pct = ((Number(max) / 280) * 100).toFixed(0);
   const resume = st.data && st.data.state.step > 0 && !st.data.state.completedAt ? st.data.state.step : 0;

@@ -42,7 +42,7 @@
 /* simplified setup (SIMPLIFY.md): one column, three steps */
 .sw { grid-column: 1 / -1; height: 100%; display: grid; grid-template-rows: auto minmax(0,1fr); background: #fff;
   background-image: linear-gradient(to right, var(--gridline) 1px, transparent 1px), linear-gradient(to bottom, var(--gridline) 1px, transparent 1px); background-size: 40px 40px; }
-.sw-top { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 18px 40px; border-bottom: 1px solid var(--line); background: rgba(255,255,255,.94); }
+.sw-top { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 18px 40px 18px 96px; -webkit-app-region: drag; user-select: none; border-bottom: 1px solid var(--line); background: rgba(255,255,255,.94); }
 .sw-top .logo { color: var(--c); }
 .sw-steps { display: flex; gap: 6px; list-style: none; margin: 0; padding: 0; }
 .sw-steps button { display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; border: 0; background: none; font: 500 13.5px/1 var(--body); color: var(--fg2); cursor: pointer; }
@@ -81,3 +81,5 @@
 .stx.ok .g { color: var(--ok); } .stx.bad .g, .stx.bad { color: var(--bad); } .stx.warn .g { color: var(--warn); } .stx.info .g { color: var(--info); }
 .stepno { font-size: 13px; font-weight: 600; color: var(--fg2); }
 .prov.on { border: 1.5px solid var(--c); box-shadow: none; }
+.sw-top button, .sw-top a { -webkit-app-region: no-drag; }
+.unlock .box { -webkit-app-region: no-drag; }

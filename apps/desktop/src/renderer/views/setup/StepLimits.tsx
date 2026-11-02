@@ -73,7 +73,7 @@ export default function StepLimits() {
       ) : (
         <>
           <section className="card dk" style={{ marginTop: 24, padding: "26px 28px" }} aria-label="Most it can lose">
-            <div className="lbl" style={{ color: "var(--sage)" }}>Most the agent can lose in a day</div>
+            <div className="sm" style={{ color: "var(--sage)" }}>Most the agent can lose in a day</div>
             <div className="bignum" style={{ color: "var(--y)", marginTop: 10 }} aria-live="polite">${maxDay.toFixed(2)}</div>
             <div className="sm" style={{ color: "var(--sage)", marginTop: 8 }}>
               Across {n === 2 ? "both vaults" : "your vault"}, on every path. That is {((maxDay / deposit) * 100).toFixed(1)}% of ${deposit.toFixed(0)}.
