@@ -1,0 +1,1218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Flow — production v1 user flow</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="flow.css">
+</head>
+<body class="board">
+
+<header class="board-head">
+  <div class="bh-row">
+    <div>
+      <span data-logo="lockup-dark" data-h="84"></span>
+      <h1>User flow · <span class="hl">production v1</span></h1>
+      <p class="lede">Every screen of the Flow desktop app at 1440 × 900, wired into the five primary journeys. <b>No step needs a terminal</b>: setup, unlock, health checks, keys, limits, funding and the attack proof all happen in the app. Owner and guardian keys stay on the owner's own device and are reached by a QR handoff.</p>
+    </div>
+    <div class="bh-meta">
+      <div>Network<b>Testnet 133</b></div>
+      <div>Max loss / UTC day<b>$51.50</b></div>
+      <div>Per vault<b>$100 · $250 · $150</b></div>
+      <div>Screens<b>10 + wizard</b></div>
+      <div>Journeys<b>A – E</b></div>
+      <div>Domain<b>flowverse.cloud</b></div>
+    </div>
+  </div>
+  <div class="legend">
+    <span class="lg"><span class="hot-demo">1</span> Hotspot: the control the user presses, numbered in journey order</span>
+    <span class="lg"><svg width="70" height="16"><path d="M2 8H60" stroke="#ffe17c" stroke-width="3"/><path d="M56 2l10 6-10 6" fill="#ffe17c"/></svg> Transition, labelled with the trigger</span>
+    <span class="lg"><span class="bd y lgx">STATE</span> Variant of a screen</span>
+    <span class="lg">Content: real testnet 133 addresses from <code style="color:#fff;background:#ffffff14;border-color:#ffffff22">deployments/133.json</code>; attack and decision tx hashes are illustrative</span>
+  </div>
+</header>
+
+<!-- ============================================================================================
+     LANE A — FIRST RUN
+     ============================================================================================ -->
+<section class="lane" id="A">
+  <div class="lane-head"><span class="lk">A</span><h2>First run</h2><p>Welcome → six setup steps → Overview. Each step is resumable; owner actions are QR handoffs to a Safe or hardware wallet on another device.</p></div>
+  <div class="lane-row">
+
+  <!-- 00 WELCOME -->
+  <div class="fw" data-cap="00|Welcome|first launch">
+  <div class="frame norail" data-id="00-welcome" data-foot="setup:0">
+    <div class="welcome">
+      <div class="wl">
+        <div class="lights" style="padding-left:0;margin-bottom:44px"><i></i><i></i><i></i></div>
+        <span data-logo="lockup-dark" data-h="64"></span>
+        <div style="margin-top:auto"></div>
+        <div class="eb" style="color:var(--sage)">Bounded autonomy for AI traders · HashKey Chain</div>
+        <h1 style="margin-top:22px;font-size:92px;line-height:.95">Let an AI trade.<br>Know the<br><span class="hl">worst case</span> first.</h1>
+        <p class="lead">Flow runs an AI trader on HSKSwap around the clock. Your funds sit in a vault contract that checks every trade, so <b>a bad prompt or a stolen key can't cost more than the limit you set.</b></p>
+        <div class="row g18" style="margin-top:34px">
+          <span class="btn pri xl hot">Set up Flow <span class="hn">1</span></span>
+          <span class="btn lg" style="font-size:15px">I already have vaults</span>
+        </div>
+        <div class="row g18 sm" style="margin-top:22px;color:var(--sage)">
+          <span>About 10 minutes</span><span>·</span><span>No terminal</span><span>·</span><span>Owner keys stay on your own device</span>
+        </div>
+      </div>
+      <div class="wr">
+        <div class="eb" style="color:var(--sage);margin-bottom:14px">With the default limits</div>
+        <div class="pc"><div class="pn">01</div><div><div class="pt">The key can never withdraw</div><div class="pd2">The agent key may trade inside your limits or pause. Only your owner device can move funds out of a vault.</div></div></div>
+        <div class="pc"><div class="pn">02</div><div><div class="pt">≤ $51.50 a day</div><div class="pd2">Worst-case execution loss across both vaults, on every path, while the Supra price feed is live. About 18% of a $280 test wallet.</div></div></div>
+        <div class="pc"><div class="pn">03</div><div><div class="pt">≤ $150 per vault</div><div class="pd2">Exposure cap checked on-chain at every buy. Price risk on what is held is managed by the stop-loss, not the contract.</div></div></div>
+        <div class="card d2" style="margin-top:26px;background:#1f2622;border-color:rgba(183,198,194,.14);padding:18px 20px">
+          <div class="lbl" style="color:var(--sage)">Every trade, every time</div>
+          <div class="row g8 mt12" style="margin-top:14px;align-items:stretch">
+            <div class="grow" style="border:1px solid rgba(183,198,194,.2);border-radius:10px;padding:10px 12px"><div class="h4">AI agent</div><div class="xs mt4" style="color:var(--sage)">decides and signs</div></div>
+            <div style="align-self:center;color:var(--y);font-size:18px">→</div>
+            <div class="grow" style="border:1.5px solid var(--y);border-radius:10px;padding:10px 12px"><div class="h4" style="color:var(--y)">Vault</div><div class="xs mt4" style="color:var(--sage)">checks 13 rules</div></div>
+            <div style="align-self:center;color:var(--y);font-size:18px">→</div>
+            <div class="grow" style="border:1px solid rgba(183,198,194,.2);border-radius:10px;padding:10px 12px"><div class="h4">HSKSwap</div><div class="xs mt4" style="color:var(--sage)">fills or reverts</div></div>
+          </div>
+        </div>
+        <div style="margin-top:auto" class="row sb xs">
+          <span style="color:var(--sage)">Contracts: Apache-2.0 · 148 tests · fuzzed invariants</span>
+          <span style="color:var(--sage)">v1.0.0</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  </div>
+
+  <div class="conn" data-n="1" data-t="Set up Flow"></div>
+
+  <!-- 01 NETWORK -->
+  <div class="fw" data-cap="01|Setup · Network|step 1 of 6">
+  <div class="frame norail" data-id="01-setup-network" data-wz="1" data-foot="setup:1">
+    <div class="wz-body">
+      <div class="eb">Step 1 of 6 · Network</div>
+      <h1>Where will Flow <span class="hl">trade?</span></h1>
+      <p class="lead">Testnet uses free test tokens and unlocks the in-app attack suite. Mainnet trades real funds. You can switch later in Settings; each network keeps its own vaults, key and journal.</p>
+      <div class="grid mt20" style="grid-template-columns:1fr 1fr;gap:20px;margin-top:30px">
+        <div class="choice on">
+          <span class="tg bd y">Start here</span>
+          <div class="row g10"><span class="radio on"></span><span class="disp" style="font-size:40px">Testnet</span></div>
+          <div class="fg2 mt8" style="padding-left:28px">HashKey Chain testnet · chain ID 133</div>
+          <div class="col g8 mt16" style="padding-left:28px;font-size:13.5px">
+            <div class="row g10"><span class="gl-ok">✓</span>Free tUSDT, tWHSK and tWBTC from the faucet</div>
+            <div class="row g10"><span class="gl-ok">✓</span>Run the attack suite against your own vault</div>
+            <div class="row g10"><span class="gl-ok">✓</span>Same contracts, limits and trader as mainnet</div>
+          </div>
+          <div class="hr" style="margin:18px 0 12px"></div>
+          <div class="row sb sm"><span class="mono">https://testnet.hsk.xyz</span><span class="bd ok"><span class="gl">✓</span>42 ms · block 35,241,906</span></div>
+        </div>
+        <div class="choice">
+          <div class="row g10"><span class="radio"></span><span class="disp" style="font-size:40px">Mainnet</span></div>
+          <div class="fg2 mt8" style="padding-left:28px">HashKey Chain · chain ID 177</div>
+          <div class="col g8 mt16" style="padding-left:28px;font-size:13.5px">
+            <div class="row g10"><span class="gl-warn">!</span>Real funds in USDT, WHSK and WBTC</div>
+            <div class="row g10"><span class="gl-warn">!</span>Owner must be a Safe or a hardware wallet</div>
+            <div class="row g10"><span class="gl-q">·</span>Attack suite is view-only: proofs link to past runs</div>
+          </div>
+          <div class="hr" style="margin:18px 0 12px"></div>
+          <div class="row sb sm"><span class="mono">https://mainnet.hsk.xyz</span><span class="bd"><span class="gl">·</span>61 ms · block 9,874,112</span></div>
+        </div>
+      </div>
+      <div class="card soft tight mt20 row g18 sm" style="margin-top:20px">
+        <span class="lbl">Explorer</span><a class="ext">testnet-explorer.hskchain.net</a>
+        <span class="lbl" style="margin-left:18px">Oracle</span><span>Supra DORA pull, storage <span class="mono">0x6Cd5…b917</span></span>
+        <span class="grow"></span><span class="lnk">Use a custom RPC</span>
+      </div>
+    </div>
+    <div class="wz-bar"><span class="btn ghost">Back</span><span class="hint">Nothing is signed in this step.</span><span class="grow"></span><span class="btn pri lg hot">Continue <span class="hn">2</span></span></div>
+  </div>
+  </div>
+
+  <div class="conn" data-n="2" data-t="Continue" data-s="testnet chosen"></div>
+
+  <!-- 02 VAULTS -->
+  <div class="fw" data-cap="02|Setup · Vaults|step 2 of 6 · owner handoff">
+  <div class="frame norail" data-id="02-setup-vaults" data-wz="2" data-foot="setup:2">
+    <div class="wz-body">
+      <div class="row sb end">
+        <div><div class="eb">Step 2 of 6 · Vaults</div><h1>Connect your <span class="hl">vaults</span></h1></div>
+        <div class="seg" style="margin-bottom:4px"><span class="on">Connect existing · 2 found</span><span>Deploy new vaults</span></div>
+      </div>
+      <p class="lead">One PolicyVault per market holds the funds and checks every trade. Flow found a deployment for chain 133. Prove you own it on your owner device: the owner key never touches this Mac.</p>
+      <div class="grid" style="grid-template-columns:minmax(0,1fr) 360px;gap:20px;margin-top:24px">
+        <div class="col g12" style="gap:12px">
+          <div class="card">
+            <div class="row sb"><div class="row g10 base"><span class="disp" style="font-size:28px">WHSK/USDT</span><span class="fg2">Vault-HSK · 0.30% pool</span></div><span class="bd ok"><span class="gl">✓</span>owner confirmed</span></div>
+            <div class="mono mt8" style="font-size:12.5px">0xF80A74F4D9C17Db8a2a0F32558a9FC3A63e2Bcd2 <a class="ext xs">explorer</a></div>
+            <div class="row g6 mt12" style="flex-wrap:wrap"><span class="bd ok"><span class="gl">✓</span>verified source</span><span class="bd ok"><span class="gl">✓</span>pool 0x840f…b542 pinned</span><span class="bd ok"><span class="gl">✓</span>Supra HSK/USD · pair 517</span><span class="bd"><span class="gl">·</span>$100 trade · $250/day · $150 exposure</span></div>
+          </div>
+          <div class="card">
+            <div class="row sb"><div class="row g10 base"><span class="disp" style="font-size:28px">WBTC/USDT</span><span class="fg2">Vault-BTC · 0.30% pool</span></div><span class="bd ok"><span class="gl">✓</span>owner confirmed</span></div>
+            <div class="mono mt8" style="font-size:12.5px">0x6Da0c6EF7328d3aD6b0b8781770D941D065a6693 <a class="ext xs">explorer</a></div>
+            <div class="row g6 mt12" style="flex-wrap:wrap"><span class="bd ok"><span class="gl">✓</span>verified source</span><span class="bd ok"><span class="gl">✓</span>pool 0x9d6A…F07 pinned</span><span class="bd ok"><span class="gl">✓</span>Supra BTC/USD · pair 0</span><span class="bd"><span class="gl">·</span>$100 trade · $250/day · $150 exposure</span></div>
+          </div>
+          <div class="card soft tight sm row g10"><span class="gl-q">i</span><span>Pool, oracle and router are fixed when a vault is deployed. Flow reads them from the chain, not from this app.</span></div>
+        </div>
+        <div class="card dk" style="padding:20px">
+          <div class="eb">Owner device</div>
+          <div class="row g12 mt12 top" style="gap:18px;margin-top:14px">
+            <span class="qr" data-qr="owner-proof-133" data-size="150"></span>
+            <div class="col g8" style="gap:8px"><div class="h4">Scan to sign</div><div class="sm" style="color:var(--sage);line-height:1.5">Safe{Wallet}, Ledger Live or any WalletConnect wallet.</div><span class="bd ok" style="align-self:flex-start"><span class="gl">✓</span>signed</span></div>
+          </div>
+          <div class="hr"></div>
+          <div class="chk" style="padding-top:2px"><span class="gl-ok">✓</span><div><div class="b5">Signed by owner</div><div class="mono xs fg2">0xFF7D…569e · 14:02:11</div></div><span></span></div>
+          <div class="chk"><span class="gl-ok">✓</span><div><div class="b5">owner() matches on both vaults</div><div class="xs fg2">read from chain 133</div></div><span></span></div>
+          <div class="chk"><span class="gl-q">·</span><div><div class="b5">Safe detected: no</div><div class="xs fg2">EOA owner is allowed on testnet only</div></div><span></span></div>
+        </div>
+      </div>
+    </div>
+    <div class="wz-bar"><span class="btn ghost">Back</span><span class="hint">Deploying instead? Flow builds the transactions; your owner device signs and pays the gas.</span><span class="grow"></span><span class="btn pri lg hot">Continue <span class="hn">3</span></span></div>
+  </div>
+  </div>
+
+  <div class="conn" data-n="3" data-t="Owner signs on phone" data-s="QR handoff → Continue"></div>
+
+  <!-- 03 AGENT KEY -->
+  <div class="fw" data-cap="03|Setup · Agent key|step 3 of 6 · Touch ID">
+  <div class="frame norail" data-id="03-setup-agent-key" data-wz="3" data-foot="setup:3">
+    <div class="wz-body">
+      <div class="eb">Step 3 of 6 · Agent key</div>
+      <h1>Create the <span class="hl">agent key</span></h1>
+      <p class="lead">The agent key signs trades from this Mac. The vault lets it do exactly two things: trade inside your limits, and pause. It can never withdraw and never change a limit.</p>
+      <div class="grid" style="grid-template-columns:minmax(0,1fr) 400px;gap:20px;margin-top:24px">
+        <div class="card dk" style="padding:22px 24px">
+          <div class="row sb"><div class="eb">Agent key · this Mac</div><span class="bd ok"><span class="gl">✓</span>created 14:03:40</span></div>
+          <div class="mono mt12" style="font-size:16px;color:#fff;letter-spacing:0">0xC11CbceE5fDf41aa7175319691aA204eFb164f8a</div>
+          <div class="sm mt8" style="color:var(--sage)">macOS Keychain, sealed by the Secure Enclave · unlocks with Touch ID · auto-locks after 12 h</div>
+          <div class="grid mt20" style="grid-template-columns:1fr 1fr;gap:24px">
+            <div><div class="lbl" style="color:var(--sage)">This key can</div>
+              <div class="col g8 mt8 sm"><div class="row g10"><span class="gl-ok">✓</span>Trade inside the vault limits</div><div class="row g10"><span class="gl-ok">✓</span>Pause both vaults (kill switch)</div><div class="row g10"><span class="gl-ok">✓</span>Refresh the Supra price</div></div></div>
+            <div><div class="lbl" style="color:var(--sage)">This key can never</div>
+              <div class="col g8 mt8 sm"><div class="row g10"><span class="gl-bad">✕</span>Withdraw funds</div><div class="row g10"><span class="gl-bad">✕</span>Raise a limit or change the agent</div><div class="row g10"><span class="gl-bad">✕</span>Unpause a vault</div></div></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="ch"><span class="h4">Connect it</span><span class="xs fg2">3 of 4 done</span></div>
+          <div class="chk"><span class="gl-ok">✓</span><div><div class="b5">Key created with Touch ID</div><div class="xs fg2">private key never leaves the Secure Enclave</div></div><span></span></div>
+          <div class="chk"><span class="gl-ok">✓</span><div><div class="b5">Owner set agent on Vault-HSK</div><div class="xs fg2 mono">0x5c1e…9a02 <a class="ext">tx</a></div></div><span class="bd">QR</span></div>
+          <div class="chk"><span class="gl-ok">✓</span><div><div class="b5">Owner set agent on Vault-BTC</div><div class="xs fg2 mono">0x0d77…c3e1 <a class="ext">tx</a></div></div><span class="bd">QR</span></div>
+          <div class="chk"><span class="gl-run"></span><div><div class="b5">Gas for the agent</div><div class="xs fg2">3.412 HSK · needs ≥ 1 HSK</div></div><span class="btn sm">Faucet</span></div>
+          <div class="hr"></div>
+          <div class="xs fg2">Guardian <span class="mono">0x8aAc…b66B</span> can only pause. It stays on your owner device.</div>
+        </div>
+      </div>
+    </div>
+    <div class="wz-bar"><span class="btn ghost">Back</span><span class="hint">Lost this Mac? The owner device sets a new agent; the old key loses all rights.</span><span class="grow"></span><span class="btn pri lg hot">Continue <span class="hn">4</span></span></div>
+  </div>
+  </div>
+
+  <div class="conn" data-n="4" data-t="Continue" data-s="key + role + gas"></div>
+
+  <!-- 04 HEALTH -->
+  <div class="fw" data-cap="04|Setup · Health checks|step 4 of 6 · live">
+  <div class="frame norail" data-id="04-setup-health" data-wz="4" data-foot="setup:4">
+    <div class="wz-body">
+      <div class="row sb end">
+        <div><div class="eb">Step 4 of 6 · Health checks</div><h1>Is everything <span class="hl">live?</span></h1></div>
+        <div class="row g18 end" style="margin-bottom:4px">
+          <div class="r"><div class="big">16<span class="of" style="font-size:20px"> / 18</span></div><div class="xs fg2 mt4">1 running · 1 warning</div></div>
+          <span class="btn">Re-run all</span>
+        </div>
+      </div>
+      <div class="bar thick stripe mt20" style="margin-top:22px"><i style="width:89%"></i></div>
+      <div class="grid" style="grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-top:20px">
+        <div class="card tight">
+          <div class="ch"><span class="h4">Chain &amp; vaults</span><span class="bd ok"><span class="gl">✓</span>6/6</span></div>
+          <div class="chk"><span class="gl-ok">✓</span><div class="sm">RPC reachable</div><span class="xs fg2 num">42 ms</span></div>
+          <div class="chk"><span class="gl-ok">✓</span><div class="sm">Chain ID is 133</div><span class="xs fg2">testnet</span></div>
+          <div class="chk"><span class="gl-ok">✓</span><div class="sm">Vault-HSK source verified</div><span class="xs fg2 mono">0xF80A…</span></div>
+          <div class="chk"><span class="gl-ok">✓</span><div class="sm">Vault-BTC source verified</div><span class="xs fg2 mono">0x6Da0…</span></div>
+          <div class="chk"><span class="gl-ok">✓</span><div class="sm">agent() is this key</div><span class="xs fg2">both</span></div>
+          <div class="chk"><span class="gl-ok">✓</span><div class="sm">Vaults not paused</div><span class="xs fg2">both</span></div>
+        </div>
+        <div class="card tight">
+          <div class="ch"><span class="h4">Prices &amp; pools</span><span class="bd warn"><span class="gl">!</span>6/7</span></div>
+          <div class="chk"><span class="gl-ok">✓</span><div class="sm">Supra HSK/USD age</div><span class="xs fg2 num">2h 12m / 25h</span></div>
+          <div class="chk"><span class="gl-ok">✓</span><div class="sm">Supra BTC/USD age</div><span class="xs fg2 num">41m / 25h</span></div>
+          <div class="chk"><span class="gl-ok">✓</span><div class="sm">Pull refresh works</div><span class="xs fg2">DORA</span></div>
+          <div class="chk"><span class="gl-ok">✓</span><div class="sm">WHSK pool vs oracle</div><span class="xs fg2 num">+13 bps</span></div>
+          <div class="chk"><span class="gl-ok">✓</span><div class="sm">WBTC pool vs oracle</div><span class="xs fg2 num">−60 bps</span></div>
+          <div class="chk"><span class="gl-ok">✓</span><div class="sm">300 s TWAP ready</div><span class="xs fg2">both</span></div>
+          <div class="chk"><span class="gl-warn">!</span><div class="sm">APRO cross-check<div class="xs fg2">not on testnet · inactive</div></div><span class="xs warn b7">ok to go</span></div>
+        </div>
+        <div class="card tight">
+          <div class="ch"><span class="h4">Services</span><span class="bd"><span class="gl">◌</span>4/5</span></div>
+          <div class="chk"><span class="gl-ok">✓</span><div class="sm">HashKey Global books</div><span class="xs fg2 num">88 ms</span></div>
+          <div class="chk"><span class="gl-ok">✓</span><div class="sm">AI model · Claude Sonnet</div><span class="xs fg2 num">1.2 s</span></div>
+          <div class="chk"><span class="gl-ok">✓</span><div class="sm">EAS schema registered</div><span class="xs fg2 mono">0x1c0c…</span></div>
+          <div class="chk"><span class="gl-ok">✓</span><div class="sm">Journal writable</div><span class="xs fg2">hash chain</span></div>
+          <div class="chk"><span class="gl-run"></span><div class="sm b5">Dry-run a $5 trade<div class="xs fg2">check() on both vaults…</div></div><span class="xs fg2">4 s</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="wz-bar"><span class="btn ghost">Back</span><span class="hint">Warnings never block. A failure blocks and shows its fix right here.</span><span class="grow"></span><span class="btn pri lg hot">Continue <span class="hn">5</span></span></div>
+  </div>
+  </div>
+
+  <div class="conn" data-n="5" data-t="Checks pass" data-s="Continue"></div>
+
+  <!-- 05 LIMITS -->
+  <div class="fw" data-cap="05|Setup · Limits|step 5 of 6 · bound live">
+  <div class="frame norail" data-id="05-setup-limits" data-wz="5" data-foot="setup:5">
+    <div class="wz-body">
+      <div class="eb">Step 5 of 6 · Limits</div>
+      <h1>Set limits. See the <span class="hl">worst case.</span></h1>
+      <div class="grid" style="grid-template-columns:minmax(0,1fr) 410px;gap:20px;margin-top:26px">
+        <div class="card" style="padding:18px 22px">
+          <div class="ch"><span class="h4">Per vault</span><span class="row g8 sm"><span class="toggle"></span>Same limits on both vaults</span></div>
+          <div class="col" style="gap:0" id="lim-rows"></div>
+          <div class="banner mt12" style="margin-top:12px;padding:10px 14px;background:var(--okbg);border-color:rgba(19,116,74,.35)"><span class="gl-ok">✓</span><span class="sm">Matches on-chain <code>limits()</code> on both vaults. Changing one sends <code>setLimits</code> to your owner device.</span></div>
+        </div>
+        <div class="card dk" style="padding:24px 26px;display:flex;flex-direction:column">
+          <div class="eb">Worst-case loss · computed live</div>
+          <div class="row base g10 mt12" style="margin-top:16px"><span class="giant" style="color:var(--y)">$51.50</span></div>
+          <div class="sm mt8" style="color:var(--sage)">per UTC day, both vaults, every trade path</div>
+          <div class="mt20" style="margin-top:22px">
+            <div class="row" style="gap:2px;height:30px">
+              <div style="flex:250;background:#ffe17c;border-radius:6px 0 0 6px"></div><div style="flex:500;background:#f0cf5c"></div><div style="flex:250;background:#d8bb55"></div><div style="flex:30;background:#fff;border-radius:0 6px 6px 0"></div>
+            </div>
+            <div class="row sb xs mt8" style="color:var(--sage)"><span>oracle 250</span><span>exit 500</span><span>slip 250</span><span>fee 30</span></div>
+          </div>
+          <div class="hr" style="margin:16px 0 8px"></div>
+          <div class="kv"><span class="k">Per vault</span><span class="v">$250 × 1030 bps = $25.75</span></div>
+          <div class="kv"><span class="k">Normal path</span><span class="v">$26.50 / day</span></div>
+          <div class="kv"><span class="k">Any rolling 24 h</span><span class="v">$103.00</span></div>
+          <div class="kv"><span class="k">Planned deposit $280</span><span class="v" style="color:var(--y)">18.4% on the worst day</span></div>
+          <div class="xs mt12" style="color:var(--sage);margin-top:auto;padding-top:12px">Holds while the Supra feed is live. Price risk on held exposure (≤ $150/vault) is the stop-loss's job, not the contract's.</div>
+        </div>
+      </div>
+    </div>
+    <div class="wz-bar"><span class="btn ghost">Back</span><span class="hint">Tighter limits apply at once. Looser limits always need the owner device.</span><span class="grow"></span><span class="btn pri lg hot">Continue <span class="hn">6</span></span></div>
+  </div>
+  </div>
+
+  <div class="conn" data-n="6" data-t="Continue" data-s="limits match chain"></div>
+
+  <!-- 06 FUND -->
+  <div class="fw" data-cap="06|Setup · Fund|step 6 of 6">
+  <div class="frame norail" data-id="06-setup-fund" data-wz="6" data-foot="setup:6">
+    <div class="wz-body">
+      <div class="row sb end">
+        <div><div class="eb">Step 6 of 6 · Fund</div><h1>Fund the <span class="hl">vaults</span></h1></div>
+        <span class="btn" style="margin-bottom:4px">Get test tokens · faucet</span>
+      </div>
+      <p class="lead">Deposits go from your owner wallet straight into each vault. Only the owner can take them out again.</p>
+      <div class="grid" style="grid-template-columns:1fr 1fr;gap:20px;margin-top:22px">
+        <div class="card">
+          <div class="ch"><div class="row g10 base"><span class="h3">WHSK/USDT</span><span class="xs fg2">Vault-HSK</span></div><span class="bd ok"><span class="gl">✓</span>funded</span></div>
+          <table class="tbl"><thead><tr><th>Token</th><th class="r">Deposited</th><th class="r">Value</th><th class="r">Tx</th></tr></thead>
+          <tbody><tr><td class="b5">tUSDT</td><td class="r">120.00</td><td class="r">$120.00</td><td class="r mono xs"><a class="ext">0x41ac…</a></td></tr>
+          <tr><td class="b5">tWHSK</td><td class="r">686.50</td><td class="r">$60.01</td><td class="r mono xs"><a class="ext">0x9e02…</a></td></tr></tbody></table>
+        </div>
+        <div class="card">
+          <div class="ch"><div class="row g10 base"><span class="h3">WBTC/USDT</span><span class="xs fg2">Vault-BTC</span></div><span class="bd ok"><span class="gl">✓</span>funded</span></div>
+          <table class="tbl"><thead><tr><th>Token</th><th class="r">Deposited</th><th class="r">Value</th><th class="r">Tx</th></tr></thead>
+          <tbody><tr><td class="b5">tUSDT</td><td class="r">100.00</td><td class="r">$100.00</td><td class="r mono xs"><a class="ext">0xc7f3…</a></td></tr>
+          <tr><td class="b5 fg2">tWBTC</td><td class="r fg2">—</td><td class="r fg2">optional</td><td class="r"></td></tr></tbody></table>
+        </div>
+      </div>
+      <div class="card dk mt20" style="margin-top:20px;padding:20px 24px">
+        <div class="grid" style="grid-template-columns:repeat(4,minmax(0,1fr));gap:0">
+          <div><div class="lbl" style="color:var(--sage)">In the vaults</div><div class="big mt8">$280.01</div></div>
+          <div style="border-left:1px solid rgba(183,198,194,.16);padding-left:22px"><div class="lbl" style="color:var(--sage)">Worst day</div><div class="big mt8" style="color:var(--y)">$51.50</div><div class="xs mt4" style="color:var(--sage)">18.4% of funds</div></div>
+          <div style="border-left:1px solid rgba(183,198,194,.16);padding-left:22px"><div class="lbl" style="color:var(--sage)">Exposure cap</div><div class="big mt8">$150</div><div class="xs mt4" style="color:var(--sage)">per vault</div></div>
+          <div style="border-left:1px solid rgba(183,198,194,.16);padding-left:22px"><div class="lbl" style="color:var(--sage)">Trader mode</div>
+            <div class="seg mt12" style="background:rgba(183,198,194,.08);border-color:rgba(183,198,194,.24)"><span class="on" style="background:var(--y);color:var(--c)">Autonomous</span><span style="color:var(--sage)">Propose</span><span style="color:var(--sage)">Watch</span></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="wz-bar"><span class="btn ghost">Back</span><span class="hint">The trader runs its first cycle within 60 s. The kill switch is on every screen from now on.</span><span class="grow"></span><span class="btn pri lg hot">Start trading <span class="hn">7</span></span></div>
+  </div>
+  </div>
+
+  <div class="conn" data-n="7" data-t="Start trading" data-s="trader starts"></div>
+
+  <!-- 10 OVERVIEW -->
+  <div class="fw" data-cap="10|Overview|home · running">
+  <div class="frame" data-id="10-overview" data-nav="overview" data-foot="live">
+    <div class="body mi">
+      <main class="main">
+        <div class="ph">
+          <div><h1><span class="hl">Overview</span></h1><div class="sub" data-slot="sub">Mon 2 Nov · UTC day resets in 9h 42m · both vaults active</div></div>
+          <div class="acts"><span data-slot="pill" class="stat-pill"><i></i>Trader running · autonomous</span><span class="net"><i></i>Testnet 133</span></div>
+        </div>
+        <div class="grid" data-slot="row1" style="grid-template-columns:minmax(0,1fr) 290px">
+          <div data-slot="hero" class="card dk ov-meter" style="padding:20px 24px">
+            <div class="row sb"><div class="eb">Worst-case loss used today</div><span class="xs" style="color:var(--sage)">limit set on-chain · both vaults</span></div>
+            <div class="row base g12" style="margin-top:14px"><span class="huge" style="color:var(--y)">$6.44</span><span class="of" style="color:var(--sage);font-size:16px">of <b style="color:#fff">$51.50</b> max today · 12.5%</span></div>
+            <div class="bar xl mt16" style="margin-top:16px;background:rgba(183,198,194,.1);border-color:rgba(183,198,194,.25)"><i style="width:12.5%"></i></div>
+            <div class="grid" style="grid-template-columns:repeat(3,minmax(0,1fr));gap:0;margin-top:16px">
+              <div><div class="lbl" style="color:var(--sage)">Vault-HSK</div><div class="mt4"><b class="num" style="font-size:16px">$3.86</b> <span class="xs" style="color:var(--sage)">of $25.75</span></div></div>
+              <div style="border-left:1px solid rgba(183,198,194,.16);padding-left:18px"><div class="lbl" style="color:var(--sage)">Vault-BTC</div><div class="mt4"><b class="num" style="font-size:16px">$2.58</b> <span class="xs" style="color:var(--sage)">of $25.75</span></div></div>
+              <div style="border-left:1px solid rgba(183,198,194,.16);padding-left:18px"><div class="lbl" style="color:var(--sage)">P&amp;L today</div><div class="mt4"><b class="num ok" style="font-size:16px">▲ +$0.31</b> <span class="xs" style="color:var(--sage)">realised</span></div><div class="xs" style="color:var(--sage)"><span class="bad b7">▼ −$0.28</span> if sold now</div></div>
+            </div>
+          </div>
+          <div data-slot="ks" class="card ks" style="padding:18px 20px">
+            <div class="row sb"><div class="eb">Kill switch</div><span class="xs fg2">⌘⇧K</span></div>
+            <p class="sm fg2 mt8" style="line-height:1.5">Pauses both vaults on-chain. New trades and stop-loss exits stop until your owner device unpauses.</p>
+            <div class="ks-btn hot" data-lane="D"><svg viewBox="0 0 24 24"><path d="M12 3v8"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></svg>Pause all<span class="hn">1</span></div>
+            <div class="row sb xs mt8" style="margin-top:12px"><span class="fg2">Signed by the agent key · 2 txs</span><span class="lnk b5">Go to cash first</span></div>
+          </div>
+        </div>
+        <div class="grid mt16" data-slot="vaults" style="grid-template-columns:1fr 1fr;margin-top:16px">
+          <div class="card" data-vault="hsk"></div>
+          <div class="card" data-vault="btc"></div>
+        </div>
+        <div class="grid mt16 fill" data-slot="row3" style="grid-template-columns:minmax(0,1fr) 300px;margin-top:16px">
+          <div data-slot="dec" class="card" style="padding:14px 20px 8px">
+            <div class="ch" style="margin-bottom:4px"><span class="h4">Last decisions</span><span class="lnk sm b5 hot" data-lane="B">All decisions →<span class="hn">1</span></span></div>
+            <div class="drow"><span class="t">14:28</span><span class="m">BTC</span><span class="x">No trade · gap 104 bps vs cost 35 bps, entry interval open 11 min</span><span class="bd"><span class="gl">·</span>skip</span></div>
+            <div class="drow"><span class="t">14:05</span><span class="m">HSK</span><span class="x">Sold 13.00 WHSK · discretionary trim before the oracle updates</span><span class="bd ok"><span class="gl">✓</span>executed</span></div>
+            <div class="drow"><span class="t">13:01</span><span class="m">BTC</span><span class="x">Vetoed a $25 buy · Supra 600 s old, 71 bps off the cross-check</span><span class="bd ok"><span class="gl">✓</span>+42 bps saved</span></div>
+            <div class="drow"><span class="t">11:57</span><span class="m">BTC</span><span class="x">Bought $25.00 WBTC · pool 113 bps under HashKey Global, net +78</span><span class="bd ok"><span class="gl">✓</span>executed</span></div>
+          </div>
+          <div data-slot="score" class="card dk" style="padding:14px 20px">
+            <div class="ch" style="margin-bottom:10px"><span class="h4">AI scoreboard</span><span class="xs" style="color:var(--sage)">today</span></div>
+            <div class="grid" style="grid-template-columns:repeat(3,1fr);gap:8px">
+              <div><div class="sc-n">3</div><div class="xs mt4" style="color:var(--sage)">acts</div></div>
+              <div><div class="sc-n">2</div><div class="xs mt4" style="color:var(--sage)">vetoes · 1 size-down</div></div>
+              <div><div class="sc-n">1<span style="font-size:22px;color:var(--sage)">/3</span></div><div class="xs mt4" style="color:var(--sage)">discretionary</div></div>
+            </div>
+            <div class="hr" style="margin:12px 0 8px"></div>
+            <div class="kv xs"><span class="k">Vetoes saved at +30 min</span><span class="v ok">+42 bps · $1.05</span></div>
+            <div class="kv xs"><span class="k">Rationale hashes on-chain</span><span class="v">4 of 4</span></div>
+          </div>
+        </div>
+      </main>
+      <aside class="insp" data-insp="overview"></aside>
+    </div>
+  </div>
+  </div>
+
+  </div>
+</section>
+
+<!-- ============================================================================================
+     LANES B + C
+     ============================================================================================ -->
+<div class="lane-pair">
+<section class="lane" id="B">
+  <div class="lane-head"><span class="lk">B</span><h2>Daily check</h2><p>Glance, then drill into one decision.</p></div>
+  <div class="lane-row">
+    <div class="fw" data-clone="10-overview" data-cap="10|Overview|home"></div>
+    <div class="conn" data-n="1" data-t="All decisions"></div>
+
+    <!-- 20 DECISIONS -->
+    <div class="fw" data-cap="20|Decisions|journal timeline">
+    <div class="frame" data-id="20-decisions" data-nav="decisions" data-foot="live">
+      <div class="body cmi">
+        <aside class="ctx">
+          <div class="eb">Show</div>
+          <div class="flt mt8" style="margin:10px 0 18px"><span class="pill on">All <span class="ct">14</span></span><span class="pill">Trades <span class="ct">4</span></span><span class="pill">No trade <span class="ct">4</span></span><span class="pill">Rejected <span class="ct">1</span></span><span class="pill">Exit path <span class="ct">2</span></span><span class="pill">Discretionary <span class="ct">1</span></span><span class="pill">You <span class="ct">0</span></span></div>
+          <div class="eb">Market</div>
+          <div class="flt" style="margin:10px 0 18px"><span class="pill on">Both</span><span class="pill">WHSK/USDT</span><span class="pill">WBTC/USDT</span></div>
+          <div class="eb">Decided by</div>
+          <div class="flt" style="margin:10px 0 18px"><span class="pill on">Anyone</span><span class="pill">AI</span><span class="pill">Guard</span><span class="pill">Rules</span></div>
+          <div class="eb">Journal</div>
+          <div class="kv sm mt8" style="margin-top:8px"><span class="k">Records</span><span class="v">214</span></div>
+          <div class="kv sm"><span class="k">Head</span><span class="v mono xs">0x3207…a4a5</span></div>
+          <div class="kv sm"><span class="k">Chain</span><span class="v ok b7">✓ intact</span></div>
+          <div class="xs fg2 mt8" style="line-height:1.5;margin-top:8px">Each record commits to the one before it. Executed trades carry the rationale hash on-chain.</div>
+          <div style="margin-top:auto" class="col g8"><span class="btn sm">Export journal</span></div>
+        </aside>
+        <main class="main">
+          <div class="ph">
+            <div><h1><span class="hl">Decisions</span></h1><div class="sub">Every trade and every skipped trade, with the reason</div></div>
+            <div class="acts"><div class="inp" style="height:34px;width:220px;border-radius:999px"><span class="fg2 sm">Search reasons…</span><span class="xs fg2">⌘F</span></div></div>
+          </div>
+          <div class="dayh">Today · Mon 2 Nov</div>
+          <div class="tl">
+            <div class="tr2"><span class="t">14:28:00</span><span class="k">No trade</span><span class="m">BTC</span><span class="x">Gap 104 bps vs cost 35 bps, but the entry interval is open for 11 more min</span><span class="bs"><span class="bd">AI</span><span class="bd"><span class="gl">·</span>skip</span></span></div>
+            <div class="tr2"><span class="t">14:05:10</span><span class="k">Execution</span><span class="m">HSK</span><span class="x">Sold 13.00 WHSK for 1.14 USDT on the exit path</span><span class="bs"><span class="bd warn"><span class="gl">!</span>exit path</span><span class="bd ok"><span class="gl">✓</span>executed</span></span></div>
+            <div class="tr2"><span class="t">14:05:00</span><span class="k">Proposal</span><span class="m">HSK</span><span class="x">Discretionary trim 1 of 3: Supra is 2.2 h old while HashKey Global is up 40 bps</span><span class="bs"><span class="bd">AI</span><span class="bd info"><span class="gl">i</span>discretionary</span></span></div>
+            <div class="tr2"><span class="t">13:31:20</span><span class="k">Outcome</span><span class="m">BTC</span><span class="x">30 min after the 13:01 veto: declining saved 42 bps ($1.05)</span><span class="bs"><span class="bd">guard</span><span class="bd ok"><span class="gl">✓</span>+42 bps</span></span></div>
+            <div class="tr2"><span class="t">13:01:20</span><span class="k">Veto</span><span class="m">BTC</span><span class="x">Gap only looks wide because Supra is 600 s old and 71 bps off the cross-check</span><span class="bs"><span class="bd">AI</span><span class="bd"><span class="gl">·</span>veto</span></span></div>
+            <div class="tr2"><span class="t">12:56:00</span><span class="k">Proposal</span><span class="m">HSK</span><span class="x">Rebalance buy $25 toward the 33% HSK target</span><span class="bs"><span class="bd bad"><span class="gl">✕</span>OracleDeviation 251 &gt; 250</span></span></div>
+            <div class="tr2"><span class="t">12:10:00</span><span class="k">No trade</span><span class="m">HSK</span><span class="x">Pool 30 bps under HashKey Global; cost 36 bps. Net edge negative, sitting out</span><span class="bs"><span class="bd">AI</span><span class="bd"><span class="gl">·</span>skip</span></span></div>
+            <div class="tr2 sel hot" data-lane="B"><span class="t">11:57:30</span><span class="k">Execution</span><span class="m">BTC</span><span class="x"><b>Bought 0.00032009 WBTC for $25.00</b> · net edge +78 bps</span><span class="bs"><span class="bd">AI</span><span class="bd ok"><span class="gl">✓</span>executed</span></span><span class="hn">2</span></div>
+            <div class="tr2"><span class="t">11:57:20</span><span class="k">Proposal</span><span class="m">BTC</span><span class="x">WBTC pool 112.6 bps under HashKey Global BTCUSDT; gap 113 vs cost 35</span><span class="bs"><span class="bd">AI</span><span class="bd info"><span class="gl">i</span>policy approved</span></span></div>
+            <div class="tr2"><span class="t">11:40:00</span><span class="k">Strategy</span><span class="m">ALL</span><span class="x">Trader started · balanced profile · autonomous</span><span class="bs"><span class="bd">you</span></span></div>
+          </div>
+        </main>
+        <aside class="insp">
+          <div class="sec"><div class="eb">Selected record</div>
+            <div class="h3" style="font-size:26px;margin:4px 0 10px">Bought $25 WBTC</div>
+            <div class="kv"><span class="k">id</span><span class="v mono">exec_8e8fbaa132d7</span></div>
+            <div class="kv"><span class="k">at</span><span class="v">Mon 2 Nov · 11:57:30</span></div>
+            <div class="kv"><span class="k">decided by</span><span class="v">AI · Claude Sonnet</span></div>
+            <div class="kv"><span class="k">signal</span><span class="v">spread-revert · open</span></div>
+            <div class="kv"><span class="k">profile</span><span class="v">default</span></div>
+          </div>
+          <div class="sec"><div class="eb">On-chain</div>
+            <div class="kv"><span class="k">trade tx</span><span class="v"><a class="mono ext">0x8e8f…feb1</a></span></div>
+            <div class="kv"><span class="k">block</span><span class="v">35,233,410</span></div>
+            <div class="kv"><span class="k">attestation</span><span class="v"><a class="mono ext">EAS 0x8d46…5a50</a></span></div>
+            <div class="kv"><span class="k">rationale hash</span><span class="v ok b7">✓ matches</span></div>
+          </div>
+          <div class="sec"><div class="eb">Hash chain</div>
+            <div class="lbl" style="color:var(--sage);margin-bottom:4px">hash</div><div class="addr">0x8e8fbaa132d730f678f9dab4bab0e97fea020ac159c44796f5961ce0bb4ffeb1</div>
+            <div class="lbl" style="color:var(--sage);margin:10px 0 4px">prev</div><div class="addr">0x5d3c1ab29e7f4408a1e0c2b7d9f3e6a4c8b2d1f0e9a7c6b5d4e3f2a1b0c9d8e7</div>
+          </div>
+          <div style="margin-top:auto"><span class="btn pri" style="width:100%">Open record</span></div>
+        </aside>
+      </div>
+    </div>
+    </div>
+    <div class="conn" data-n="2" data-t="Open a record" data-s="click row or Enter"></div>
+
+    <!-- 21 RECORD -->
+    <div class="fw" data-cap="21|Decision record|detail">
+    <div class="frame" data-id="21-decision-record" data-nav="decisions" data-foot="live">
+      <div class="body mi">
+        <main class="main">
+          <div class="ph" style="padding-top:20px">
+            <div><div class="crumb"><span class="lnk">Decisions</span> / 11:57:30 · WBTC/USDT · exec_8e8fbaa132d7</div><h1>Bought $25.00 <span class="hl">WBTC</span></h1><div class="sub">0.00032009 WBTC into Vault-BTC · decided by the AI, approved by vault policy, no human in the loop</div></div>
+            <div class="acts"><span class="bd ok lgx"><span class="gl">✓</span>executed</span><span class="btn">Explorer ↗</span><span class="btn">EAS attestation ↗</span></div>
+          </div>
+          <div class="card dk" style="padding:18px 24px">
+            <div class="row sb"><div class="eb">Prices at the decision</div><span class="xs" style="color:var(--sage)">block 35,233,409 · 11:57:20</span></div>
+            <div class="px3" style="margin-top:12px">
+              <div><div class="lbl" style="color:var(--sage)">Supra oracle · pair 0</div><div class="pv">$78,577.05</div><span class="bd ok"><span class="gl">✓</span>41 min old · max 25 h</span></div>
+              <div><div class="lbl" style="color:var(--sage)">HSKSwap pool</div><div class="pv">$78,102.00</div><span class="bd ok"><span class="gl">✓</span>−60 bps vs oracle · max 250</span></div>
+              <div><div class="lbl" style="color:var(--sage)">HashKey Global mid</div><div class="pv" style="color:var(--y)">$78,991.40</div><span class="bd"><span class="gl">·</span>half-spread 1 bps · depth $185k</span></div>
+            </div>
+          </div>
+          <div class="grid" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr);margin-top:16px">
+            <div class="card">
+              <div class="ch"><span class="h4">Why</span><span class="xs fg2">AI rationale · hash on-chain</span></div>
+              <p style="font-size:14px;line-height:1.55;border-left:3px solid var(--y);padding-left:12px">WBTC pool sits 112.6 bps below HashKey Global's BTCUSDT mid; gap 113 bps vs cost 35 bps leaves 78 bps net. Oracle and TWAP agree within 12 bps. Taking the full $25 strategy size, no size-down.</p>
+              <div class="lbl mt16" style="margin-top:16px">Gap vs cost</div>
+              <div class="gauge"><div class="ax"></div><div class="cost" style="left:0;width:23.3%"></div><div class="gp" style="left:23.3%;width:52%"></div>
+                <span class="lab" style="left:11.6%;color:var(--bad)">cost 35</span><span class="lab" style="left:75.3%">gap 113 bps</span><span class="lab2" style="left:49%">net +78 bps</span></div>
+              <div class="row g6 mt8" style="flex-wrap:wrap;margin-top:6px"><span class="bd">fee 30 + impact 5</span><span class="bd">min net edge 15</span><span class="bd mono">cand_0b5e2c7a</span></div>
+            </div>
+            <div class="card">
+              <div class="ch"><span class="h4">Vault checks</span><span class="bd ok"><span class="gl">✓</span>13 of 13 passed</span></div>
+              <div class="grid" style="grid-template-columns:1fr 1fr;gap:0 18px" id="checks13"></div>
+            </div>
+          </div>
+          <div class="card mt16" style="margin-top:16px;padding:14px 20px">
+            <div class="grid" style="grid-template-columns:2.1fr 1fr 1fr 1fr 1fr;gap:18px">
+              <div><div class="lbl">Trade tx</div><div class="mono mt4" style="font-size:11px;word-break:break-all"><a>0x8e8fbaa132d730f678f9dab4bab0e97fea020ac159c44796f5961ce0bb4ffeb1</a></div></div>
+              <div><div class="lbl">Received</div><div class="b7 mt4 num">0.00032009 WBTC</div></div>
+              <div><div class="lbl">Floor (min out)</div><div class="b5 mt4 num">0.00031208</div></div>
+              <div><div class="lbl">Gas</div><div class="b5 mt4 num">214,377</div></div>
+              <div><div class="lbl">Attestation</div><div class="mt4"><a class="mono ext">0x8d46…5a50</a></div></div>
+            </div>
+          </div>
+        </main>
+        <aside class="insp">
+          <div class="sec"><div class="eb">Record</div>
+            <div class="kv"><span class="k">seq</span><span class="v">207</span></div>
+            <div class="kv"><span class="k">actor</span><span class="v">AI via MCP · trader</span></div>
+            <div class="kv"><span class="k">engine</span><span class="v">llm · Claude Sonnet</span></div>
+            <div class="kv"><span class="k">origin</span><span class="v">candidate</span></div>
+            <div class="kv"><span class="k">approved by</span><span class="v">vault policy</span></div>
+          </div>
+          <div class="sec"><div class="eb">Hash chain</div>
+            <div class="lbl" style="color:var(--sage);margin-bottom:4px">record hash = proposalId</div><div class="addr">0x8e8fbaa132d730f678f9dab4bab0e97fea020ac159c44796f5961ce0bb4ffeb1</div>
+            <div class="lbl" style="color:var(--sage);margin:10px 0 4px">rationaleHash</div><div class="addr">0x6a0923be73fd02fc570c6883e785f7710a7b78b6534251e8de7906db03fd1335</div>
+            <div class="kv mt8" style="margin-top:8px"><span class="k">on-chain event</span><span class="v ok b7">✓ same hash</span></div>
+            <div class="kv"><span class="k">EAS attestation</span><span class="v ok b7">✓ same hash</span></div>
+          </div>
+          <div class="sec"><div class="eb">Afterwards</div>
+            <div class="kv"><span class="k">lot</span><span class="v">open · close at gap &lt; 20</span></div>
+            <div class="kv"><span class="k">if sold now</span><span class="v bad b7">▼ −$0.15</span></div>
+          </div>
+          <div style="margin-top:auto" class="col g8"><span class="btn" style="width:100%">Ask in Chat: “why this trade?”</span><div class="row g8"><span class="btn sm grow">← Previous</span><span class="btn sm grow">Next →</span></div></div>
+        </aside>
+      </div>
+    </div>
+    </div>
+  </div>
+</section>
+
+<section class="lane" id="C">
+  <div class="lane-head"><span class="lk">C</span><h2>Control in words</h2><p>“Go to cash on HSK” → confirm → the guard sells.</p></div>
+  <div class="lane-row">
+    <!-- 60 CHAT -->
+    <div class="fw" data-cap="60|Chat|tool card awaiting confirm">
+    <div class="frame" data-id="60-chat" data-nav="chat" data-foot="live">
+      <div class="body mi">
+        <main class="main" style="padding-bottom:18px">
+          <div class="ph" style="padding:20px 0 14px;margin-bottom:14px">
+            <div><h1><span class="hl">Chat</span></h1><div class="sub">Plain-language control. Tightening applies at once; loosening and immediate sells ask for Touch ID.</div></div>
+            <div class="acts"><span class="bd lgx">engine · Claude Sonnet</span></div>
+          </div>
+          <div class="msgs">
+            <div class="mu">How am I doing today?</div>
+            <div class="ma"><div class="who"><i>F</i>Flow</div>
+              Up <b class="ok">$0.31</b> realised today; <b class="bad">$0.28</b> down if you sold everything now, mostly the fresh BTC lot.
+              <div class="tc"><div class="tch"><span class="tn">ate_positions</span><span class="fg2">both vaults</span><span class="grow"></span><span class="bd ok"><span class="gl">✓</span>done · 0.4 s</span></div>
+                <div class="tcb" style="padding:6px 14px"><table class="tbl cmp sm"><thead><tr><th>Market</th><th class="r">Holding</th><th class="r">Realised</th><th class="r">If sold now</th><th class="r">CEX mark</th></tr></thead>
+                <tbody><tr><td class="b7">WHSK/USDT</td><td class="r">705.80 WHSK</td><td class="r ok">+$0.31</td><td class="r bad">−$0.13</td><td class="r ok">+$0.28</td></tr>
+                <tr><td class="b7">WBTC/USDT</td><td class="r">0.00032009 WBTC</td><td class="r">$0.00</td><td class="r bad">−$0.15</td><td class="r ok">+$0.20</td></tr></tbody></table></div></div>
+            </div>
+            <div class="mu">Go to cash on HSK, keep the BTC</div>
+            <div class="ma" style="max-width:720px"><div class="who"><i>F</i>Flow</div>
+              That drops WHSK from your target assets. The guard sells the whole position straight away, with no AI cycle to wait for.
+              <div class="tc" style="border-color:var(--c);border-width:1.5px"><div class="tch" style="background:var(--y)"><span class="tn">ate_strategy_set</span><span class="mono xs">{ "targetAssets": ["WBTC"] }</span><span class="grow"></span><span class="bd" style="background:#fff">tightening · sells now</span></div>
+                <div class="tcb">
+                  <div class="grid" style="grid-template-columns:1fr 1fr 1fr;gap:16px">
+                    <div><div class="lbl">Target assets</div><div class="mt4"><s class="fg2">WHSK, WBTC</s> → <b>WBTC</b></div></div>
+                    <div><div class="lbl">Guard sells now</div><div class="mt4"><b>705.80 WHSK</b> ≈ $61.55</div></div>
+                    <div><div class="lbl">Vault checks</div><div class="mt4 ok b7">✓ inside every limit</div></div>
+                  </div>
+                  <div class="row g10 mt12" style="margin-top:14px"><span class="btn pri hot" data-lane="C">Confirm with Touch ID<span class="hn">1</span></span><span class="btn">Cancel</span><span class="grow"></span><span class="xs fg2">expires in 0:54</span></div>
+                </div></div>
+            </div>
+          </div>
+          <div class="qps"><span class="pill">How am I doing?</span><span class="pill">Only trade BTC</span><span class="pill">Be more conservative</span><span class="pill">Why did you sell at 14:05?</span><span class="pill">Stop everything</span></div>
+          <div class="composer"><span class="ph2">Tell Flow what to do…</span><span class="xs fg2">⏎ send</span><span class="btn solid sm">Send</span></div>
+        </main>
+        <aside class="insp" data-insp="chat"></aside>
+      </div>
+    </div>
+    </div>
+    <div class="conn" data-n="1" data-t="Confirm" data-s="Touch ID prompt"></div>
+
+    <!-- 61 TOUCH ID -->
+    <div class="fw" data-clone="60-chat" data-as="61-chat-touch-id" data-cap="61|Chat · Touch ID|system sheet" data-add="tpl-touchid"></div>
+    <template id="tpl-touchid">
+      <div class="scrim" style="background:rgba(23,30,25,.5)">
+        <div class="tid">
+          <div class="hot round" data-lane="C" style="width:64px;margin:4px auto 14px"><span class="hn">2</span><svg class="ic" style="margin:0" viewBox="0 0 64 64" fill="none" stroke="#ff3b30" stroke-width="2.6" stroke-linecap="round"><path d="M18 22a17 17 0 0 1 28 0"/><path d="M14 33a18 18 0 0 1 2-8"/><path d="M50 26a18 18 0 0 1 1 11"/><path d="M21 44a14 14 0 0 1-1-12 12 12 0 0 1 23 1c1 5 1 9 0 13"/><path d="M26 50c-1-4-1-9 0-13a6 6 0 0 1 12 1c1 5 1 9 0 13"/><path d="M32 38c1 6 1 11-1 16"/><path d="M48 46c-1 3-2 6-4 8"/></svg></div>
+          <div class="t">Flow</div>
+          <div class="d">Flow wants to confirm <b>go to cash on HSK</b>: the guard sells 705.80 WHSK on Vault-HSK now.</div>
+          <div class="diff"><div><span>Target assets</span><b>WHSK, WBTC → WBTC</b></div><div><span>Sell</span><b>705.80 WHSK</b></div><div><span>Vault floor (min out)</span><b>60.15 USDT</b></div></div>
+          <div class="h">Touch ID or enter your password to allow this.</div>
+          <div class="bb"><span>Cancel</span><span>Use Password…</span></div>
+        </div>
+      </div>
+    </template>
+    <div class="conn" data-n="2" data-t="Touch ID" data-s="guard sells in ~10 s"></div>
+
+    <!-- 41 POSITIONS AFTER CASH -->
+    <div class="fw" data-clone="40-positions" data-as="41-positions-after-cash" data-mod="cash" data-cap="41|Positions|HSK in cash"></div>
+  </div>
+</section>
+</div>
+
+
+<!-- ============================================================================================
+     LANES D + E
+     ============================================================================================ -->
+<div class="lane-pair">
+<section class="lane" id="D">
+  <div class="lane-head"><span class="lk">D</span><h2>Safety</h2><p>One button stops both vaults on-chain.</p></div>
+  <div class="lane-row">
+    <div class="fw" data-clone="10-overview" data-cap="10|Overview|kill switch"></div>
+    <div class="conn" data-n="1" data-t="Pause all" data-s="or ⌘⇧K"></div>
+    <div class="fw" data-clone="10-overview" data-as="11-overview-kill-confirm" data-add="tpl-kill" data-cap="11|Kill switch|confirm"></div>
+    <template id="tpl-kill">
+      <div class="scrim">
+        <div class="modal">
+          <div class="mh"><div class="eb">Kill switch · both vaults</div><div class="disp" style="font-size:52px;margin-top:12px">Pause both <span class="hl red">vaults?</span></div></div>
+          <div class="mb">
+            <div class="chk"><span class="gl-ok">✓</span><div class="sm">Every new trade reverts on-chain with <code>VaultPaused()</code>, whoever holds the key.</div><span></span></div>
+            <div class="chk"><span class="gl-ok">✓</span><div class="sm">The trader stops proposing. Chat stays read-only.</div><span></span></div>
+            <div class="chk"><span class="gl-warn">!</span><div class="sm"><b>Stop-loss exits stop too.</b> $86.91 of tokens (WHSK $61.70, WBTC $25.21) will be unprotected.</div><span></span></div>
+            <div class="chk"><span class="gl-warn">!</span><div class="sm">Only your owner device can unpause (QR handoff).</div><span></span></div>
+            <div class="grid mt12" style="grid-template-columns:1fr 1fr;gap:10px;margin-top:14px">
+              <div class="choice on" style="padding:12px 14px"><div class="row g10"><span class="radio on"></span><b>Pause now</b></div><div class="xs fg2 mt4" style="padding-left:28px">2 txs · ~4 s</div></div>
+              <div class="choice" style="padding:12px 14px"><div class="row g10"><span class="radio"></span><b>Go to cash, then pause</b></div><div class="xs fg2 mt4" style="padding-left:28px">guard sells first · ~1 min</div></div>
+            </div>
+          </div>
+          <div class="mf"><span class="xs fg2 grow">Signed with the agent key on this Mac</span><span class="btn">Cancel</span><span class="btn danger lg hot" data-lane="D" style="overflow:hidden">Hold to pause<span class="hn">2</span></span></div>
+        </div>
+      </div>
+    </template>
+    <div class="conn" data-n="2" data-t="Hold 1.5 s" data-s="2 pause txs land"></div>
+    <div class="fw" data-clone="10-overview" data-as="12-overview-paused" data-mod="paused" data-cap="12|Overview|paused"></div>
+  </div>
+</section>
+
+<section class="lane" id="E">
+  <div class="lane-head"><span class="lk">E</span><h2>Trust</h2><p>Attack your own vault, watch it refuse.</p></div>
+  <div class="lane-row">
+    <!-- 70 PROOF -->
+    <div class="fw" data-cap="70|Proof|last run + history">
+    <div class="frame" data-id="70-proof" data-nav="proof" data-foot="live">
+      <div class="body mi">
+        <main class="main">
+          <div class="ph">
+            <div><h1><span class="hl">Proof</span></h1><div class="sub">What the contract refuses, on-chain. Re-run it yourself on testnet.</div></div>
+            <div class="acts"><span class="bd warn lgx"><span class="gl">!</span>testnet only</span><span class="btn pri lg hot" data-lane="E">Run attack suite<span class="hn">1</span></span></div>
+          </div>
+          <div class="card dk" style="padding:20px 26px">
+            <div class="row g24" style="align-items:center">
+              <div class="giant" style="color:var(--y)">7/7</div>
+              <div class="grow"><div class="h3" style="font-size:28px">attacks reverted on-chain</div><div class="sm mt8" style="color:var(--sage)">Last run Mon 2 Nov 10:12 · agent key 0xC11C…4f8a · Vault-HSK · 2m 31s</div></div>
+              <div class="col g6"><span class="bd ok"><span class="gl">✓</span>key can never withdraw</span><span class="bd ok"><span class="gl">✓</span>price floor holds</span><span class="bd ok"><span class="gl">✓</span>caps hold</span></div>
+            </div>
+          </div>
+          <div class="grid fill" style="grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);margin-top:16px">
+            <div class="card" style="padding:14px 20px"><div class="ch" style="margin-bottom:0"><span class="h4">Last run</span><span class="xs fg2">decoded custom errors</span></div><div data-atk="short"></div></div>
+            <div class="col g16" style="gap:16px">
+              <div class="card" style="padding:14px 20px"><div class="ch"><span class="h4">Pause history</span><span class="xs fg2">4 events</span></div>
+                <table class="tbl cmp sm"><tbody>
+                <tr><td class="fg2">10:14</td><td>Guardian · <b>Paused</b> both</td><td class="r"><a class="mono xs ext">0x7b1e…</a></td></tr>
+                <tr><td class="fg2">10:21</td><td>Owner · <b>Unpaused</b> both</td><td class="r"><a class="mono xs ext">0x2c90…</a></td></tr>
+                <tr><td class="fg2">Sun 18:40</td><td>Guardian · <b>Paused</b> HSK</td><td class="r"><a class="mono xs ext">0xe410…</a></td></tr>
+                <tr><td class="fg2">Sun 18:52</td><td>Owner · <b>Unpaused</b> HSK</td><td class="r"><a class="mono xs ext">0x9fd3…</a></td></tr></tbody></table></div>
+              <div class="card" style="padding:14px 20px"><div class="ch"><span class="h4">Tests &amp; invariants</span><span class="bd ok"><span class="gl">✓</span>CI green</span></div>
+                <div class="kv sm"><span class="k">Contract tests</span><span class="v">148 pass</span></div>
+                <div class="kv sm"><span class="k">Invariants (fuzzed)</span><span class="v">12 · 2 shapes</span></div>
+                <div class="kv sm"><span class="k">Fork smoke</span><span class="v">both vaults ✓</span></div>
+                <div class="kv sm"><span class="k">Audit</span><span class="v warn b7">not yet</span></div></div>
+            </div>
+          </div>
+        </main>
+        <aside class="insp" data-insp="proof"></aside>
+      </div>
+    </div>
+    </div>
+    <div class="conn" data-n="1" data-t="Run attack suite" data-s="testnet, in-app"></div>
+
+    <!-- 71 RUNNING -->
+    <div class="fw" data-cap="71|Proof|suite running">
+    <div class="frame" data-id="71-proof-running" data-nav="proof" data-foot="live">
+      <div class="body mi">
+        <main class="main">
+          <div class="ph">
+            <div><h1><span class="hl">Proof</span></h1><div class="sub">Attacking Vault-HSK with the agent's own key · 1m 12s</div></div>
+            <div class="acts"><span class="stat-pill warn"><i></i>Running 3 of 7</span><span class="btn">Stop after this attack</span></div>
+          </div>
+          <div class="bar thick stripe"><i style="width:36%"></i></div>
+          <div class="grid fill" style="grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);margin-top:16px">
+            <div class="card" style="padding:14px 20px"><div class="ch" style="margin-bottom:0"><span class="h4">Attacks</span><span class="xs fg2">each must revert</span></div><div data-atk="run"></div></div>
+            <div class="logbox">
+              <div class="m">10:40:01 suite start · vault 0xF80A…2Bd2 · key 0xC11C…4f8a</div>
+              <div>10:40:02 hold Vault-HSK candidates 90 s</div>
+              <div>10:40:05 [1] check() → <span class="y">9 ERR_TRADE_CAP</span> ✓ expected</div>
+              <div>10:40:06 [1] broadcast 0x51d0…8e2a fixed gas</div>
+              <div>10:40:08 [1] <span class="g">reverted TradeCap(5000.00, 100.00)</span></div>
+              <div>10:41:08 [2] cooldown 60 s elapsed</div>
+              <div>10:41:09 [2] check() → <span class="y">14 ERR_EXPOSURE</span> ✓</div>
+              <div>10:41:11 [2] <span class="g">reverted Exposure(61.70, 95.00, 150.00)</span></div>
+              <div>10:41:12 [3] minAmountOut = 1 · check() → <span class="y">12 ERR_SLIPPAGE</span> ✓</div>
+              <div>10:41:13 [3] broadcast 0x0c4f…31d7 …</div>
+              <div class="m">waiting for block 35,241,955</div>
+            </div>
+          </div>
+          <div class="banner warn mt16" style="margin-top:16px"><span class="ic" style="background:var(--y)">!</span><div><div class="bt sm">The trader holds Vault-HSK entries until the suite finishes</div><div class="bs">Guard exits still run. If any other tx enters the queue the suite aborts safely.</div></div></div>
+        </main>
+        <aside class="insp" data-insp="proof"></aside>
+      </div>
+    </div>
+    </div>
+    <div class="conn" data-n="2" data-t="All 7 land" data-s="~2.5 min"></div>
+
+    <!-- 72 RESULT -->
+    <div class="fw" data-cap="72|Proof|7 reverts">
+    <div class="frame" data-id="72-proof-result" data-nav="proof" data-foot="live">
+      <div class="body mi">
+        <main class="main">
+          <div class="ph">
+            <div><h1>7 of 7 <span class="hl">reverted</span></h1><div class="sub">Mon 2 Nov 10:42 · 2m 31s · every refusal decoded from the chain</div></div>
+            <div class="acts"><span class="btn">Export evidence</span><span class="btn solid">Share proof link</span></div>
+          </div>
+          <div class="banner" style="background:var(--c);color:#fff;border:0;border-left:6px solid var(--y)"><span class="ic" style="background:var(--y);color:var(--c)">❚❚</span><div class="grow"><div class="bt">Vault-HSK is paused: attack 7 needed it</div><div class="bs" style="color:var(--sage)">Unpause on your owner device to resume trading on HSK. Vault-BTC was never touched.</div></div><span class="btn pri">Show unpause QR</span></div>
+          <div class="card mt16 fill" style="margin-top:16px;padding:14px 22px"><div data-atk="full"></div></div>
+        </main>
+        <aside class="insp" data-insp="proof"></aside>
+      </div>
+    </div>
+    </div>
+  </div>
+</section>
+</div>
+
+<!-- ============================================================================================
+     INVENTORY
+     ============================================================================================ -->
+<section class="lane" id="F">
+  <div class="lane-head"><span class="lk">+</span><h2>Other screens</h2><p>Markets, Positions, Agent, Payments (disabled in v1), Settings.</p></div>
+  <div class="lane-row" style="gap:48px">
+
+  <!-- 30 MARKETS -->
+  <div class="fw" data-cap="30|Markets|WBTC selected">
+  <div class="frame" data-id="30-markets" data-nav="markets" data-foot="live">
+    <div class="body cmi">
+      <aside class="ctx">
+        <div class="eb">Markets</div>
+        <div class="card tight mt8" style="margin-top:10px;border:2px solid var(--c);background:#fff"><div class="row sb"><span class="h3">WBTC/USDT</span><span class="bd y">+104</span></div><div class="xs fg2 mt4">gap bps vs HashKey Global · Vault-BTC</div></div>
+        <div class="card tight mt8" style="margin-top:8px"><div class="row sb"><span class="h3">WHSK/USDT</span><span class="bd">+30</span></div><div class="xs fg2 mt4">below cost 36 bps · Vault-HSK</div></div>
+        <div class="eb" style="margin-top:20px">Sources</div>
+        <div class="kv sm mt8"><span class="k">Supra pair 0</span><span class="v">41 min</span></div>
+        <div class="kv sm"><span class="k">Pool TWAP</span><span class="v">300 s</span></div>
+        <div class="kv sm"><span class="k">HashKey Global</span><span class="v">2 s</span></div>
+        <div class="kv sm"><span class="k">APRO</span><span class="v fg2">testnet: off</span></div>
+        <div style="margin-top:auto"><span class="btn sm" style="width:100%">Refresh Supra now</span></div>
+      </aside>
+      <main class="main" data-slot="mmain">
+        <div class="ph">
+          <div><h1><span class="hl">Markets</span></h1><div class="sub">Three prices, the gap, the cost, and what the agent may do about it</div></div>
+          <div class="acts"><span class="stat-pill"><i></i>Live · 2 s</span></div>
+        </div>
+        <div data-slot="mbody" class="col" style="gap:16px;min-height:0;flex:1">
+        <div class="card dk" style="padding:18px 22px">
+          <div class="px3">
+            <div><div class="lbl" style="color:var(--sage)">Supra oracle</div><div class="pv">$78,577.05</div><span class="xs" style="color:var(--sage)">41 min old</span></div>
+            <div><div class="lbl" style="color:var(--sage)">HSKSwap pool</div><div class="pv">$78,170.00</div><span class="xs" style="color:var(--sage)">−52 bps vs oracle</span></div>
+            <div><div class="lbl" style="color:var(--sage)">HashKey Global</div><div class="pv" style="color:var(--y)">$78,991.40</div><span class="xs" style="color:var(--sage)">mid · 1 bps half-spread</span></div>
+          </div>
+        </div>
+        <div class="grid" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr)">
+          <div class="card tight"><div class="ch"><span class="h4">Gap vs cost</span><span class="bd ok"><span class="gl">✓</span>net +69 bps</span></div>
+            <div class="gauge"><div class="ax"></div><div class="cost" style="left:0;width:25%"></div><div class="gp" style="left:25%;width:49%"></div><span class="lab" style="left:12.5%;color:var(--bad)">cost 35</span><span class="lab" style="left:74%">gap 104</span><span class="lab2" style="left:50%">min net edge 15</span></div></div>
+          <div class="card tight chart"><div class="ch"><span class="h4">Gap · 6 h</span><span class="xs fg2">cost line 35 bps</span></div>
+            <svg viewBox="0 0 300 64" height="64"><path d="M0 44H300" stroke="#b3202d" stroke-dasharray="4 4" stroke-width="1"/><path d="M0 50 L30 46 L60 40 L90 30 L120 22 L150 14 L180 18 L210 20 L240 16 L270 22 L300 19" fill="none" stroke="#171e19" stroke-width="2"/><circle cx="300" cy="19" r="3.5" fill="#ffe17c" stroke="#171e19" stroke-width="1.5"/></svg></div>
+        </div>
+        <div class="card" style="padding:14px 20px"><div class="ch" style="margin-bottom:4px"><span class="h4">Live candidates</span><span class="xs fg2">computed by the daemon, decided by the AI</span></div>
+          <table class="tbl cmp sm"><thead><tr><th>Signal</th><th>Side</th><th class="r">Size</th><th class="r">Net edge</th><th class="r">Expires</th><th class="r">State</th></tr></thead><tbody>
+          <tr><td class="b5">spread-revert · open</td><td>buy</td><td class="r">$25.00</td><td class="r ok b7">+69 bps</td><td class="r">2:14</td><td class="r"><span class="bd warn"><span class="gl">!</span>entry interval 11 min</span></td></tr>
+          <tr><td class="b5">discretionary_exit</td><td>sell</td><td class="r">0.00032009</td><td class="r bad b7">−62 bps</td><td class="r">standing</td><td class="r"><span class="bd"><span class="gl">·</span>not taken</span></td></tr></tbody></table></div>
+        <div class="card soft tight row g10" style="border-style:dashed"><span class="b7">▸ Advanced: manual order</span><span class="xs fg2">passes the same 13 vault checks · ⌘↵ to execute</span><span class="grow"></span><span class="bd">collapsed</span></div>
+        </div>
+      </main>
+      <aside class="insp">
+        <div class="sec"><div class="eb">Vault-BTC limits</div>
+          <div class="kv"><span class="k">Per trade</span><span class="v">$100.00</span></div>
+          <div class="kv"><span class="k">Budget left today</span><span class="v">$225.00 of $250</span></div>
+          <div class="kv"><span class="k">Exposure</span><span class="v">$25.21 of $150</span></div>
+          <div class="kv"><span class="k">Slippage</span><span class="v">250 bps</span></div>
+          <div class="kv"><span class="k">Oracle deviation</span><span class="v">250 bps · now −52</span></div>
+          <div class="kv"><span class="k">Exit discount</span><span class="v">500 bps</span></div>
+          <div class="kv"><span class="k">Cooldown</span><span class="v">60 s · ready</span></div>
+          <div class="kv"><span class="k">Oracle max age</span><span class="v">25 h</span></div></div>
+        <div class="sec"><div class="eb">Worst case</div><div class="big" style="color:var(--y)">$25.75</div><div class="xs mt4" style="color:var(--sage)">per UTC day on this vault</div></div>
+        <div style="margin-top:auto"><a class="ext sm">Vault-BTC on explorer</a></div>
+      </aside>
+    </div>
+  </div>
+  </div>
+
+  <!-- 40 POSITIONS -->
+  <div class="fw" data-cap="40|Positions|holding both">
+  <div class="frame" data-id="40-positions" data-nav="positions" data-foot="live">
+    <div class="body mi">
+      <main class="main">
+        <div class="ph">
+          <div><h1><span class="hl">Positions</span></h1><div class="sub">Three marks: what you paid, what selling now returns after fees, and HashKey Global's mid</div></div>
+          <div class="acts"><span class="btn">Go to cash · both</span></div>
+        </div>
+        <div class="card dk" data-slot="phero" style="padding:18px 24px"><div class="grid" style="grid-template-columns:repeat(4,1fr);gap:0">
+          <div><div class="lbl" style="color:var(--sage)">In the vaults</div><div class="big mt8">$281.42</div></div>
+          <div style="border-left:1px solid rgba(183,198,194,.16);padding-left:22px"><div class="lbl" style="color:var(--sage)">Realised today</div><div class="big mt8 ok">+$0.31</div></div>
+          <div style="border-left:1px solid rgba(183,198,194,.16);padding-left:22px"><div class="lbl" style="color:var(--sage)">If sold now</div><div class="big mt8 bad">−$0.28</div></div>
+          <div style="border-left:1px solid rgba(183,198,194,.16);padding-left:22px"><div class="lbl" style="color:var(--sage)">At CEX mark</div><div class="big mt8">+$0.48</div></div></div></div>
+        <div class="grid" style="grid-template-columns:1fr 1fr;margin-top:16px">
+          <div class="card" data-slot="phsk">
+            <div class="ch"><div class="row g10 base"><span class="h3">WHSK/USDT</span><span class="bd ok"><span class="gl">✓</span>target asset</span></div><span class="btn sm">Go to cash on HSK</span></div>
+            <div class="kv sm"><span class="k">Holding</span><span class="v">705.80 WHSK · $61.70</span></div>
+            <div class="kv sm"><span class="k">Cash</span><span class="v">85.31 USDT</span></div>
+            <div class="kv sm"><span class="k">Avg cost</span><span class="v">$0.08739</span></div>
+            <div class="kv sm"><span class="k">If sold now</span><span class="v bad b7">▼ −$0.13</span></div>
+            <div class="kv sm"><span class="k">Realised today</span><span class="v ok b7">▲ +$0.31</span></div>
+            <div class="kv sm"><span class="k">Stop-loss</span><span class="v">300 bps · $0.08477</span></div>
+            <div class="lbl mt12" style="margin-top:14px">Lots</div>
+            <table class="tbl cmp xs"><tbody><tr><td>seed deposit</td><td class="r">686.50 @ 0.08742</td></tr><tr><td>rebalance buy</td><td class="r">32.30 @ 0.08669</td></tr><tr><td>trim (14:05)</td><td class="r">−13.00 @ 0.08750</td></tr></tbody></table>
+          </div>
+          <div class="card">
+            <div class="ch"><div class="row g10 base"><span class="h3">WBTC/USDT</span><span class="bd ok"><span class="gl">✓</span>target asset</span></div><span class="btn sm">Go to cash on BTC</span></div>
+            <div class="kv sm"><span class="k">Holding</span><span class="v">0.00032009 WBTC · $25.21</span></div>
+            <div class="kv sm"><span class="k">Cash</span><span class="v">75.00 USDT</span></div>
+            <div class="kv sm"><span class="k">Avg cost</span><span class="v">$78,102.00</span></div>
+            <div class="kv sm"><span class="k">If sold now</span><span class="v bad b7">▼ −$0.15 · −0.6%</span></div>
+            <div class="kv sm"><span class="k">At CEX mark</span><span class="v ok b7">▲ +$0.20 · +0.8%</span></div>
+            <div class="kv sm"><span class="k">Stop-loss</span><span class="v">300 bps · $75,759</span></div>
+            <div class="lbl mt12" style="margin-top:14px">Lots</div>
+            <table class="tbl cmp xs"><tbody><tr><td>spread-revert open (11:57)</td><td class="r">0.00032009 @ 78,102</td></tr><tr><td>close when gap &lt; 20 bps</td><td class="r fg2">pending</td></tr></tbody></table>
+          </div>
+        </div>
+      </main>
+      <aside class="insp">
+        <div class="sec"><div class="eb">Portfolio guard</div>
+          <div class="kv"><span class="k">Exposure</span><span class="v" data-slot="pexp">$86.91 of $200</span></div>
+          <div class="kv"><span class="k">Turnover today</span><span class="v">$62.50 of $500</span></div>
+          <div class="kv"><span class="k">Daily loss breaker</span><span class="v ok">armed · −$10</span></div>
+          <div class="kv"><span class="k">Target assets</span><span class="v" data-slot="ptgt">WHSK, WBTC</span></div></div>
+        <div class="sec"><div class="eb">Fee drag today</div><div class="big">$0.30</div><div class="xs mt4" style="color:var(--sage)">pool fees + impact, both vaults</div></div>
+        <div class="xs" style="margin-top:auto;color:var(--sage)">Price risk on held exposure is managed by the stop-loss, not the contract.</div>
+      </aside>
+    </div>
+  </div>
+  </div>
+
+  <!-- 50 AGENT -->
+  <div class="fw" data-cap="50|Agent|1 approval pending">
+  <div class="frame" data-id="50-agent" data-nav="agent" data-pending="1" data-foot="live">
+    <div class="body mi">
+      <main class="main">
+        <div class="ph">
+          <div><h1><span class="hl">Agent</span></h1><div class="sub">Who decides, how boldly, and what it changed on its own</div></div>
+          <div class="acts"><span class="stat-pill"><i></i>Trader running</span><span class="btn">Pause trader</span></div>
+        </div>
+        <div class="grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+          <div class="card tight"><div class="lbl">Model</div><div class="h3 mt8" style="margin-top:8px">Claude Sonnet</div><div class="xs fg2 mt4">via Claude Code · MCP · 9 tools allowed</div></div>
+          <div class="card tight"><div class="lbl">Mode</div><div class="seg mt8" style="margin-top:10px"><span class="on">Autonomous</span><span>Propose</span><span>Watch</span></div></div>
+          <div class="card tight"><div class="lbl">Risk profile</div><div class="seg mt8" style="margin-top:10px"><span>Conservative</span><span class="on">Balanced</span><span>Aggressive</span></div></div>
+        </div>
+        <div class="grid fill" style="grid-template-columns:minmax(0,1fr) 330px;margin-top:16px">
+          <div class="card" style="padding:14px 20px"><div class="ch"><span class="h4">Strategy · WBTC/USDT</span><span class="seg"><span>HSK</span><span class="on">BTC</span></span></div>
+            <table class="tbl cmp sm"><thead><tr><th>Setting</th><th class="r">Yours</th><th class="r">Agent-tuned</th><th class="r">Agent may set</th></tr></thead><tbody>
+            <tr><td>Trade size</td><td class="r b7">$25</td><td class="r">$25</td><td class="r fg2">$12.50 – $37.50</td></tr>
+            <tr><td>Entry spread</td><td class="r b7">60 bps</td><td class="r"><span class="bd info">72 · tighter</span></td><td class="r fg2">30 – 90</td></tr>
+            <tr><td>Min net edge</td><td class="r b7">15 bps</td><td class="r">15</td><td class="r fg2">7 – 22</td></tr>
+            <tr><td>Stop-loss</td><td class="r b7">300 bps</td><td class="r">300</td><td class="r fg2">yours only</td></tr>
+            <tr><td>Take-profit</td><td class="r b7">120 bps</td><td class="r"><span class="bd info">100</span></td><td class="r fg2">60 – 180</td></tr>
+            <tr><td>Cycle</td><td class="r b7">60 s</td><td class="r"><span class="bd info">90 s</span></td><td class="r fg2">30 – 90 s</td></tr>
+            <tr><td>Discretionary</td><td class="r b7">3 × $10/day</td><td class="r">1 used</td><td class="r fg2">yours only</td></tr></tbody></table>
+            <div class="xs fg2 mt8">Agent changes stay within ±50% of yours and are journalled as actor = agent.</div></div>
+          <div class="card" style="border:2px solid var(--c);padding:16px 18px">
+            <div class="ch"><span class="h4">Waiting for you</span><span class="bd y">1</span></div>
+            <div class="lbl">From Chat · 14:31</div>
+            <div class="mt4" style="font-size:14px">“Back to a 3% stop on HSK”</div>
+            <div class="card soft tight mt12" style="margin-top:12px"><div class="row sb sm"><span class="mono">stopLossBps · HSK</span><span><s class="fg2">50</s> → <b>300</b></span></div><div class="xs warn b7 mt4">loosening · needs Touch ID</div></div>
+            <div class="row g8 mt12" style="margin-top:14px"><span class="btn pri grow">Approve · Touch ID</span><span class="btn">Reject</span></div>
+            <div class="xs fg2 mt8">expires in 0:48</div>
+          </div>
+        </div>
+      </main>
+      <aside class="insp">
+        <div class="sec"><div class="eb">Runner</div>
+          <div class="kv"><span class="k">Status</span><span class="v ok">running</span></div><div class="kv"><span class="k">Last cycle</span><span class="v">14 s ago</span></div><div class="kv"><span class="k">Cycles</span><span class="v">1,482</span></div><div class="kv"><span class="k">Agent gas</span><span class="v">3.412 HSK</span></div></div>
+        <div class="sec"><div class="eb">Pause trader vs kill switch</div><div class="sm" style="color:var(--sage);line-height:1.55"><b style="color:#fff">Pause trader</b> stops the AI here; vaults stay open for guard exits. <b style="color:#fff">Kill switch</b> pauses the vaults on-chain.</div></div>
+      </aside>
+    </div>
+  </div>
+  </div>
+
+  <!-- 80 PAYMENTS -->
+  <div class="fw" data-cap="80|Payments|disabled · coming soon">
+  <div class="frame" data-id="80-payments" data-nav="payments" data-foot="live">
+    <div class="body">
+      <main class="main">
+        <div class="ph"><div><h1 style="opacity:.45">Payments</h1><div class="sub">Agent-to-agent payments over HSP</div></div><div class="acts"><span class="bd lgx">coming soon</span></div></div>
+        <div style="flex:1;display:grid;place-items:center">
+          <div class="card" style="width:620px;padding:36px 40px;text-align:center;border-style:dashed">
+            <div class="disp" style="font-size:54px;opacity:.5">Connect HSP</div>
+            <p class="fg2 mt12" style="margin-top:16px;font-size:14px;line-height:1.6">Your trader will be able to buy premium signals from other agents and settle through the HashKey Settlement Protocol, with a signed mandate for every payment. It never sits on the trade path.</p>
+            <div class="mt20" style="margin-top:24px"><span class="btn lg dis">Connect HSP · coming soon</span></div>
+            <div class="xs fg2 mt12" style="margin-top:14px">Built and tested on recorded responses · live once HSP access opens</div>
+          </div>
+        </div>
+      </main>
+    </div>
+    <div class="tip" style="top:452px">Payments · <b>coming soon</b></div>
+  </div>
+  </div>
+
+  <!-- 90 SETTINGS -->
+  <div class="fw" data-cap="90|Settings|3 unsaved">
+  <div class="frame" data-id="90-settings" data-nav="settings" data-foot="live">
+    <div class="body">
+      <main class="main" style="padding-bottom:0">
+        <div class="ph"><div><h1><span class="hl">Settings</span></h1><div class="sub">Every save is signed with Touch ID and journalled</div></div><div class="acts"><span class="net"><i></i>Testnet 133</span></div></div>
+        <div class="grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+          <div class="card"><div class="ch"><span class="h4">Network</span></div><div class="seg"><span class="on">Testnet · 133</span><span>Mainnet · 177</span></div><div class="xs fg2 mt8" style="margin-top:10px">Each network keeps its own vaults, agent key and journal.</div></div>
+          <div class="card"><div class="ch"><span class="h4">RPC endpoints</span><span class="lnk xs">Add</span></div>
+            <div class="kv sm"><span class="k mono">testnet.hsk.xyz</span><span class="v">primary · 42 ms</span></div>
+            <div class="kv sm"><span class="k mono">hsk-testnet.drpc.org</span><span class="v"><span class="bd y">new</span> fallback · 97 ms</span></div></div>
+          <div class="card"><div class="ch"><span class="h4">Oracle refresh</span></div>
+            <div class="kv sm"><span class="k">Auto pull-refresh when older than</span><span class="v"><s class="fg2">12 h</s> <b>6 h</b></span></div>
+            <div class="kv sm"><span class="k">Supra HSK/USD</span><span class="v">2h 12m · <span class="lnk">refresh</span></span></div>
+            <div class="kv sm"><span class="k">Supra BTC/USD</span><span class="v">41m · <span class="lnk">refresh</span></span></div></div>
+          <div class="card"><div class="ch"><span class="h4">Approval key</span></div>
+            <div class="kv sm"><span class="k">Method</span><span class="v">Touch ID · Secure Enclave</span></div>
+            <div class="kv sm"><span class="k">Approval window</span><span class="v">60 s</span></div>
+            <div class="kv sm"><span class="k">Auto-lock</span><span class="v"><s class="fg2">12 h</s> <b>8 h</b></span></div></div>
+          <div class="card"><div class="ch"><span class="h4">Agent key</span></div>
+            <div class="mono xs">0xC11CbceE5fDf41aa7175319691aA204eFb164f8a</div>
+            <div class="row g8 mt12" style="margin-top:12px"><span class="btn sm">Rotate (owner device)</span><span class="btn sm">Top up gas</span></div></div>
+          <div class="card"><div class="ch"><span class="h4">AI &amp; data</span></div>
+            <div class="kv sm"><span class="k">Model</span><span class="v">Claude Sonnet · Claude Code</span></div>
+            <div class="kv sm"><span class="k">Journal</span><span class="v"><span class="lnk">Export</span> · 214 records</span></div></div>
+        </div>
+        <div style="flex:1"></div>
+        <div class="wz-bar" style="margin:0 -30px;padding:14px 30px"><span class="bd y">3 unsaved</span><span class="hint">RPC fallback added · refresh 12 h → 6 h · auto-lock 12 h → 8 h</span><span class="grow"></span><span class="btn ghost">Discard</span><span class="btn pri lg">Save with Touch ID</span></div>
+      </main>
+    </div>
+  </div>
+  </div>
+
+  </div>
+</section>
+
+<!-- ============================================================================================
+     STATES
+     ============================================================================================ -->
+<section class="lane" id="G">
+  <div class="lane-head"><span class="lk">S</span><h2>States</h2><p>Overview and Markets: empty, loading, error, paused.</p></div>
+  <div class="lane-row" style="gap:36px;flex-wrap:wrap;row-gap:40px">
+    <div class="fw sm" data-clone="10-overview" data-as="13-overview-empty" data-mod="empty" data-cap="13|Overview|empty"></div>
+    <div class="fw sm" data-clone="10-overview" data-as="14-overview-loading" data-mod="loading" data-cap="14|Overview|loading"></div>
+    <div class="fw sm" data-clone="10-overview" data-as="15-overview-error" data-mod="error" data-foot="stale" data-rail="stale" data-cap="15|Overview|error"></div>
+    <div class="fw sm" data-clone="10-overview" data-mod="paused" data-cap="12|Overview|paused"></div>
+    <div class="fw sm" data-clone="30-markets" data-as="31-markets-empty" data-mod="mempty" data-cap="31|Markets|empty"></div>
+    <div class="fw sm" data-clone="30-markets" data-as="32-markets-loading" data-mod="mloading" data-cap="32|Markets|loading"></div>
+    <div class="fw sm" data-clone="30-markets" data-as="33-markets-error" data-mod="merror" data-cap="33|Markets|error"></div>
+    <div class="fw sm" data-clone="30-markets" data-as="34-markets-paused" data-mod="mpaused" data-foot="paused" data-rail="paused" data-cap="34|Markets|paused"></div>
+  </div>
+</section>
+
+<!-- LANES-END -->
+
+<script>
+/* ---------------- shared chrome: rail, footer, wizard side, logo, QR, connectors, captions ---------------- */
+const BRAND = "../../../packages/ui/brand/";
+const ICON = {
+  overview: '<path d="M4 11.5 12 4l8 7.5"/><path d="M6 10v10h12V10"/><path d="M10 20v-5h4v5"/>',
+  decisions: '<path d="M8 6h12M8 12h12M8 18h8"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/>',
+  markets: '<path d="M3 20h18"/><path d="M5 16l4.5-5 3.5 3 6-7"/><path d="M15 7h4v4"/>',
+  positions: '<path d="M12 3a9 9 0 1 0 9 9h-9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/>',
+  agent: '<rect x="4" y="7" width="16" height="12" rx="3"/><path d="M12 3v4"/><circle cx="9" cy="13" r="1.2"/><circle cx="15" cy="13" r="1.2"/>',
+  chat: '<path d="M4 5h16v11H9l-5 4z"/><path d="M8 10h8"/>',
+  proof: '<path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/>',
+  payments: '<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M7 15h4"/>',
+  settings: '<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/>',
+};
+const NAV = [["overview","Overview"],["decisions","Decisions"],["markets","Markets"],["positions","Positions"],["agent","Agent"],["chat","Chat"],["proof","Proof"],["payments","Payments"]];
+const V = { hsk: "0xF80A74F4D9C17Db8a2a0F32558a9FC3A63e2Bcd2", btc: "0x6Da0c6EF7328d3aD6b0b8781770D941D065a6693" };
+
+function logo(kind, h) {
+  /* brand files from packages/ui/brand (mark / wordmark / lockup, -dark for charcoal surfaces); text fallback if absent */
+  return `<span class="logo" style="--lh:${h}px"><img src="${BRAND}flow-${kind}.svg" alt="Flow" onerror="this.nextElementSibling.style.display='';this.remove()"><span style="display:none;font-size:${h}px">Flow<span class="pd">.</span></span></span>`;
+}
+function rail(f) {
+  const nav = f.dataset.nav, st = f.dataset.rail || "running";
+  const items = NAV.map(([k, l]) => `<div class="ri ${k === nav ? "on" : ""} ${k === "payments" ? "off" : ""}"><svg viewBox="0 0 24 24">${ICON[k]}</svg><span>${l}</span>${k === "payments" ? '<b class="soon">SOON</b>' : ""}${k === "agent" && f.dataset.pending ? '<i class="dotc"></i>' : ""}</div>`).join("");
+  const stl = { running: "Trader<br>running", paused: "Vaults<br>paused", setup: "Setting<br>up", stale: "Offline" }[st];
+  return `<nav class="rail"><div class="lights"><i></i><i></i><i></i></div>${logo("mark-dark", 40)}${items}<div class="sp"></div><div class="tstat ${st}"><i></i>${stl}</div><div class="ri ${nav === "settings" ? "on" : ""}"><svg viewBox="0 0 24 24">${ICON.settings}</svg><span>Settings</span></div></nav>`;
+}
+function short(a, h = 6, t = 4) { return a.slice(0, h) + "…" + a.slice(-t); }
+function footer(kind) {
+  const [k, step] = kind.split(":");
+  const vault = (lab, a, on) => on ? `<span class="fi"><b>${lab}</b><a class="mono ext">${a}</a></span>` : `<span class="fi mut"><b>${lab}</b>not connected</span>`;
+  if (k === "setup") {
+    const s = +step;
+    return `<footer class="foot"><div class="frow">${vault("Vault-HSK", V.hsk, s >= 2)}${vault("Vault-BTC", V.btc, s >= 2)}<span class="fi"><b>Agent key</b>${s >= 3 ? '<span class="mono">0xC11C…4f8a</span>' : '<span style="color:var(--sage)">—</span>'}</span><span class="sp"></span><span class="fi"><b>Network</b>HashKey testnet · 133</span></div>
+      <div class="frow"><span class="fi"><b>Limits</b>${s >= 2 ? "$100/trade · $250/UTC day · $150 exposure · max loss $51.50/day" : '<span style="color:var(--sage)">read from the vaults in step 2</span>'}</span><span class="fi"><span class="up gr">SETUP ${s} / 6</span></span><span class="sp"></span><span class="fi"><a>flowverse.cloud/proof</a></span></div></footer>`;
+  }
+  const paused = k === "paused", stale = k === "stale";
+  const up = paused ? '<span class="up red">PAUSED 14:41:07</span> 1,511 cycles · 4 trades' : stale ? '<span class="up gr">RECONNECTING</span> last read 2 min ago' : '<span class="up">RUNNING 8H 14M</span> 1,482 cycles · 4 trades';
+  return `<footer class="foot"><div class="frow"><span class="fi"><b>Vault-HSK</b><a class="mono ext">${V.hsk}</a></span><span class="fi"><b>Vault-BTC</b><a class="mono ext">${V.btc}</a></span><span class="fi"><b>Chain head</b><span class="mono">0x3207a835…ef51a4a5</span> <span style="color:var(--sage)">#214</span></span><span class="sp"></span><span class="fi"><b>Last trade</b><a class="mono ext">${paused ? "0xa1f0…77c2" : "0x8e8fbaa1…bb4ffeb1"}</a></span></div>
+    <div class="frow"><span class="fi"><b>Limits</b>$100/trade · $250/UTC day · $150 exposure · max loss $51.50/day</span><span class="fi">${up}</span><span class="fi"><b>HSKSwap</b>4 trades routed · $87.50</span><span class="sp"></span><span class="fi"><b>Testnet 133</b>block ${stale ? "35,241,790" : "35,241,906"}</span><span class="fi"><a>flowverse.cloud/proof</a></span></div></footer>`;
+}
+const STEPS = [["Network", "Testnet or mainnet"], ["Vaults", "Connect or deploy"], ["Agent key", "Created on this Mac"], ["Health checks", "Live checklist"], ["Limits", "Worst case, live"], ["Fund", "Deposit and start"]];
+function wizardSide(n) {
+  const steps = STEPS.map(([a, b], i) => { const s = i + 1, c = s < n ? "done" : s === n ? "cur" : "todo"; return `<div class="step ${c}"><span class="sn">${s < n ? "✓" : s}</span><div><div class="st1">${a}</div><div class="st2">${b}</div></div></div>`; }).join("");
+  return `<aside class="wz-side"><div class="lights"><i></i><i></i><i></i></div>${logo("lockup-dark", 40)}<div class="eb" style="color:var(--sage);margin-top:26px">Setup · testnet 133</div><div class="steps" style="margin-top:14px">${steps}</div><div class="promise"><b>No terminal, ever.</b> Owner and guardian keys stay on your own device; Flow shows a QR code whenever they need to sign.</div></aside>`;
+}
+function wizardTop(n) {
+  const p = [1, 2, 3, 4, 5, 6].map((s) => `<i class="${s < n ? "d" : s === n ? "c" : ""}"></i>`).join("");
+  return `<div class="wz-top"><div class="progress">${p}</div><div class="row g10"><span class="xs fg2">Saved · resume any time</span><span class="net"><i></i>Testnet 133</span></div></div>`;
+}
+function vaultCard(el) {
+  const hsk = el.dataset.vault === "hsk", st = el.dataset.state || "active";
+  const empty = st === "empty";
+  const badge = st === "paused" ? '<span class="bd bad"><span class="gl">❚❚</span>paused</span>' : st === "cash" ? '<span class="bd info"><span class="gl">$</span>in cash</span>' : '<span class="bd ok"><span class="gl">✓</span>active</span>';
+  const d = hsk ? { m: "WHSK/USDT", n: "Vault-HSK", a: "0xF80A…2Bd2", used: 37.5, exp: 61.7, hold: "85.31 USDT · 705.80 WHSK", last: "14:05 · sold 13.00 WHSK" } : { m: "WBTC/USDT", n: "Vault-BTC", a: "0x6Da0…6693", used: 25, exp: 25.21, hold: "75.00 USDT · 0.00032009 WBTC", last: "11:57 · bought $25.00 WBTC" };
+  el.innerHTML = `<div class="row sb"><div class="row g10 base"><span class="h3">${d.m}</span><span class="xs fg2">${d.n} · <a class="mono ext">${d.a}</a></span></div>${badge}</div>
+    <div class="vals"><div class="row sb sm" style="margin-top:14px"><span class="fg2">Budget today</span><span class="num"><b>$${(empty ? 0 : d.used).toFixed(2)}</b> used · $${(250 - (empty ? 0 : d.used)).toFixed(2)} left of $250</span></div><div class="bar mt8" style="margin-top:6px"><i style="width:${empty ? 0 : d.used / 2.5}%"></i></div>
+    <div class="row sb sm" style="margin-top:12px"><span class="fg2">Exposure</span><span class="num"><b>$${(empty && !hsk ? 0 : d.exp).toFixed(2)}</b> of $150</span></div><div class="bar" style="margin-top:6px"><i style="width:${empty && !hsk ? 0 : d.exp / 1.5}%"></i></div>
+    <div class="row sb xs fg2" style="margin-top:12px"><span>${empty ? (hsk ? "120.00 USDT · 686.50 WHSK" : "100.00 USDT") : d.hold}</span><span>${empty ? "no trades yet" : d.last}</span></div></div>`;
+}
+function inspOverview(el) {
+  const paused = el.dataset.state === "paused";
+  el.innerHTML = `<div class="sec"><div class="eb">${paused ? "Stopped" : "Uptime"}</div><div class="huge" style="font-size:60px;${paused ? "color:#ff8d95" : ""}">${paused ? "Paused" : "8h 14m"}</div>
+    <div class="kv mt12" style="margin-top:12px"><span class="k">Cycles</span><span class="v">${paused ? "1,511" : "1,482"}</span></div><div class="kv"><span class="k">Trades</span><span class="v">4 · $87.50 routed</span></div><div class="kv"><span class="k">${paused ? "Paused at" : "Last cycle"}</span><span class="v">${paused ? "14:41:07 · 2 txs" : "14 s ago · next in 46 s"}</span></div></div>
+    <div class="sec"><div class="eb">Health</div>
+      ${[["RPC testnet.hsk.xyz", "42 ms"], ["Supra HSK/USD", "2h 12m old"], ["Supra BTC/USD", "41m old"], ["HashKey Global", "88 ms"], ["AI model", "1.2 s"], ["Agent gas", "3.412 HSK"]].map(([a, b]) => `<div class="chk" style="padding:6px 0"><span class="gl-ok">✓</span><span class="sm">${a}</span><span class="xs" style="color:var(--sage)">${b}</span></div>`).join("")}</div>
+    <div class="sec"><div class="eb">Keys</div>
+      <div class="kv"><span class="k">Agent · this Mac</span><span class="v mono">0xC11C…4f8a</span></div><div class="kv"><span class="k">Guardian · pause</span><span class="v mono">0x8aAc…b66B</span></div><div class="kv"><span class="k">Owner · device</span><span class="v mono">0xFF7D…569e</span></div>
+      <div class="xs mt8" style="color:var(--sage)">The agent key can never withdraw.</div></div>`;
+}
+function qr(el) {
+  const n = 29, sz = +(el.dataset.size || 120), m = sz / n; let s = 0; for (const c of el.dataset.qr) s = (s * 31 + c.charCodeAt(0)) >>> 0;
+  const rnd = () => ((s = (s * 1103515245 + 12345) >>> 0) >>> 16) & 1;
+  const fin = (x, y) => [[0, 0], [n - 7, 0], [0, n - 7]].some(([a, b]) => x >= a && x < a + 7 && y >= b && y < b + 7);
+  const sep = (x, y) => [[0, 0], [n - 8, 0], [0, n - 8]].some(([a, b]) => x >= a && x < a + 8 && y >= b && y < b + 8);
+  let r = "";
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+    let on;
+    if (fin(x, y)) { const [a, b] = [[0, 0], [n - 7, 0], [0, n - 7]].find(([a, b]) => x >= a && x < a + 7 && y >= b && y < b + 7); const dx = x - a, dy = y - b; on = dx === 0 || dx === 6 || dy === 0 || dy === 6 || (dx >= 2 && dx <= 4 && dy >= 2 && dy <= 4); }
+    else if (sep(x, y)) on = false; else if (y === 6) on = x % 2 === 0; else if (x === 6) on = y % 2 === 0; else on = rnd();
+    if (on) r += `<rect x="${(x * m).toFixed(2)}" y="${(y * m).toFixed(2)}" width="${(m + .02).toFixed(2)}" height="${(m + .02).toFixed(2)}"/>`;
+  }
+  el.innerHTML = `<svg width="${sz}" height="${sz}" viewBox="0 0 ${sz} ${sz}" fill="#171e19">${r}</svg>`;
+}
+function limRows(el) {
+  const rows = [["Max per trade", "$100", 40], ["Daily budget · UTC day", "$250", 50], ["Max exposure", "$150", 50], ["Max slippage", "250 bps", 50], ["Max oracle deviation", "250 bps", 50], ["Max exit discount", "500 bps", 50], ["Cooldown between trades", "60 s", 20]];
+  el.innerHTML = rows.map(([a, b, p], i) => `<div class="row g18" style="padding:8px 0;border-bottom:1px solid var(--line)"><span class="sm b5" style="width:170px">${a}</span><div class="slider grow"><div class="tr"><i style="width:${p}%"></i></div><span class="kn" style="left:${p}%"></span></div><div class="inp ${i === 1 ? "focus" : ""}" style="width:118px;height:36px"><b>${b}</b></div></div>`).join("");
+}
+function conn(el, lane) {
+  const n = el.dataset.n, t = el.dataset.t, s = el.dataset.s;
+  el.innerHTML = `<svg viewBox="0 0 170 450" preserveAspectRatio="none"><path d="M10 225 H148" stroke="#171e19" stroke-width="8" stroke-linecap="round"/><path d="M10 225 H148" stroke="#ffe17c" stroke-width="4" stroke-linecap="round"/><path d="M144 213 L162 225 L144 237 Z" fill="#171e19" stroke="#171e19" stroke-width="3" stroke-linejoin="round"/></svg>
+    <div class="cl" style="top:${225 - 72}px"><span class="n">${n}</span><div>${t}</div>${s ? `<small>${s}</small>` : ""}</div>`;
+}
+function caption(fw) {
+  if (!fw.dataset.cap) return;
+  const [no, nm, st] = fw.dataset.cap.split("|");
+  const c = document.createElement("div"); c.className = "cap";
+  c.innerHTML = `<span class="no">${no}</span><span class="nm">${nm}</span>${st ? `<span class="st">${st}</span>` : ""}`;
+  const frame = fw.querySelector(".frame");
+  const shot = document.createElement("div"); shot.className = "shot";
+  fw.insertBefore(c, frame); fw.insertBefore(shot, frame); shot.appendChild(frame);
+}
+
+const ATK = [
+  ["$5,000 buy", "trade cap $100", "TradeCap(5000.00, 100.00)", "0x51d0…8e2a"],
+  ["Buy past the exposure cap", "exposure $150", "Exposure(61.70, 95.00, 150.00)", "0x77ab…c401"],
+  ["minAmountOut = 1", "oracle price floor", "Slippage(1, 56912.40)", "0x0c4f…31d7"],
+  ["Pay with a fake token", "pinned pair", "PairNotAllowed(0x7a3F…e19c)", "0xd2e8…0b56"],
+  ["withdraw(USDT, attacker, all)", "owner only", "NotOwner(0xC11C…4f8a)", "0x3f61…a7e0"],
+  ["setLimits(maxTradeUsd = 1e6)", "owner only", "NotOwner(0xC11C…4f8a)", "0x96c2…5d18"],
+  ["Trade after guardian pause", "pause", "VaultPaused()", "0xa1f0…77c2"],
+];
+function atk(el) {
+  const mode = el.dataset.atk;
+  el.innerHTML = ATK.map(([a, e, err, tx], i) => {
+    let st = `<span class="bd ok"><span class="gl">✓</span>reverted</span>`, cls = "", errh = `<span class="err">${err}</span>`;
+    if (mode === "run") { if (i === 2) { st = `<span class="bd warn"><span class="gl">◌</span>broadcasting</span>`; errh = `<span class="xs fg2">check() → ERR_SLIPPAGE ✓ expected</span>`; } else if (i > 2) { st = `<span class="bd"><span class="gl">·</span>queued</span>`; cls = "q"; errh = `<span class="xs">expects ${e}</span>`; } }
+    const txh = mode === "run" && i >= 2 ? "" : `<a class="mono xs ext">${tx}</a>`;
+    if (mode === "short") return `<div class="atk" style="grid-template-columns:24px minmax(0,1fr) minmax(0,1.2fr) 82px"><span class="an">${i + 1}</span><span class="b5">${a}</span>${errh}<span class="r">${txh}</span></div>`;
+    return `<div class="atk ${cls}" style="grid-template-columns:24px minmax(0,1.1fr) minmax(0,1.3fr) 100px"><span class="an">${i + 1}</span><div><div class="b5">${a}</div><div class="xs fg2">expects ${e}</div></div><div>${errh}</div><div class="r col g6" style="align-items:flex-end;gap:4px">${st}${txh}</div></div>`;
+  }).join("");
+  if (mode === "full") el.insertAdjacentHTML("beforeend", `<div class="row g10 xs fg2" style="padding-top:10px"><span class="gl-q">i</span>Not runnable as a tx, by design: routing through an attacker pool (no pool parameter exists) and changing limits with stolen app tokens (no owner key on this Mac).</div>`);
+}
+function checks13(el) {
+  const c = ["Not paused", "Caller is agent", "Amount > 0", "Deadline", "Pair allowed", "Oracle fresh · 41m", "Deviation −60 ≤ 250", "Trade $25 ≤ $100", "Budget $25 of $250", "Cooldown 60 s", "Floor 0.00031208", "Balance", "Exposure $25 ≤ $150"];
+  el.innerHTML = c.map((t) => `<div class="row g8 xs" style="padding:4px 0;border-bottom:1px solid var(--line)"><span class="ok b7">✓</span>${t}</div>`).join("");
+}
+function inspChat(el) {
+  el.innerHTML = `<div class="sec"><div class="eb">Chat can</div>${["Read positions, markets, journal", "Change strategy settings", "Pause both vaults"].map((t) => `<div class="chk" style="padding:6px 0"><span class="gl-ok">✓</span><span class="sm">${t}</span><span></span></div>`).join("")}</div>
+  <div class="sec"><div class="eb">Chat can never</div>${["Execute a trade itself", "Raise a vault limit", "Move funds"].map((t) => `<div class="chk" style="padding:6px 0"><span class="gl-bad">✕</span><span class="sm">${t}</span><span></span></div>`).join("")}</div>
+  <div class="sec"><div class="eb">Approvals</div><div class="kv sm"><span class="k">Tighter</span><span class="v">applies at once</span></div><div class="kv sm"><span class="k">Looser</span><span class="v">Touch ID</span></div><div class="kv sm"><span class="k">Sells now</span><span class="v">Touch ID confirm</span></div></div>
+  <div class="xs" style="margin-top:auto;color:var(--sage)">Every change is journalled as actor = you, via chat, with your words as the reason.</div>`;
+}
+function inspProof(el) {
+  el.innerHTML = `<div class="sec"><div class="eb">How it works</div><div class="sm" style="color:var(--sage);line-height:1.55">The suite signs with the <b style="color:#fff">agent key</b>, the same key the trader uses, with fixed gas and no pre-flight. Each refusal is a real on-chain revert you can open on the explorer.</div></div>
+  <div class="sec"><div class="eb">Target</div><div class="kv"><span class="k">Vault</span><span class="v mono">0xF80A…2Bd2</span></div><div class="kv"><span class="k">Key</span><span class="v mono">0xC11C…4f8a</span></div><div class="kv"><span class="k">Guardian</span><span class="v mono">0x8aAc…b66B</span></div></div>
+  <div class="sec"><div class="eb">Mainnet</div><div class="sm" style="color:var(--sage)">View only: links to recorded runs. No attack is ever sent from the app on mainnet.</div></div>
+  <div style="margin-top:auto"><a class="ext sm">flowverse.cloud/proof</a></div>`;
+}
+const banner = (cls, ic, t, sub, btn) => `<div class="banner ${cls}" style="margin-bottom:16px"><span class="ic" style="${cls === "bad" ? "background:var(--bad);color:#fff" : "background:#ff8d95;color:var(--c)"}">${ic}</span><div class="grow"><div class="bt">${t}</div><div class="bs">${sub}</div></div>${btn ? `<span class="btn ${cls === "paused" ? "pri" : "solid"}">${btn}</span>` : ""}</div>`;
+const slot = (f, n) => f.querySelector(`[data-slot="${n}"]`);
+const MODS = {
+  paused(f) {
+    f.dataset.foot = "paused"; f.dataset.rail = "paused";
+    slot(f, "sub").textContent = "Paused 14:41:07 by you · 2 txs · trader idle";
+    slot(f, "pill").outerHTML = '<span class="stat-pill bad"><i></i>Vaults paused</span>';
+    f.querySelector(".ph").insertAdjacentHTML("afterend", banner("paused", "❚❚", "Both vaults are paused on-chain", "New trades revert with VaultPaused(). Stop-loss exits are off too. Only the owner device can unpause.", "Unpause on owner device"));
+    const h = slot(f, "hero"); h.querySelector(".huge").textContent = "$6.44"; h.querySelector(".of").innerHTML = 'of <b style="color:#fff">$51.50</b> · frozen while paused';
+    slot(f, "ks").outerHTML = `<div class="card dk" style="padding:18px 20px;border:2px solid #ff8d95"><div class="eb">Kill switch</div><div class="disp" style="font-size:44px;color:#ff8d95;margin-top:12px">Paused</div><div class="xs mt8" style="color:var(--sage);margin-top:8px">14:41:07 · <a class="mono">0xa1f0…77c2</a> · <a class="mono">0x5be9…02d4</a></div><div class="row g8" style="margin-top:14px"><span class="qr" data-qr="unpause" data-size="64" style="padding:4px"></span><span class="xs" style="color:var(--sage)">Scan on the owner device to unpause both vaults.</span></div></div>`;
+    f.querySelectorAll("[data-vault]").forEach((v) => (v.dataset.state = "paused"));
+    f.querySelector("[data-insp]").dataset.state = "paused";
+    const d = slot(f, "dec"); d.querySelector(".drow").outerHTML = '<div class="drow"><span class="t">14:41</span><span class="m">ALL</span><span class="x"><b>Paused both vaults</b> · kill switch, by you</span><span class="bd bad"><span class="gl">❚❚</span>paused</span></div>';
+  },
+  empty(f) {
+    slot(f, "sub").textContent = "Mon 2 Nov · trader started 40 s ago · first cycle in 20 s";
+    const h = slot(f, "hero"); h.querySelector(".huge").textContent = "$0.00"; h.querySelector(".bar i").style.width = "0"; h.querySelectorAll("b.num").forEach((b) => (b.textContent = "$0.00")); h.querySelectorAll(".bad.b7").forEach((b) => (b.textContent = "$0.00"));
+    f.querySelectorAll("[data-vault]").forEach((v) => (v.dataset.state = "empty"));
+    slot(f, "dec").innerHTML = '<div class="ch"><span class="h4">Last decisions</span></div><div style="display:grid;place-items:center;height:150px;text-align:center"><div><div class="disp" style="font-size:30px">No decisions yet</div><div class="sm fg2 mt8">The first cycle reads three prices and decides in about 20 s. Skipped trades show up here too.</div></div></div>';
+    slot(f, "score").querySelectorAll(".sc-n").forEach((n) => (n.innerHTML = "0"));
+  },
+  loading(f) {
+    const m = f.querySelector(".main"); [...m.children].slice(1).forEach((c) => c.remove());
+    m.insertAdjacentHTML("beforeend", `<div class="grid" style="grid-template-columns:minmax(0,1fr) 290px"><div class="card dk" style="height:220px;padding:22px"><div class="sk" style="width:40%;height:12px"></div><div class="sk" style="width:30%;height:70px;margin-top:18px"></div><div class="sk" style="height:30px;margin-top:18px"></div></div><div class="card" style="height:220px;padding:22px"><div class="sk" style="width:50%;height:12px"></div><div class="sk" style="height:74px;margin-top:80px;background:rgba(179,32,45,.15)"></div></div></div>
+      <div class="grid" style="grid-template-columns:1fr 1fr;margin-top:16px">${'<div class="card" style="height:170px;padding:20px"><div class="sk" style="width:45%;height:20px"></div><div class="sk" style="height:10px;margin-top:30px"></div><div class="sk" style="height:10px;margin-top:30px"></div></div>'.repeat(2)}</div>
+      <div class="card" style="margin-top:16px;flex:1;padding:20px">${'<div class="sk" style="height:14px;margin:14px 0"></div>'.repeat(4)}</div>
+      <div class="xs fg2 c" style="margin-top:10px">Reading limits() and balances from chain 133…</div>`);
+    f.querySelector("[data-insp]").outerHTML = `<aside class="insp"><div class="sk" style="width:40%;height:12px"></div><div class="sk" style="width:70%;height:56px;margin-top:14px"></div>${'<div class="sk" style="height:12px;margin-top:22px"></div>'.repeat(8)}</aside>`;
+    slot(f, "pill") && (slot(f, "pill").outerHTML = '<span class="stat-pill warn"><i></i>Connecting…</span>');
+  },
+  error(f) {
+    slot(f, "sub").textContent = "Showing values from 14:26 · RPC unreachable for 2 min";
+    slot(f, "pill").outerHTML = '<span class="stat-pill bad"><i></i>RPC unreachable</span>';
+    f.querySelector(".ph").insertAdjacentHTML("afterend", banner("bad", "!", "Can't reach testnet.hsk.xyz · retrying in 8 s", "The vault still enforces every limit on-chain. The kill switch will try the fallback RPC.", "Switch to fallback RPC"));
+    f.querySelector(".main").classList.add("stale");
+    ["hero", "vaults", "row3"].forEach((n) => slot(f, n).style.opacity = ".5");
+  },
+  cash(f) {
+    slot(f, "phero").querySelectorAll(".big")[0].textContent = "$281.27";
+    slot(f, "phero").querySelectorAll(".big")[1].textContent = "+$0.18";
+    slot(f, "phero").querySelectorAll(".big")[2].textContent = "−$0.15";
+    slot(f, "phero").querySelectorAll(".big")[3].textContent = "+$0.20";
+    slot(f, "phsk").outerHTML = `<div class="card" style="border:2px solid var(--c)"><div class="ch"><div class="row g10 base"><span class="h3">WHSK/USDT</span><span class="bd info"><span class="gl">$</span>in cash</span></div><span class="btn sm">Trade HSK again</span></div>
+      <div class="kv sm"><span class="k">Holding</span><span class="v">0 WHSK</span></div><div class="kv sm"><span class="k">Cash</span><span class="v b7">146.86 USDT</span></div><div class="kv sm"><span class="k">Last sale</span><span class="v">705.80 WHSK → 61.55 USDT</span></div><div class="kv sm"><span class="k">Realised on sale</span><span class="v bad b7">▼ −$0.13</span></div><div class="kv sm"><span class="k">Realised today</span><span class="v ok b7">▲ +$0.18</span></div><div class="kv sm"><span class="k">Reason</span><span class="v">target_assets · guard, no AI</span></div>
+      <div class="card soft tight" style="margin-top:14px"><div class="xs"><b>14:33:12</b> · guard exit · <a class="mono ext">0xb3d2…19af</a> · EAS <a class="mono ext">0x41e7…c08b</a></div></div></div>`;
+    slot(f, "pexp").textContent = "$25.21 of $200"; slot(f, "ptgt").textContent = "WBTC";
+    f.insertAdjacentHTML("beforeend", `<div class="toast" style="bottom:80px;right:344px"><div class="t1">✓ Guard sold 705.80 WHSK → 61.55 USDT</div><div class="t2">Go to cash on HSK · Vault-HSK · <a class="mono">0xb3d2…19af ↗</a></div></div>`);
+  },
+  mempty(f) {
+    slot(f, "mbody").innerHTML = `<div style="flex:1;display:grid;place-items:center"><div class="card" style="width:520px;padding:32px;text-align:center;border-style:dashed"><div class="disp" style="font-size:40px">No market enabled</div><p class="fg2 mt12" style="margin-top:12px">Both markets are switched off in your strategy, so the agent only watches. Turn one on in Agent or ask Chat “trade BTC again”.</p><div style="margin-top:20px"><span class="btn pri">Enable WBTC/USDT</span></div></div></div>`;
+    f.querySelectorAll(".ctx .card").forEach((c) => (c.style.opacity = ".5"));
+  },
+  mloading(f) {
+    slot(f, "mbody").innerHTML = `<div class="card dk" style="height:130px;padding:20px"><div class="grid" style="grid-template-columns:repeat(3,1fr);gap:22px">${'<div><div class="sk" style="width:60%;height:10px"></div><div class="sk" style="height:40px;margin-top:14px"></div></div>'.repeat(3)}</div></div><div class="grid" style="grid-template-columns:1fr 1fr">${'<div class="card" style="height:120px"><div class="sk" style="width:40%;height:16px"></div><div class="sk" style="height:12px;margin-top:40px"></div></div>'.repeat(2)}</div><div class="card" style="height:150px">${'<div class="sk" style="height:12px;margin:14px 0"></div>'.repeat(4)}</div><div class="xs fg2 c">Reading Supra, the pool TWAP and HashKey Global…</div>`;
+  },
+  merror(f) {
+    slot(f, "mbody").insertAdjacentHTML("afterbegin", banner("bad", "!", "Supra BTC/USD is 26 h old: over the vault's 25 h limit", "Buys are refused on-chain (OracleStale) until it refreshes. The agent has been told.", "Refresh Supra now"));
+    slot(f, "mbody").querySelectorAll(".card").forEach((c) => (c.style.opacity = ".55"));
+  },
+  mpaused(f) {
+    slot(f, "mbody").insertAdjacentHTML("afterbegin", banner("paused", "❚❚", "Vaults paused · candidates are not traded", "Prices keep updating. Manual orders are disabled until the owner unpauses.", "Unpause on owner device"));
+    slot(f, "mbody").querySelector("table").style.opacity = ".45";
+  },
+};
+function build(root) {
+  root.querySelectorAll(".frame").forEach((f) => {
+    if (f.dataset.built) return; f.dataset.built = 1;
+    if (f.dataset.wz) {
+      const n = +f.dataset.wz, kids = [...f.childNodes];
+      const wz = document.createElement("div"); wz.className = "wz";
+      wz.innerHTML = wizardSide(n) + `<section class="wz-main">${wizardTop(n)}</section>`;
+      const main = wz.querySelector(".wz-main"); kids.forEach((k) => main.appendChild(k));
+      f.appendChild(wz);
+    }
+    if (f.dataset.nav) f.insertAdjacentHTML("afterbegin", rail(f));
+    if (f.dataset.foot) f.insertAdjacentHTML("beforeend", footer(f.dataset.foot));
+  });
+  root.querySelectorAll("[data-logo]").forEach((e) => (e.outerHTML = logo(e.dataset.logo, +e.dataset.h)));
+  root.querySelectorAll("[data-vault]").forEach(vaultCard);
+  root.querySelectorAll("[data-insp=overview]").forEach(inspOverview);
+  root.querySelectorAll("[data-qr]").forEach(qr);
+  root.querySelectorAll("#lim-rows").forEach(limRows);
+  root.querySelectorAll("[data-atk]").forEach(atk);
+  root.querySelectorAll("#checks13").forEach(checks13);
+  root.querySelectorAll("[data-insp=chat]").forEach(inspChat);
+  root.querySelectorAll("[data-insp=proof]").forEach(inspProof);
+}
+/* clones: <div class="fw" data-clone="id" data-cap=… data-mod="cls" data-hot="lane"> */
+document.querySelectorAll("[data-clone]").forEach((fw) => {
+  const src = document.querySelector(`.frame[data-id="${fw.dataset.clone}"]`);
+  const f = src.cloneNode(true); f.removeAttribute("data-built");
+  if (fw.dataset.as) f.dataset.id = fw.dataset.as; else f.removeAttribute("data-id");
+  if (fw.dataset.foot) f.dataset.foot = fw.dataset.foot;
+  if (fw.dataset.rail) f.dataset.rail = fw.dataset.rail;
+  if (fw.dataset.mod) MODS[fw.dataset.mod](f);
+  if (fw.dataset.foot) f.dataset.foot = fw.dataset.foot;
+  if (fw.dataset.add) { f.querySelectorAll(".hot").forEach((h) => { h.classList.remove("hot"); h.querySelector(".hn")?.remove(); }); }
+  if (fw.dataset.add) f.appendChild(document.getElementById(fw.dataset.add).content.cloneNode(true));
+  fw.appendChild(f);
+});
+build(document);
+/* per-lane hotspot filtering: data-lane on .hot limits it to one lane */
+document.querySelectorAll(".lane").forEach((lane) => lane.querySelectorAll(".hot[data-lane]").forEach((h) => { if (h.dataset.lane !== lane.id) { h.classList.remove("hot"); h.querySelector(".hn")?.remove(); } }));
+document.querySelectorAll(".hot:not([data-lane])").forEach((h) => { const lane = h.closest(".lane"); if (lane && h.closest("[data-hotlane]") && h.closest("[data-hotlane]").dataset.hotlane !== lane.id) { h.classList.remove("hot"); h.querySelector(".hn")?.remove(); } });
+document.querySelectorAll(".conn").forEach(conn);
+document.querySelectorAll(".fw").forEach(caption);
+/* solo render: index.html?f=<frame id> */
+const solo = new URLSearchParams(location.search).get("f");
+if (solo) {
+  const f = document.querySelector(`.frame[data-id="${solo}"]`);
+  document.body.className = "solo"; document.body.innerHTML = ""; document.body.appendChild(f);
+}
+</script>
+</body>
+</html>
