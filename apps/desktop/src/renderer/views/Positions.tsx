@@ -53,7 +53,7 @@ export default function Positions(_: ViewProps) {
     <>
       <PageHead
         title="Positions"
-        sub="Three marks: what you paid, what selling now returns after fees, and HashKey Global's mid"
+        sub="Three marks: what you paid, what selling now returns after fees, and the on-chain oracle price"
         acts={<Btn disabled={!held.length || busy} onClick={() => setConfirm([])}>Go to cash · both</Btn>}
       />
       <section className="card dk" style={{ padding: "18px 24px" }} aria-label="Portfolio marks">
@@ -61,7 +61,7 @@ export default function Positions(_: ViewProps) {
           <Hero label="In the vaults" value={money(inVaults)} />
           <Hero label="Realised today" value={signed(n(pos.portfolio.realisedUsd))} tone={n(pos.portfolio.realisedUsd)} sep />
           <Hero label="If sold now" value={signed(n(pos.portfolio.unrealisedExitUsd))} tone={n(pos.portfolio.unrealisedExitUsd)} sep />
-          <Hero label="At CEX mark" value={signed(n(pos.portfolio.unrealisedCexUsd))} sep />
+          <Hero label="At oracle mark" value={signed(n(pos.portfolio.unrealisedCexUsd))} sep />
         </div>
       </section>
       <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", marginTop: 16 }}>
@@ -187,7 +187,7 @@ function MarketCard({ p, isTarget, cash, stopLossBps, sale, busy, onCash, onAgai
         <>
           <KV k="Avg cost" className="sm">{p.avgEntry ? price8(p.avgEntry) : "—"}</KV>
           <KV k="If sold now" className="sm"><Delta usd={p.unrealisedExitUsd} bps={p.unrealisedExitBps} /></KV>
-          <KV k="At CEX mark" className="sm"><Delta usd={p.unrealisedCexUsd} bps={p.unrealisedCexBps} /></KV>
+          <KV k="At oracle mark" className="sm"><Delta usd={p.unrealisedCexUsd} bps={p.unrealisedCexBps} /></KV>
           <KV k="Realised today" className="sm"><Delta usd={p.realisedUsd} /></KV>
           <KV k="Stop-loss" className="sm">{stopLossBps !== undefined ? `${stopLossBps} bps${stopPx ? " · " + price8(stopPx) : ""}` : "—"}</KV>
           {p.reentryLockUntil && <KV k="Re-entry" className="sm">locked until {clock(p.reentryLockUntil)}</KV>}
