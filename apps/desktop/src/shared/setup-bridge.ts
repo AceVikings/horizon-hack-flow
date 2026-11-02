@@ -44,6 +44,8 @@ export type SetupPath =
   | "/engine/providers"
   | "/engine/select"
   | "/engine/proxy/install"
+  | "/engine/opencode"
+  | "/engine/opencode/test"
   | `/engine/providers/${string}/test`;
 export type ApprovalPath = "/setup/config" | "/setup/model/key" | `/engine/providers/${string}/credential`;
 
@@ -88,7 +90,7 @@ export interface SetupBridge {
    * The user's own CLIProxyAPI (never bundled): detect the binary and its login flags (from its --help), pick it by
    * hand, open Terminal on one allowlisted login flag, or list the models its server reports at /v1/models.
    */
-  proxyCli(o: { op: "detect" | "pick" | "login" | "models"; flag?: string; baseURL?: string; apiKey?: string }): Promise<Res<any>>;
+  proxyCli(o: { op: "detect" | "pick" | "login" | "models" | "opencode-login"; flag?: string; baseURL?: string; apiKey?: string }): Promise<Res<any>>;
   /** Touch ID for a risk-raising change (v1 policy). `{ method: "none" }` when Touch ID is not set up (ask in-app). */
   confirmRisk(reason: string): Promise<Res<{ method: "touch-id" | "none" }>>;
   strategyCode(changeId: string): Promise<{ code: string; expiresAt: number } | null>;
@@ -98,9 +100,9 @@ export interface SetupBridge {
 export const SETUP_IPC = ["setup.daemon", "setup.start", "setup.stop", "setup.submitCode", "setup.unlock", "setup.get", "setup.post", "setup.keygen", "setup.approveStart", "setup.approveFinish", "setup.open", "setup.saveJson", "setup.proxy", "setup.strategyCode", "setup.proxyCli", "setup.confirmRisk"] as const;
 export type SetupIpc = (typeof SETUP_IPC)[number];
 
-const PROV = "(anthropic|openai|gemini|openrouter|ollama|proxy)";
-export const SETUP_GET_RE = /^\/setup\/(status|networks|vaults|agent|doctor|limits|fund|handoff|config|model|model\/check)$|^\/engine\/providers$/;
-export const SETUP_POST_RE = new RegExp(`^/setup/(state|network|vaults|handoff|complete|model|config)$|^/engine/select$|^/engine/proxy/install$|^/engine/providers/${PROV}/test$`);
+const PROV = "(opencode|subscription|anthropic|openai|gemini|openrouter|ollama|proxy)";
+export const SETUP_GET_RE = /^\/setup\/(status|networks|vaults|agent|doctor|limits|fund|handoff|config|model|model\/check)$|^\/engine\/providers$|^\/engine\/opencode$/;
+export const SETUP_POST_RE = new RegExp(`^/setup/(state|network|vaults|handoff|complete|model|config)$|^/engine/select$|^/engine/proxy/install$|^/engine/opencode/test$|^/engine/providers/${PROV}/test$`);
 export const APPROVAL_RE = new RegExp(`^/setup/(config|model/key)$|^/engine/providers/${PROV}/credential$`);
 
 /**

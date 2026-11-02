@@ -1,7 +1,7 @@
 // Setup 3 · Start (SIMPLIFY.md): AI account, money in the vaults + agent gas, and the health checks (run silently;
 // only failures show, each with one fix). "Start trading" saves the trader mode and starts the in-app trader.
 import { useEffect, useState } from "react";
-import type { AiHealth } from "@shared/bridge";
+import { viaClaudeCode, type AiHealth } from "@shared/bridge";
 import { useApp } from "../../src/app";
 import {Btn, QR} from "../../src/ui";
 import { SubscriptionSignIn } from "./Subscriptions";
@@ -46,7 +46,7 @@ function AiPart({ onState, rules, setRules }: { onState(ok: boolean): void; rule
       if (r.data.credential !== "none" && !r.data.lastCheck) void ate.ai!.check().then((c) => c.ok && setH(c.data));
     });
   }, [ate]);
-  const cli = !!h && h.engine === "claude-code" && !!h.claudeCli;
+  const cli = !!h && viaClaudeCode(h);
   const ok = sub || cli || (!!h && h.credential !== "none" && h.lastCheck?.reachable !== false);
   useEffect(() => onState(ok), [ok, onState]);
   const save = async () => {

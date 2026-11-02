@@ -407,7 +407,8 @@ export class AiEngine {
   effectiveModel(): string {
     if (this.cfg.provider === "opencode") {
       const ids = (this.models_.opencode ?? []).filter((m) => m.tools !== false).map((m) => m.id);
-      if (this.cfg.model && (ids.length === 0 || ids.includes(this.cfg.model))) return this.cfg.model;
+      // opencode ids are provider/model; a leftover id from another provider (auto-switched ai.json) is ignored
+      if (this.cfg.model.includes("/") && (ids.length === 0 || ids.includes(this.cfg.model))) return this.cfg.model;
       return OPENCODE_PREFERRED.find((m) => ids.length === 0 || ids.includes(m)) ?? ids[0] ?? OPENCODE_PREFERRED[0]!;
     }
     if (this.cfg.provider !== "subscription") return this.cfg.model;
@@ -528,7 +529,7 @@ export class AiEngine {
     };
   }
   async check(): Promise<AiHealth> {
-    if (this.cfg.engine === "claude-code") {
+    if (this.cfg.engine === "claude-code" && this.cfg.provider === "anthropic") {
       // the CLI brings its own login; Flow only checks that it is installed (no tokens spent)
       const cli = findClaudeBin(this.env);
       this.lastCheck = { at: nowSec(), reachable: !!cli, ...(cli ? {} : { error: { kind: "no_credentials", message: "Claude Code is not installed on this Mac" } }) };

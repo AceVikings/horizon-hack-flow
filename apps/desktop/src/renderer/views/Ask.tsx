@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MARKETS, type MarketId, type PositionsOutput } from "@ate/core";
 import type { AiHealth, ChatMessage, PendingChange, Res } from "@shared/bridge";
-import { aiMissing } from "@shared/bridge";
+import { aiMissing, viaClaudeCode } from "@shared/bridge";
 import { useApp, useNow, useRemote } from "../src/app";
 import { baseDecimals, fmtUnits } from "../src/format";
 import { PageHead, useNav } from "../src/shell";
@@ -142,7 +142,7 @@ export default function Ask(_: ViewProps) {
         }}
       />
     ) : null;
-  const engine = ai.last ? (aiMissing(ai.last) ? "simple answers until you connect a subscription" : ai.last.engine === "claude-code" ? `${ai.last.modelLabel} · Claude Code` : ai.last.modelLabel) : null;
+  const engine = ai.last ? (aiMissing(ai.last) ? "simple answers until you connect a subscription" : viaClaudeCode(ai.last) ? `${ai.last.modelLabel} · Claude Code` : ai.last.modelLabel) : null;
 
   return (
     <div className="page1" style={{ display: "flex", flexDirection: "column", minHeight: "100%" }}>

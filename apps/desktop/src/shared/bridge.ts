@@ -182,7 +182,9 @@ export interface AiHealth {
   claudeCli?: string | null;
 }
 /** No AI to run the agents: no credential, and not the Claude Code CLI engine with the CLI installed. */
-export const aiMissing = (h: Pick<AiHealth, "credential" | "engine" | "claudeCli">): boolean => h.credential === "none" && !(h.engine === "claude-code" && !!h.claudeCli);
+export const aiMissing = (h: Pick<AiHealth, "credential" | "engine" | "claudeCli" | "provider">): boolean => h.credential === "none" && !(viaClaudeCode(h));
+/** The Claude Code CLI runs the agents (Anthropic provider only; another provider ignores the engine flag). */
+export const viaClaudeCode = (h: Pick<AiHealth, "engine" | "claudeCli" | "provider">): boolean => h.engine === "claude-code" && h.provider === "anthropic" && !!h.claudeCli;
 
 export interface AiConfigPatch {
   model?: string;

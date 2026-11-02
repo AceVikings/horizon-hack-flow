@@ -101,4 +101,16 @@ describe("OpenCode engine (mocked opencode serve)", () => {
     ai.setConfig({ provider: "anthropic" });
     expect(new AiEngine(h, env, {}, undefined, oc).config.provider).toBe("anthropic");
   });
+
+  it("an older ai.json (Anthropic model, no providerChosen) auto-switched to opencode uses an opencode model", () => {
+    const h = home();
+    const auth = join(h, "auth.json");
+    writeFileSync(auth, JSON.stringify({ opencode: { type: "api", key: "x" } }));
+    writeFileSync(join(h, "ai.json"), JSON.stringify({ provider: "anthropic", model: "claude-opus-5-5", engine: "claude-code" }));
+    const env = { ATE_KEYSTORE: "file", ATE_OPENCODE_AUTH: auth };
+    const oc = new OpencodeEngine({ home: h, daemonPort: 1, tokens: new TokenRegistry(), baseUrl: base, env });
+    const ai = new AiEngine(h, env, {}, undefined, oc);
+    expect(ai.config.provider).toBe("opencode");
+    expect(ai.effectiveModel()).toBe("opencode/deepseek-v4.1-flash");
+  });
 });
