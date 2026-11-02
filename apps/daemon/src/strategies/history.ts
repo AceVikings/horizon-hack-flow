@@ -108,7 +108,16 @@ export class HistoryLoader {
     const out = new Map<number, number>();
     let end = to * 1000;
     for (let k = 0; k < 40 && end > from * 1000; k++) {
-      const raw = (await this.d.cex.klines(sym, iv, 1000, end)) as [number, string, string, string, string][];
+      let raw: [number, string, string, string, string][] = [];
+      for (let attempt = 0; ; attempt++) {
+        try {
+          raw = (await this.d.cex.klines(sym, iv, 1000, end)) as typeof raw;
+          break;
+        } catch (e) {
+          if (attempt >= 2) throw e;
+          await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+        }
+      }
       if (!Array.isArray(raw) || !raw.length) break;
       let minT = Infinity;
       for (const r of raw) {
