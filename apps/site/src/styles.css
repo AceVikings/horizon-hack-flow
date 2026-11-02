@@ -470,3 +470,4 @@ p { text-wrap: pretty; }
 
 /* headline lines: each sentence is its own balanced block */
 .ln { display: block; text-wrap: balance; }
+.pnote a { color: var(--y); text-underline-offset: 3px; }
