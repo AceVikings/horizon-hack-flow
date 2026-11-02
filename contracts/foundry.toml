@@ -24,4 +24,7 @@ depth = 100
 hsk = "https://mainnet.hsk.xyz"
 
 [etherscan]
-hsk = { key = "verifyContract", url = "https://hsk.blockscout.com/api", chain = 177 }
+hsk = { key = "verifyContract", url = "https://hsk.blockscout.com/api" }
+
+[lint]
+lint_on_build = false
