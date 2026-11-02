@@ -309,7 +309,7 @@ export function TxQR({ tx, landed, detail, size = 150, dark }: { tx: HandoffTx; 
 }
 
 /** Dialog that shows every transaction of a handoff as QR and closes itself once all have landed. */
-export function HandoffDialog({ open, onClose, title, intro, body, onDone }: { open: boolean; onClose(): void; title: ReactNode; intro: ReactNode; body: Record<string, unknown> | null; onDone?(): void }) {
+export function HandoffDialog({ open, onClose, title, intro, body, onDone, eyebrow = "Owner device" }: { open: boolean; onClose(): void; title: ReactNode; intro: ReactNode; body: Record<string, unknown> | null; onDone?(): void; eyebrow?: string }) {
   const ho = useHandoff(() => onDone?.());
   const key = JSON.stringify(body);
   useEffect(() => {
@@ -318,7 +318,7 @@ export function HandoffDialog({ open, onClose, title, intro, body, onDone }: { o
   }, [open, key]);
   const done = ho.poll?.done;
   return (
-    <Dialog open={open} onClose={onClose} eyebrow="Owner device" title={title} width={720} footer={<><span className="grow" /><Btn kind={done ? "pri" : undefined} onClick={onClose}>{done ? "Done" : "Close"}</Btn></>}>
+    <Dialog open={open} onClose={onClose} eyebrow={eyebrow} title={title} width={720} footer={<><span className="grow" /><Btn kind={done ? "pri" : undefined} onClick={onClose}>{done ? "Done" : "Close"}</Btn></>}>
       <p className="sm fg2" style={{ marginBottom: 14 }}>{intro}</p>
       <ErrLine error={ho.error} />
       {ho.busy && <Spinner label="Building the transactions…" />}

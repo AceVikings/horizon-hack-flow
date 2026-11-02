@@ -138,7 +138,7 @@ function FundPart({ onState }: { onState(ok: boolean): void }) {
   const gasOk = gas >= (d?.chainId === 133 ? 0.01 : 2);
   useEffect(() => onState(total > 0 && gasOk), [total, gasOk, onState]);
   return (
-    <Section title="Money" done={total > 0 && gasOk} sub="Deposits go from your owner wallet into the vaults. Only the owner can take them out.">
+    <Section title="Money" done={total > 0 && gasOk} sub="Send money into the vaults from any wallet. Only your Flow wallet can take it out.">
       {!d ? (
         <div style={{ marginTop: 12 }}><Spinner label="Reading balances…" /></div>
       ) : (
@@ -209,7 +209,7 @@ function FundPart({ onState }: { onState(ok: boolean): void }) {
           )}
         </>
       )}
-      <HandoffDialog open={!!dep} onClose={() => setDep(null)} title="Deposit" intro="Scan with your owner wallet. It sends the tokens straight into the vault." body={dep ? { kind: "deposit", ...dep } : null} onDone={() => (f.reload(), setForm(null))} />
+      <HandoffDialog open={!!dep} onClose={() => setDep(null)} title="Deposit" eyebrow="From any wallet" intro="Scan with any wallet that holds the tokens. It sends them straight into the vault." body={dep ? { kind: "deposit", ...dep } : null} onDone={() => (f.reload(), setForm(null))} />
       <HandoffDialog open={!!tok} onClose={() => setTok(null)} title="Free test tokens" intro="Scan with any wallet you choose. The faucet mints test tokens to that wallet." body={tok ? { kind: "faucet", token: tok } : null} />
     </Section>
   );

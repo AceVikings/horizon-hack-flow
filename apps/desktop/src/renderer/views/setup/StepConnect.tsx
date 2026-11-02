@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import { MARKETS, type MarketId } from "@ate/core";
 import { short } from "../../src/format";
-import { AddrLink, Btn } from "../../src/ui";
+import { AddrLink, Btn, QR } from "../../src/ui";
 import { Details, ErrLine, Section, Spinner, StatusText, Wizard, go, useOwner, useSetup, useSetupGet } from "./common";
 
 interface Net {
@@ -98,6 +98,46 @@ function Network({ chainId, onBusy }: { chainId: number; onBusy(b: boolean): voi
   );
 }
 
+/** The Flow wallet that will create and own the vaults: its address and HSK, which pays the gas to create them. */
+function OwnerGas({ chainId, onGas }: { chainId: number; onGas(hsk: number | null): void }) {
+  const owner = useOwner();
+  const s = useSetup();
+  const [o, setO] = useState<{ address: string | null; gasHsk?: string | null } | null>(null);
+  useEffect(() => {
+    if (!owner) return;
+    let live = true;
+    const run = () => void owner.status().then((r) => live && r.ok && (setO(r.data), onGas(r.data.gasHsk == null ? null : Number(r.data.gasHsk))));
+    run();
+    const iv = setInterval(run, 6000);
+    return () => {
+      live = false;
+      clearInterval(iv);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [owner]);
+  if (!o?.address) return <div style={{ marginTop: 12 }}><Spinner label="Making your Flow wallet…" /></div>;
+  const gas = o.gasHsk == null ? null : Number(o.gasHsk);
+  const low = gas !== null && gas < 0.01;
+  return (
+    <div className="hx row g18 top" style={{ marginTop: 14 }}>
+      <QR data={`ethereum:${o.address}@${chainId}`} size={110} label="Flow wallet address QR" />
+      <div className="col" style={{ gap: 6, minWidth: 0 }}>
+        <div className="sm b7">Your Flow wallet</div>
+        <div className="xs fg2">Flow made this wallet for you. It will own your vaults.</div>
+        <div className="row g10">
+          <span className="mono xs" style={{ wordBreak: "break-all" }}>{o.address}</span>
+          <button className="linkbtn xs" onClick={() => void navigator.clipboard?.writeText(o.address!)}>Copy</button>
+        </div>
+        <StatusText tone={low ? "warn" : gas === null ? "mute" : "ok"}>{gas === null ? "Reading balance…" : `${gas.toFixed(3)} HSK`}</StatusText>
+        {low && <div className="sm">Needs a little HSK for gas. Send some to this address, then create your vaults.</div>}
+        {low && chainId === 133 && (
+          <button className="linkbtn sm" style={{ alignSelf: "flex-start" }} onClick={() => void s.open("https://faucet.hsk.xyz/faucet")}>Get free test HSK ↗</button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function VaultsPart({ chainId, confirmed, onConfirmed }: { chainId: number; confirmed: boolean; onConfirmed(): void }) {
   const s = useSetup();
   const owner = useOwner();
@@ -105,6 +145,7 @@ function VaultsPart({ chainId, confirmed, onConfirmed }: { chainId: number; conf
   const [mine, setMine] = useState(confirmed);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<{ message: string } | null>(null);
+  const [gas, setGas] = useState<number | null>(null);
   const d = v.data;
   const use = async (body: Record<string, unknown>) => {
     setError(null);
@@ -170,7 +211,8 @@ function VaultsPart({ chainId, confirmed, onConfirmed }: { chainId: number; conf
           {!confirmed && (
             <>
               <p className="sm" style={{ marginTop: 10 }}>Flow will create your vaults. Nothing to sign.</p>
-              <Btn kind="pri" size="lg" disabled={!!busy} onClick={() => void create()} style={{ marginTop: 12 }}>Create my vaults</Btn>
+              <OwnerGas chainId={chainId} onGas={setGas} />
+              <Btn kind="pri" size="lg" disabled={!!busy || (gas !== null && gas < 0.01)} onClick={() => void create()} style={{ marginTop: 12 }}>Create my vaults</Btn>
             </>
           )}
           {busy && <div style={{ marginTop: 12 }}><Spinner label={busy} /></div>}
