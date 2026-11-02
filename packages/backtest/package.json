@@ -1,0 +1,23 @@
+{
+  "name": "@ate/backtest",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "description": "Flow backtests and practice runs (lane STRAT): replays a custom strategy over past pool, HashKey Global and oracle prices with simulated fills, the vault limits and the guard rules; AI practice on a virtual clock; training suggestions and parameter sweeps",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ate/core": "workspace:*",
+    "@ate/strategy": "workspace:*"
+  }
+}

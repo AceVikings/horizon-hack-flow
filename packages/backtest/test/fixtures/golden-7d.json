@@ -1,0 +1,71 @@
+{
+  "pnlUsd": 0.36,
+  "returnPct": 0.24,
+  "buys": 16,
+  "sells": 19,
+  "winRate": 0.667,
+  "maxDrawdownPct": 1.6,
+  "feesUsd": 2.32,
+  "timeInMarketPct": 45.3,
+  "hold": {
+    "pnlUsd": -15.59,
+    "returnPct": -10.39
+  },
+  "preset": {
+    "name": "Balanced",
+    "pnlUsd": -0.36,
+    "returnPct": -0.24,
+    "trades": 47
+  },
+  "summary": "Over 7 days: +0.24%, 35 trades, worst dip −1.6%",
+  "firstTrades": [
+    {
+      "t": 1789972200,
+      "side": "buy",
+      "usd": 25,
+      "by": "rules",
+      "reason": "entry rules met",
+      "pnlUsd": null
+    },
+    {
+      "t": 1789975200,
+      "side": "buy",
+      "usd": 25,
+      "by": "rules",
+      "reason": "entry rules met",
+      "pnlUsd": null
+    },
+    {
+      "t": 1790023200,
+      "side": "buy",
+      "usd": 25,
+      "by": "rules",
+      "reason": "entry rules met",
+      "pnlUsd": null
+    },
+    {
+      "t": 1790031600,
+      "side": "buy",
+      "usd": 25,
+      "by": "rules",
+      "reason": "entry rules met",
+      "pnlUsd": null
+    },
+    {
+      "t": 1790037300,
+      "side": "buy",
+      "usd": 25,
+      "by": "rules",
+      "reason": "entry rules met",
+      "pnlUsd": null
+    },
+    {
+      "t": 1790061300,
+      "side": "sell",
+      "usd": 24.99,
+      "by": "rules",
+      "reason": "up 0.51% (take profit 0.5%)",
+      "pnlUsd": 0.1763
+    }
+  ]
+}
