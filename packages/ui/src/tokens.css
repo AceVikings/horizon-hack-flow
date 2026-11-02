@@ -1,0 +1,46 @@
+/* ATE design tokens (source of truth: docs/design/DESIGN-LANGUAGE.md). Mirrored in tokens.ts. */
+:root {
+  /* palette */
+  --ate-charcoal: #171e19;
+  --ate-dark: #272727;
+  --ate-sage: #b7c6c2;
+  --ate-white: #ffffff;
+  --ate-yellow: #ffe17c;
+  --ate-surface: #f8f9fa;
+
+  /* type */
+  --ate-font-display: "Anton", Impact, "Arial Narrow", sans-serif;
+  --ate-font-body: "Satoshi", "Figtree", -apple-system, system-ui, sans-serif;
+  --ate-font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --ate-display-leading: 0.9;
+
+  /* lines and grid */
+  --ate-line-light: rgba(23, 30, 25, 0.1);   /* 1px #171e19 at 10% */
+  --ate-line-light-strong: rgba(23, 30, 25, 0.2);
+  --ate-line-dark: rgba(183, 198, 194, 0.1); /* 1px #b7c6c2 at 10% */
+  --ate-line-dark-strong: rgba(183, 198, 194, 0.22);
+  --ate-grid-size: 40px;
+  --ate-grid: linear-gradient(to right, #b7c6c220 1px, transparent 1px), linear-gradient(to bottom, #b7c6c220 1px, transparent 1px);
+
+  /* motion */
+  --ate-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --ate-dur: 300ms;
+
+  /* shape and depth */
+  --ate-radius-card: 14px;
+  --ate-radius-input: 10px;
+  --ate-radius-pill: 999px;
+  --ate-shadow-card: 0 1px 2px rgba(23, 30, 25, 0.04);
+  --ate-shadow-lift: 0 14px 34px -14px rgba(23, 30, 25, 0.28);
+
+  /* status, light surfaces (AA on white). Colour is never the only signal: pair with a glyph and text. */
+  --ate-ok-light: #13744a;
+  --ate-bad-light: #b3202d;
+  --ate-warn-light: #855800;
+  --ate-info-light: #1d5a8e;
+  /* status, dark surfaces (AA on #171e19) */
+  --ate-ok-dark: #7fdcaa;
+  --ate-bad-dark: #ff8d95;
+  --ate-warn-dark: #ffe17c;
+  --ate-info-dark: #a8ccf3;
+}

@@ -1,0 +1,10 @@
+/* Locally bundled fonts only (Electron CSP: font-src 'self', no CDNs).
+   Display: Anton (SIL OFL 1.1, @fontsource/anton).
+   Body: the design language specifies Satoshi (Fontshare, ITF Free Font License). That license forbids
+   redistribution through repositories or public servers, so Satoshi is NOT committed. "Satoshi" stays first in
+   the stack (used when installed locally); the bundled fallback is Figtree (SIL OFL 1.1, @fontsource/figtree),
+   a close geometric grotesque with tabular figures, in the three specified weights 400/500/700. */
+@import "@fontsource/anton/latin-400.css";
+@import "@fontsource/figtree/latin-400.css";
+@import "@fontsource/figtree/latin-500.css";
+@import "@fontsource/figtree/latin-700.css";

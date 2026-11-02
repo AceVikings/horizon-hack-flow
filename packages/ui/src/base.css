@@ -1,0 +1,173 @@
+/* ATE base CSS: fonts, tokens, surfaces (light/dark scopes), grid background, highlight bar, card, button/pill,
+   badge, table, focus ring, reduced motion. Primitives are prefixed `ate-`; apps compose their own classes from
+   the semantic custom properties (--fg, --bg, --line, --ok, ...) which flip inside `.ate-dark`. */
+@import "./fonts.css";
+@import "./tokens.css";
+
+/* ---- surfaces: semantic variables ---- */
+:root,
+.ate-light {
+  --fg: var(--ate-charcoal);
+  --fg-2: rgba(23, 30, 25, 0.74);
+  --fg-mute: rgba(23, 30, 25, 0.64);
+  --bg: var(--ate-white);
+  --bg-2: var(--ate-surface);
+  --bg-3: rgba(23, 30, 25, 0.045);
+  --line: var(--ate-line-light);
+  --line-2: var(--ate-line-light-strong);
+  --ok: var(--ate-ok-light);
+  --bad: var(--ate-bad-light);
+  --warn: var(--ate-warn-light);
+  --info: var(--ate-info-light);
+  --ok-bg: rgba(19, 116, 74, 0.08);
+  --bad-bg: rgba(179, 32, 45, 0.07);
+  --warn-bg: rgba(255, 225, 124, 0.38);
+  --info-bg: rgba(29, 90, 142, 0.07);
+  --link: var(--ate-charcoal);
+  --focus: var(--ate-charcoal);
+  --grid-line: #b7c6c240;
+}
+.ate-dark {
+  --fg: var(--ate-white);
+  --fg-2: var(--ate-sage);
+  --fg-mute: rgba(183, 198, 194, 0.74);
+  --bg: var(--ate-charcoal);
+  --bg-2: var(--ate-dark);
+  --bg-3: rgba(183, 198, 194, 0.07);
+  --line: var(--ate-line-dark);
+  --line-2: var(--ate-line-dark-strong);
+  --ok: var(--ate-ok-dark);
+  --bad: var(--ate-bad-dark);
+  --warn: var(--ate-warn-dark);
+  --info: var(--ate-info-dark);
+  --ok-bg: rgba(127, 220, 170, 0.1);
+  --bad-bg: rgba(255, 141, 149, 0.1);
+  --warn-bg: rgba(255, 225, 124, 0.12);
+  --info-bg: rgba(168, 204, 243, 0.1);
+  --link: var(--ate-yellow);
+  --focus: var(--ate-yellow);
+  --grid-line: #b7c6c214;
+  color: var(--fg);
+  background-color: var(--bg);
+}
+
+/* ---- base ---- */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  font-family: var(--ate-font-body);
+  font-weight: 400;
+  color: var(--fg);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "tnum" 1;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+
+/* ---- type ---- */
+.ate-display {
+  font-family: var(--ate-font-display);
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: normal;
+  line-height: var(--ate-display-leading);
+}
+.ate-num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }
+.ate-eyebrow {
+  display: inline-flex; align-items: center; gap: 8px;
+  font: 700 11px/1.2 var(--ate-font-body);
+  text-transform: uppercase; letter-spacing: 0.16em;
+  color: var(--fg-2);
+}
+.ate-eyebrow::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--ate-yellow); box-shadow: 0 0 0 1px var(--line-2); flex: none; }
+
+/* ---- grid background (40 px) ---- */
+.ate-grid-bg {
+  background-image: linear-gradient(to right, var(--grid-line) 1px, transparent 1px), linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+  background-size: var(--ate-grid-size) var(--ate-grid-size);
+}
+
+/* ---- highlight bar: #ffe17c parallelogram slanted 15° behind a key word ---- */
+.ate-hl { position: relative; z-index: 0; display: inline-block; white-space: nowrap; }
+.ate-hl::before {
+  content: "";
+  position: absolute; z-index: -1;
+  left: -0.12em; right: -0.12em; top: 44%; bottom: -0.02em;
+  background: var(--ate-yellow);
+  transform: rotate(-1.5deg) skewX(-15deg);
+}
+.ate-dark .ate-hl { color: var(--ate-charcoal); }
+.ate-dark .ate-hl::before { top: -0.06em; }
+
+/* ---- card ---- */
+.ate-card {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--ate-radius-card);
+  box-shadow: var(--ate-shadow-card);
+  transition: transform var(--ate-dur) var(--ate-ease), box-shadow var(--ate-dur) var(--ate-ease);
+}
+.ate-card:hover { transform: translateY(-2px); box-shadow: var(--ate-shadow-lift); }
+
+/* ---- buttons and pills ---- */
+.ate-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 34px; padding: 0 18px;
+  border-radius: var(--ate-radius-pill);
+  border: 1px solid var(--line-2);
+  background: var(--bg); color: var(--fg);
+  font: 500 13px/1 var(--ate-font-body);
+  cursor: pointer; white-space: nowrap;
+  transition: transform var(--ate-dur) var(--ate-ease), box-shadow var(--ate-dur) var(--ate-ease), background-color var(--ate-dur) var(--ate-ease);
+}
+.ate-btn:hover:not(:disabled) { border-color: var(--fg); }
+.ate-btn:disabled { opacity: 0.42; cursor: not-allowed; }
+.ate-btn--primary { background: var(--ate-yellow); color: var(--ate-charcoal); border-color: var(--ate-charcoal); font: 400 15px/1 var(--ate-font-display); text-transform: uppercase; letter-spacing: 0.02em; }
+.ate-btn--primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 8px 18px -10px rgba(23, 30, 25, 0.6); }
+.ate-btn--solid { background: var(--ate-charcoal); color: var(--ate-white); border-color: var(--ate-charcoal); }
+.ate-btn--ghost { background: transparent; border-color: transparent; }
+.ate-btn--danger { background: var(--bad); color: var(--ate-white); border-color: var(--bad); font-weight: 700; }
+.ate-dark .ate-btn--danger { color: var(--ate-charcoal); }
+.ate-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 12px; border-radius: var(--ate-radius-pill);
+  border: 1px solid var(--line-2); background: var(--bg); color: var(--fg);
+  font: 500 12px/1.3 var(--ate-font-body); cursor: pointer;
+}
+.ate-pill[aria-pressed="true"], .ate-pill--on { background: var(--ate-charcoal); color: var(--ate-white); border-color: var(--ate-charcoal); }
+
+/* ---- badge (always glyph + text, colour is a secondary signal) ---- */
+.ate-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2px 9px; border-radius: var(--ate-radius-pill);
+  border: 1px solid var(--line-2); background: var(--bg-3); color: var(--fg-2);
+  font: 600 11px/1.45 var(--ate-font-body); white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+.ate-badge .glyph { font-weight: 700; font-size: 10px; }
+.ate-badge--ok { color: var(--ok); background: var(--ok-bg); border-color: color-mix(in srgb, var(--ok) 45%, transparent); }
+.ate-badge--bad { color: var(--bad); background: var(--bad-bg); border-color: color-mix(in srgb, var(--bad) 45%, transparent); }
+.ate-badge--warn { color: var(--warn); background: var(--warn-bg); border-color: color-mix(in srgb, var(--warn) 50%, transparent); }
+.ate-badge--info { color: var(--info); background: var(--info-bg); border-color: color-mix(in srgb, var(--info) 40%, transparent); }
+.ate-badge--mute { color: var(--fg-2); }
+
+/* ---- table ---- */
+.ate-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.ate-table th {
+  text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line-2);
+  font: 700 10.5px/1.3 var(--ate-font-body); text-transform: uppercase; letter-spacing: 0.1em; color: var(--fg-2);
+}
+.ate-table td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.ate-table tbody tr { transition: background-color var(--ate-dur) var(--ate-ease); }
+.ate-table tbody tr:hover { background: var(--bg-3); }
+
+/* ---- focus ring: charcoal on light, yellow on dark; always visible on keyboard focus ---- */
+:focus { outline: none; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; box-shadow: 0 0 0 5px rgba(255, 225, 124, 0.85); }
+.ate-dark :focus-visible { box-shadow: none; }
+
+/* ---- reduced motion ---- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  .ate-card:hover, .ate-btn:hover { transform: none !important; }
+}
