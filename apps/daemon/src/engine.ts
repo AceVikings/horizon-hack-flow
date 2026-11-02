@@ -607,15 +607,16 @@ export class AiEngine {
   }
 
   /** Run the tool loop on the conversation's provider. Strict schemas fall back to plain ones after a 400. */
-  async run(kind: "trader" | "chat", c: Conversation, o: { effort: Effort; system: string; toolNames: readonly string[]; call(name: string, input: unknown, id: string): Promise<ToolCallResult>; signal?: AbortSignal; onText?(d: string): void; maxTurns?: number; maxTokens?: number; onToolCall?(name: string, input: unknown, result: unknown): void; noExtraTools?: boolean }): Promise<LoopResult> {
+  async run(kind: "trader" | "chat", c: Conversation, o: { effort: Effort; system: string; toolNames: readonly string[]; call(name: string, input: unknown, id: string): Promise<ToolCallResult>; signal?: AbortSignal; onText?(d: string): void; maxTurns?: number; maxTokens?: number; onToolCall?(name: string, input: unknown, result: unknown): void; noExtraTools?: boolean; chatSessionId?: string }): Promise<LoopResult> {
     if (c.protocol === "opencode") {
       // opencode's agent calls Flow's tools itself, over Flow's MCP (same server-side rules); results come back as parts
       if (!this.opencode) throw new Error("opencode engine unavailable in this daemon");
       const last = [...c.items].reverse().find((x) => (x as { role?: string }).role === "user") as { content: string } | undefined;
       const meta = c.items.find((x) => (x as { opencodeSession?: string }).opencodeSession) as { opencodeSession: string } | undefined;
-      const r = await this.opencode.prompt({ scope: kind === "trader" ? "agent" : "chat", model: c.model, system: o.system, text: last?.content ?? "", toolNames: o.toolNames, ...(meta ? { sessionId: meta.opencodeSession } : {}), ...(o.signal ? { signal: o.signal } : {}), ...(o.noExtraTools ? { noExtraTools: true } : {}), agentId: `opencode:${c.model}` });
+      const r = await this.opencode.prompt({ scope: kind === "trader" ? "agent" : "chat", model: c.model, system: o.system, text: last?.content ?? "", toolNames: o.toolNames, ...(meta ? { sessionId: meta.opencodeSession } : {}), ...(o.signal ? { signal: o.signal } : {}), ...(o.noExtraTools ? { noExtraTools: true } : {}), ...(o.chatSessionId ? { chatSessionId: o.chatSessionId } : {}), agentId: `opencode:${c.model}` });
       if (!meta) c.items.unshift({ opencodeSession: r.sessionId });
-      for (const t of r.calls) o.onToolCall?.(t.tool, t.input, t.output);
+      // a chat turn with its Flow session: the MCP layer already emitted each call live (args + ToolResult) on that session
+      if (!o.chatSessionId) for (const t of r.calls) o.onToolCall?.(t.tool, t.input, t.output);
       if (r.text) o.onText?.(r.text);
       this.lastUsage = { at: nowSec(), kind, ...r.usage };
       return r;

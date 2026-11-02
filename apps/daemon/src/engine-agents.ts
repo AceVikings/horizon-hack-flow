@@ -103,6 +103,7 @@ export async function runSdkChatTurn(o: SdkChatOptions, t: SdkChatTurn): Promise
     toolNames: CHAT_TOOL_ALLOWLIST,
     maxTurns: 8,
     maxTokens: 8000,
+    chatSessionId: t.sessionId,
     onText: (d: string) => o.emit({ type: "chat.delta", at: now(), data: { sessionId: t.sessionId, turnId: t.turnId, role: "agent", text: d, engine: "llm", model: sel.model, provider: sel.provider, done: false } }),
     // opencode runs the tools itself (over Flow's MCP): its calls arrive afterwards as cards
     onToolCall: (name: string, input: unknown, result: unknown) => o.emit({ type: "chat.tool", at: now(), data: { sessionId: t.sessionId, turnId: t.turnId, tool: name, args: input, result } }),

@@ -49,7 +49,20 @@ export interface OpencodeOptions {
   mcp?: McpServers;
 }
 
-type Prompt = { scope: "agent" | "chat"; model: string; system: string; text: string; toolNames: readonly string[]; sessionId?: string; signal?: AbortSignal; agentId: string; noExtraTools?: boolean };
+type Prompt = {
+  scope: "agent" | "chat";
+  model: string;
+  system: string;
+  text: string;
+  toolNames: readonly string[];
+  sessionId?: string;
+  signal?: AbortSignal;
+  agentId: string;
+  noExtraTools?: boolean;
+  /** Chat scope: the Flow chat session (Ask / Trade) this turn belongs to, so the MCP layer emits its tool cards there. */
+  chatSessionId?: string;
+};
+type OcPart = { id?: string; type: string; text?: string; tool?: string; callID?: string; state?: { status: string; input?: unknown; output?: string; error?: string } };
 export type OpencodeToolCall = { tool: string; input: unknown; output: unknown; ok: boolean };
 
 export class OpencodeEngine {
@@ -59,6 +72,8 @@ export class OpencodeEngine {
   private tokenInfo: Record<"agent" | "chat", TokenInfo> | null = null;
   private tokenIds: string[] = [];
   private readonly work: string;
+  /** Chat prompts run one at a time: the chat token's sessionId is pointed at the running turn's Flow chat session. */
+  private chatLock: Promise<unknown> = Promise.resolve();
   lastError: string | null = null;
 
   constructor(private readonly o: OpencodeOptions) {
@@ -182,6 +197,44 @@ export class OpencodeEngine {
    * abort at the signal (session.abort + the request raced against it). Returns the final text and the tool calls.
    */
   async prompt(p: Prompt): Promise<LoopResult & { sessionId: string; calls: OpencodeToolCall[] }> {
+    if (p.scope !== "chat") return this.promptOnce(p);
+    const prev = this.chatLock;
+    let release!: () => void;
+    this.chatLock = new Promise<void>((r) => (release = r));
+    try {
+      await prev;
+      await this.ensure();
+      // MCP calls on the shared chat token now emit chat.tool on this chat session (http.ts reads auth.sessionId)
+      if (this.tokenInfo) this.tokenInfo.chat.sessionId = p.chatSessionId ?? "opencode";
+      return await this.promptOnce(p);
+    } finally {
+      if (this.tokenInfo) this.tokenInfo.chat.sessionId = "opencode";
+      release();
+    }
+  }
+
+  /** Every tool part of this turn: opencode answers with the last step's message only, earlier steps hold the calls. */
+  private async turnParts(c: OpencodeClient, sessionId: string, last: OcPart[]): Promise<OcPart[]> {
+    let all: OcPart[] = [];
+    try {
+      const r = await c.session.messages({ path: { id: sessionId }, query: { directory: this.work } });
+      const msgs = (r.data ?? []) as { info: { role?: string }; parts: OcPart[] }[];
+      let from = 0;
+      for (let i = msgs.length - 1; i >= 0; i--)
+        if (msgs[i]!.info?.role === "user") {
+          from = i + 1;
+          break;
+        }
+      all = msgs.slice(from).flatMap((m) => m.parts ?? []);
+    } catch {
+      /* fall back to the returned message's parts */
+    }
+    const seen = new Set(all.map((x) => x.id ?? x.callID).filter(Boolean));
+    for (const x of last) if (!(x.id ?? x.callID) || !seen.has(x.id ?? x.callID)) all.push(x);
+    return all;
+  }
+
+  private async promptOnce(p: Prompt): Promise<LoopResult & { sessionId: string; calls: OpencodeToolCall[] }> {
     const c = await this.ensure();
     const [providerID, ...rest] = p.model.split("/");
     const modelID = rest.join("/");
@@ -209,7 +262,7 @@ export class OpencodeEngine {
         c.session.prompt({ path: { id: sessionId }, query: { directory: this.work }, body: { model: { providerID, modelID }, system: p.system, tools, parts: [{ type: "text", text: p.text }] } }),
         p.signal,
       );
-      const data = r.data as { info?: { error?: { name?: string; data?: { message?: string } }; tokens?: { input?: number; output?: number; cache?: { read?: number; write?: number } }; finish?: string; modelID?: string }; parts?: { type: string; text?: string; tool?: string; state?: { status: string; input?: unknown; output?: string; error?: string } }[] } | undefined;
+      const data = r.data as { info?: { error?: { name?: string; data?: { message?: string } }; tokens?: { input?: number; output?: number; cache?: { read?: number; write?: number } }; finish?: string; modelID?: string }; parts?: OcPart[] } | undefined;
       if (!data) throw new Error(`opencode prompt failed${r.error ? `: ${JSON.stringify(r.error).slice(0, 200)}` : ""}`);
       const parts = data.parts ?? [];
       const text = parts
@@ -217,7 +270,7 @@ export class OpencodeEngine {
         .map((x) => x.text!)
         .join("\n")
         .trim();
-      const calls: OpencodeToolCall[] = parts
+      const calls: OpencodeToolCall[] = (await this.turnParts(c, sessionId, parts))
         .filter((x) => x.type === "tool" && x.tool?.startsWith(`${server}_`))
         .map((x) => {
           let output: unknown = x.state?.output ?? x.state?.error ?? null;

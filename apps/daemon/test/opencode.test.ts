@@ -14,6 +14,8 @@ let srv: Server;
 let base = "";
 const seen: { method: string; url: string; body: unknown }[] = [];
 let hang = false;
+let lastScope = "flowagent";
+let onPrompt: (() => void) | null = null;
 
 beforeAll(async () => {
   srv = createServer((req, res) => {
@@ -29,13 +31,26 @@ beforeAll(async () => {
       if (u === "/experimental/tool/ids") return send(["bash", "read", "flowagent_ate_positions", "flowagent_ate_decide", "flowchat_ate_positions"]);
       if (u === "/session" && req.method === "POST") return send({ id: "ses_1" });
       if (u.endsWith("/abort")) return send(true);
+      if (u.endsWith("/message") && req.method === "GET") {
+        // the whole session: an earlier step's message holds a tool call the prompt response does not repeat
+        const scope = lastScope;
+        return send([
+          { info: { role: "user" }, parts: [{ id: "p0", type: "text", text: "older turn" }] },
+          { info: { role: "assistant" }, parts: [{ id: "p_old", type: "tool", tool: `${scope}_ate_positions`, state: { status: "completed", input: {}, output: "{}" } }] },
+          { info: { role: "user" }, parts: [{ id: "p1", type: "text", text: "this turn" }] },
+          { info: { role: "assistant" }, parts: [{ id: "p2", type: "tool", tool: `${scope}_ate_chart`, state: { status: "completed", input: { kind: "price" }, output: JSON.stringify({ ok: true, data: { kind: "price" } }) } }] },
+          { info: { role: "assistant" }, parts: [{ id: "p3", type: "tool", tool: `${scope}_ate_positions`, state: { status: "completed", input: {}, output: JSON.stringify({ ok: true, data: { markets: [] } }) } }, { id: "p4", type: "text", text: "Nothing to do this cycle." }] },
+        ]);
+      }
       if (u.endsWith("/message")) {
+        lastScope = (body as { tools: Record<string, boolean> }).tools.flowchat_ate_positions ? "flowchat" : "flowagent";
+        if (onPrompt) onPrompt();
         if (hang) return; // never answers: the engine must give up at the abort
         return send({
           info: { modelID: "deepseek-v4.1-flash", tokens: { input: 10, output: 4, cache: { read: 3, write: 0 } }, finish: "stop" },
           parts: [
-            { type: "tool", tool: (body as { tools: Record<string, boolean> }).tools.flowchat_ate_positions ? "flowchat_ate_positions" : "flowagent_ate_positions", state: { status: "completed", input: {}, output: JSON.stringify({ ok: true, data: { markets: [] } }) } },
-            { type: "text", text: "Nothing to do this cycle." },
+            { id: "p3", type: "tool", tool: (body as { tools: Record<string, boolean> }).tools.flowchat_ate_positions ? "flowchat_ate_positions" : "flowagent_ate_positions", state: { status: "completed", input: {}, output: JSON.stringify({ ok: true, data: { markets: [] } }) } },
+            { id: "p4", type: "text", text: "Nothing to do this cycle." },
           ],
         });
       }
@@ -60,7 +75,9 @@ describe("OpenCode engine (mocked opencode serve)", () => {
       { id: "opencode/img-1", label: "OpenCode · Image", tools: false, streaming: false },
     ]);
     const r = await oc.prompt({ scope: "agent", model: "opencode/deepseek-v4.1-flash", system: "sys", text: "cycle 1", toolNames: ["ate_positions", "ate_decide"], agentId: "opencode:opencode/deepseek-v4.1-flash" });
-    expect(r).toMatchObject({ text: "Nothing to do this cycle.", stop: "end_turn", sessionId: "ses_1", calls: [{ tool: "ate_positions", ok: true, output: { ok: true } }] });
+    expect(r).toMatchObject({ text: "Nothing to do this cycle.", stop: "end_turn", sessionId: "ses_1", calls: [{ tool: "ate_chart", ok: true, input: { kind: "price" } }, { tool: "ate_positions", ok: true, output: { ok: true } }] });
+    // every tool call of the turn counts (the trader log's "N tool calls"), not only the last step's
+    expect(r.toolCalls).toBe(2);
     const body = seen.find((x) => x.url.startsWith("/session/ses_1/message"))!.body as { model: unknown; system: string; tools: Record<string, boolean> };
     expect(body.model).toEqual({ providerID: "opencode", modelID: "deepseek-v4.1-flash" });
     expect(body.tools).toMatchObject({ bash: false, read: false, edit: false, webfetch: false, flowchat_ate_positions: false, flowagent_ate_positions: true, flowagent_ate_decide: true });
@@ -95,11 +112,34 @@ describe("OpenCode engine (mocked opencode serve)", () => {
     const texts: string[] = [];
     const r = await ai.run("chat", c, { effort: "low", system: "s", toolNames: ["ate_positions"], call: async () => ({ content: "", isError: false }), onToolCall: (n) => cards.push(n), onText: (t) => texts.push(t) });
     expect(r.text).toBe("Nothing to do this cycle.");
-    expect(cards).toEqual(["ate_positions"]);
+    expect(cards).toEqual(["ate_chart", "ate_positions"]);
     expect(texts).toEqual(["Nothing to do this cycle."]);
     // an explicit choice sticks (Flow stops choosing for the user)
     ai.setConfig({ provider: "anthropic" });
     expect(new AiEngine(h, env, {}, undefined, oc).config.provider).toBe("anthropic");
+  });
+
+  it("a chat turn points the chat token at its Flow chat session while it runs (live tool cards), one turn at a time", async () => {
+    const tokens = new TokenRegistry();
+    const minted: string[] = [];
+    const mint = tokens.mint.bind(tokens);
+    tokens.mint = (i) => {
+      const t = mint(i);
+      minted.push(t);
+      return t;
+    };
+    const oc = new OpencodeEngine({ home: home(), daemonPort: 1, tokens, baseUrl: base });
+    await oc.ensure();
+    const chatTok = () => tokens.resolve(minted[1]!)!;
+    expect(chatTok().scope).toBe("chat");
+    const during: string[] = [];
+    onPrompt = () => during.push(chatTok().sessionId!);
+    const p1 = oc.prompt({ scope: "chat", model: "opencode/deepseek-v4.1-flash", system: "s", text: "chart", toolNames: ["ate_positions"], agentId: "opencode:x", chatSessionId: "ask-1" });
+    const p2 = oc.prompt({ scope: "chat", model: "opencode/deepseek-v4.1-flash", system: "s", text: "chart", toolNames: ["ate_positions"], agentId: "opencode:x", chatSessionId: "trade-hsk-2" });
+    await Promise.all([p1, p2]);
+    onPrompt = null;
+    expect(during).toEqual(["ask-1", "trade-hsk-2"]);
+    expect(chatTok().sessionId).toBe("opencode");
   });
 
   it("an older ai.json (Anthropic model, no providerChosen) auto-switched to opencode uses an opencode model", () => {
