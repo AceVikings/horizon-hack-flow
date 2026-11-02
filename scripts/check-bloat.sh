@@ -5,7 +5,7 @@
 set -euo pipefail
 MAX_KB=${BLOAT_MAX_KB:-250}
 if [[ "${1:-}" == "--all" ]]; then files=$(git ls-files); else files=$(git diff --cached --name-only --diff-filter=AM); fi
-banned='(^|/)(node_modules|dist|out|cache|broadcast|coverage|\.turbo|\.next|\.context|\.tokensave)/|^contracts/lib/|^infra/aws/|(^|/)\.env($|\.)|\.(db|db-wal|db-shm|log|sqlite|pem|key|p12|zip|tar|gz|dmg|pdf|mp4|mov)$|(^|/)\.DS_Store$|deployer\.json$|keystore'
+banned='(^|/)(node_modules|dist|out|cache|broadcast|coverage|\.turbo|\.next|\.context|\.tokensave)/|^contracts/lib/|^infra/aws/|(^|/)\.env($|\.)|\.(db|db-wal|db-shm|log|sqlite|pem|key|p12|zip|tar|gz|dmg|pdf|mp4|mov)$|(^|/)\.DS_Store$|deployer\.json$|(^|/)keystores?/|(^|/)keystore[^/]*\.json$'
 fail=0
 while IFS= read -r f; do
   [[ -z "$f" || ! -e "$f" ]] && continue
