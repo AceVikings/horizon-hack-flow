@@ -49,7 +49,7 @@ export interface OpencodeOptions {
   mcp?: McpServers;
 }
 
-type Prompt = { scope: "agent" | "chat"; model: string; system: string; text: string; toolNames: readonly string[]; sessionId?: string; signal?: AbortSignal; agentId: string };
+type Prompt = { scope: "agent" | "chat"; model: string; system: string; text: string; toolNames: readonly string[]; sessionId?: string; signal?: AbortSignal; agentId: string; noExtraTools?: boolean };
 export type OpencodeToolCall = { tool: string; input: unknown; output: unknown; ok: boolean };
 
 export class OpencodeEngine {
@@ -194,7 +194,7 @@ export class OpencodeEngine {
     const tools: Record<string, boolean> = Object.fromEntries([...ids, ...BUILTINS].map((t) => [t, false]));
     for (const t of allowed) tools[t] = true;
     // extra MCP servers the user enabled for this agent (Tools (MCP))
-    const prefixes = this.extraPrefixes(p.scope);
+    const prefixes = p.noExtraTools ? [] : this.extraPrefixes(p.scope);
     for (const id of ids) if (prefixes.some((x) => id.startsWith(x))) tools[id] = true;
     let sessionId = p.sessionId;
     if (!sessionId) {

@@ -28,6 +28,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^1.3.0",
     "@ate/approve": "workspace:*",
+    "@ate/backtest": "workspace:*",
     "@ate/chain": "workspace:*",
     "@ate/chat": "workspace:*",
     "@ate/core": "workspace:*",

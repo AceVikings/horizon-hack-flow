@@ -292,8 +292,7 @@ export async function runOpenAILoop(client: OpenAILike, history: ChatCompletionM
     const body: Record<string, unknown> = {
       model: o.model,
       messages: [{ role: "system", content: o.system }, ...history],
-      tools,
-      tool_choice: "auto",
+      ...(tools.length ? { tools, tool_choice: "auto" } : {}),
       max_completion_tokens: o.maxTokens ?? 16000,
       ...(o.stream ? { stream: true, stream_options: { include_usage: true } } : {}),
     };
@@ -386,7 +385,7 @@ export async function runGeminiLoop(client: GeminiLike, history: Content[], o: G
     const r = await abortable(client.models.generateContent({
       model: o.model,
       contents: history,
-      config: { systemInstruction: o.system, tools: [{ functionDeclarations: decls }], maxOutputTokens: o.maxTokens ?? 16000, httpOptions: { timeout: REQUEST_TIMEOUT_MS }, ...(o.signal ? { abortSignal: o.signal } : {}) },
+      config: { systemInstruction: o.system, ...(decls.length ? { tools: [{ functionDeclarations: decls }] } : {}), maxOutputTokens: o.maxTokens ?? 16000, httpOptions: { timeout: REQUEST_TIMEOUT_MS }, ...(o.signal ? { abortSignal: o.signal } : {}) },
     }), o.signal);
     turns++;
     servedBy = r.modelVersion ?? servedBy;

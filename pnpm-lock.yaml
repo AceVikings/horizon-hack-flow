@@ -111,6 +111,9 @@ importers:
       '@ate/approve':
         specifier: workspace:*
         version: link:../approve
+      '@ate/backtest':
+        specifier: workspace:*
+        version: link:../../packages/backtest
       '@ate/chain':
         specifier: workspace:*
         version: link:../../packages/chain

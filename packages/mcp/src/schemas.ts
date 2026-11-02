@@ -336,6 +336,39 @@ export const TOOL_DEFINITIONS: Record<ToolName, ToolDefinition> = {
     },
     annotations: ro("Data table"),
   },
+
+  // ---- additive (lane STRAT): custom strategies — read-only backtest; saving waits for the user's OK in the app
+  ate_backtest: {
+    name: "ate_backtest",
+    description:
+      "Backtest a custom strategy on past data (read-only): HashKey Chain mainnet pool prices from Swap logs, HashKey Global prices and oracle rounds, with simulated fills (pool impact + 0.30% fee) and this vault's limits and safety rules. Returns plain numbers (P&L, trades, win rate, worst dip, fees, time in market), just holding, the current settings, the strategy as sentences and notes on data coverage. Omit strategyId and specJson to list the user's saved strategies. specJson is a flow.strategy/v1 spec: {name, kind: rules|ai, markets: [HSK|BTC], barMinutes?, entry: {when: all|any, conditions: [{signal, op: above|below|between, value, value2?, period?, windowMin?}]}, exit: {conditions?, takeProfitPct?, stopLossPct?, trailingStopPct?, maxHoldHours?}, sizing: {mode: usd|pct, value}, limits: {maxTradesPerDay, cooldownMin}, instructions?}; signals gap_cex, gap_oracle, change, ema, sma, vwap, rsi, bollinger, hour, pnl (values in %). Say results are simulated, not a promise.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        strategyId: { type: "string", maxLength: 40, description: "A saved strategy (stg_…)" },
+        specJson: { type: "string", maxLength: 6000, description: "A strategy spec as JSON text (to test before saving)" },
+        days: { type: "integer", enum: [7, 30, 90], description: "Period (default 30)" },
+      },
+      additionalProperties: false,
+    },
+    annotations: ro("Backtest a strategy"),
+  },
+
+  ate_strategy_save: {
+    name: "ate_strategy_save",
+    description:
+      "Propose saving a custom strategy the user described (specJson: a flow.strategy/v1 spec as JSON text, see ate_backtest). Nothing is saved until the user confirms it in the app, and saving never changes what trades: the user picks \"Use this strategy\" per market (riskier strategies need Touch ID). Read the returned sentences back to the user.",
+    inputSchema: {
+      type: "object",
+      required: ["specJson", "rationale"],
+      properties: {
+        specJson: { type: "string", maxLength: 6000 },
+        rationale,
+      },
+      additionalProperties: false,
+    },
+    annotations: { title: "Propose a strategy", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+  },
 };
 
 export const TOOL_LIST: ToolDefinition[] = TOOL_NAMES.map((n) => TOOL_DEFINITIONS[n]);

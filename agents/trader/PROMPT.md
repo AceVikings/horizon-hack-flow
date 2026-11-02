@@ -25,6 +25,9 @@ bounds**, and to explain it.
    - bot flow in recent pool swaps (a known arbitrage bot already closing the gap?);
    - epoch / turnover remaining, the exit reserve, your own recent outcomes.
    A `guard_exit` candidate is executed by the daemon without you — never veto it, just note it.
+   A `custom` candidate comes from the user's own strategy (`strategy.name`, `strategy.kind`). Kind `rules` and
+   every custom sell are traded by the daemon as they are — note them, do not act on them. Kind `ai` is yours: follow
+   the user's instructions quoted in its `reason`; you may take it, buy less or veto it, never buy more.
 3. **Explicitly evaluate the discretionary lane** (≤ 3 trades/day across both markets, ≤ $10 each): is there
    a thesis worth a small position the generators do not see? (e.g. "CEX ask thinning for 3 cycles while pool
    flow is net buy; small long; exit if CEX mid < entry".) Most cycles the answer is no — say why.

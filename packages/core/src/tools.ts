@@ -41,6 +41,9 @@ export const TOOL_NAMES = [
   // additive (Flow v1 lane D4): read-only charts and data tables
   "ate_chart",
   "ate_data",
+  // additive (lane STRAT): read-only backtest of a custom strategy; chat-proposed strategies wait for the user's OK
+  "ate_backtest",
+  "ate_strategy_save",
 ] as const;
 export type ToolName = (typeof TOOL_NAMES)[number];
 
@@ -56,7 +59,12 @@ export const CHAT_TOOL_ALLOWLIST = [
   "ate_pause",
   "ate_chart",
   "ate_data",
+  "ate_backtest",
+  "ate_strategy_save",
 ] as const satisfies readonly ToolName[];
+
+/** Additive (lane STRAT): tools the trader (agent scope) never gets. */
+export const AGENT_EXCLUDED_TOOLS = ["ate_strategy_save"] as const satisfies readonly ToolName[];
 
 /** Registered only when G-HSP is go (§7.1). */
 export const HSP_GATED_TOOLS = ["ate_signal_buy"] as const satisfies readonly ToolName[];
@@ -72,7 +80,7 @@ export const MUTATING_TOOLS = {
 
 /** Tool set visible to a scope (server-side, §7.1). */
 export function toolsForScope(scope: "agent" | "chat", opts: { hsp: boolean }): ToolName[] {
-  const base: readonly ToolName[] = scope === "chat" ? CHAT_TOOL_ALLOWLIST : TOOL_NAMES;
+  const base: readonly ToolName[] = scope === "chat" ? CHAT_TOOL_ALLOWLIST : TOOL_NAMES.filter((t) => !(AGENT_EXCLUDED_TOOLS as readonly string[]).includes(t));
   return base.filter((t) => opts.hsp || !(HSP_GATED_TOOLS as readonly string[]).includes(t));
 }
 
@@ -255,6 +263,20 @@ export interface ToolIO {
   ate_pause: [PauseInput, PauseOutput];
   ate_chart: [ChartInput, ChartSpec];
   ate_data: [DataInput, DataTable];
+  ate_backtest: [BacktestToolInput, unknown];
+  ate_strategy_save: [StrategySaveInput, { status: "needs_confirmation"; pendingId: string; name: string; sentences: string[]; hint: string }];
+}
+
+/** Additive (lane STRAT). Omit both strategyId and specJson to list saved strategies. */
+export interface BacktestToolInput {
+  strategyId?: string;
+  /** A flow.strategy/v1 spec as a JSON string. */
+  specJson?: string;
+  days?: 7 | 30 | 90;
+}
+export interface StrategySaveInput {
+  specJson: string;
+  rationale: string;
 }
 export type ToolInput<T extends ToolName> = ToolIO[T][0];
 export type ToolOutput<T extends ToolName> = ToolIO[T][1];

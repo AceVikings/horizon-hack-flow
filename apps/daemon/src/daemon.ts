@@ -2,6 +2,7 @@
 
 import { registerChatRoutes } from "./chat.js";
 import { registerAppRoutes } from "./app-routes.js";
+import { registerStrategyRoutes } from "./strategies/index.js";
 import { AiEngine } from "./engine.js";
 import { ProviderKeys } from "./providers.js";
 import { ProxySidecar } from "./sidecar.js";
@@ -283,6 +284,12 @@ export async function startDaemon(o: StartOptions = {}): Promise<RunningDaemon> 
   registerSetupRoutes({ routes, home, env, cfg, configPath, service, unlock, broadcast: (e) => http.broadcast(e), approval: approvalHandle, log });
   // Flow desktop v1 (additive): supervised trader, pending-change list/reject, in-app proof suite (testnet only).
   const app = registerAppRoutes({ routes, tokens, service, home, port, deploymentsPath: findDeployments(env, cfg.chain.id), ai, approval: approvalHandle, log });
+  // Lane STRAT (additive): custom strategies, backtests, practice runs and training (+ ate_backtest / ate_strategy_save).
+  const traderMod = (await import("@ate/trader").catch(() => null)) as { TRADER_PROMPT_PATH?: string } | null;
+  registerStrategyRoutes({ routes, cfg, db, service, ai, traderPromptFile: traderMod?.TRADER_PROMPT_PATH ?? "", emit, autonomous: () => {
+    const t = app.trader.state();
+    return t.running && t.mode === "autonomous";
+  }, log });
   const runtime: RuntimeJson = { pid: process.pid, port, agentToken, startedAt: Math.floor(Date.now() / 1000), version: DAEMON_VERSION };
   const runtimePath = join(home, "runtime.json");
   writeFileSync(runtimePath, JSON.stringify(runtime, null, 2), { mode: 0o600 });

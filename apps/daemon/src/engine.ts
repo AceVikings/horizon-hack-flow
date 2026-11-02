@@ -203,8 +203,8 @@ export async function runToolLoop(client: LoopClient, o: LoopOptions): Promise<L
       max_tokens: o.maxTokens ?? 16000,
       // frozen system prompt + deterministic tools come first and carry the cache breakpoint
       system: [{ type: "text", text: o.system, cache_control: { type: "ephemeral" } }],
-      tools: o.tools,
-      tool_choice: { type: "auto" },
+      // a tool-free call (strategy drafts, practice JSON mode) sends no tools at all
+      ...(o.tools.length ? { tools: o.tools, tool_choice: { type: "auto" } } : {}),
       messages: o.messages,
       output_config: { effort: o.effort },
       cache_control: { type: "ephemeral" },
@@ -603,13 +603,13 @@ export class AiEngine {
   }
 
   /** Run the tool loop on the conversation's provider. Strict schemas fall back to plain ones after a 400. */
-  async run(kind: "trader" | "chat", c: Conversation, o: { effort: Effort; system: string; toolNames: readonly string[]; call(name: string, input: unknown, id: string): Promise<ToolCallResult>; signal?: AbortSignal; onText?(d: string): void; maxTurns?: number; maxTokens?: number; onToolCall?(name: string, input: unknown, result: unknown): void }): Promise<LoopResult> {
+  async run(kind: "trader" | "chat", c: Conversation, o: { effort: Effort; system: string; toolNames: readonly string[]; call(name: string, input: unknown, id: string): Promise<ToolCallResult>; signal?: AbortSignal; onText?(d: string): void; maxTurns?: number; maxTokens?: number; onToolCall?(name: string, input: unknown, result: unknown): void; noExtraTools?: boolean }): Promise<LoopResult> {
     if (c.protocol === "opencode") {
       // opencode's agent calls Flow's tools itself, over Flow's MCP (same server-side rules); results come back as parts
       if (!this.opencode) throw new Error("opencode engine unavailable in this daemon");
       const last = [...c.items].reverse().find((x) => (x as { role?: string }).role === "user") as { content: string } | undefined;
       const meta = c.items.find((x) => (x as { opencodeSession?: string }).opencodeSession) as { opencodeSession: string } | undefined;
-      const r = await this.opencode.prompt({ scope: kind === "trader" ? "agent" : "chat", model: c.model, system: o.system, text: last?.content ?? "", toolNames: o.toolNames, ...(meta ? { sessionId: meta.opencodeSession } : {}), ...(o.signal ? { signal: o.signal } : {}), agentId: `opencode:${c.model}` });
+      const r = await this.opencode.prompt({ scope: kind === "trader" ? "agent" : "chat", model: c.model, system: o.system, text: last?.content ?? "", toolNames: o.toolNames, ...(meta ? { sessionId: meta.opencodeSession } : {}), ...(o.signal ? { signal: o.signal } : {}), ...(o.noExtraTools ? { noExtraTools: true } : {}), agentId: `opencode:${c.model}` });
       if (!meta) c.items.unshift({ opencodeSession: r.sessionId });
       for (const t of r.calls) o.onToolCall?.(t.tool, t.input, t.output);
       if (r.text) o.onText?.(r.text);
@@ -622,7 +622,8 @@ export class AiEngine {
     const strict = this.strictOk[c.provider] !== false;
     // extra MCP servers enabled for this agent: their tools join Flow's; calls go to the server, not the daemon
     const agent = kind === "trader" ? "trader" : "chat";
-    const extra = this.mcp?.extraTools(agent) ?? [];
+    // lane STRAT: practice runs and drafts never offer the user's extra MCP servers (their calls would reach real systems)
+    const extra = o.noExtraTools ? [] : (this.mcp?.extraTools(agent) ?? []);
     const flowCall = o.call;
     o = { ...o, call: (name, input, id) => (name.startsWith("mcp__") && this.mcp ? this.mcp.call(agent, name, input) : flowCall(name, input, id)) };
     const once = async (useStrict: boolean): Promise<LoopResult> => {

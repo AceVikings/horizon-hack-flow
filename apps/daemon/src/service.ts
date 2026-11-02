@@ -195,6 +195,10 @@ export class AteService {
   private pendingChanges = new Map<string, { patch: StrategyPatch; scope: CallerScope; rationale: string; changes: StrategyFieldChange[]; next: StrategyParams; expiresAt: number; renderedDiff: string; confirm?: "sells_now" }>();
   /** Lane D4 (additive): ate_chart / ate_data backend, set by the daemon bootstrap. */
   charts: ChartService | null = null;
+  /** Lane STRAT (additive): custom strategies backend for ate_backtest / ate_strategy_save, set by the daemon bootstrap. */
+  strategies: { backtestTool(a: Record<string, unknown>): Promise<unknown>; saveFromChat(a: { specJson: string; rationale: string }, via: string): unknown } | null = null;
+  /** Lane STRAT (additive): true while the trader runs autonomously — then Rules strategies and custom exits trade as is. */
+  customAuto: (() => boolean) | null = null;
   /** Lane E hook: notified with StrategyApprovalPending when ate_strategy_set returns ATE_APPROVAL_REQUIRED. */
   onStrategyPending: ((d: unknown) => void) | null = null;
   counters = { cycles: 0, trades: 0, routedUsdE8: 0n, lastCycleAt: null as number | null };
@@ -659,7 +663,49 @@ export class AteService {
         if (this.candidates.get(cand.candidateId)?.consumedBy) continue;
         void this.runGuardExit(cand).catch((e) => this.o.log?.(`guard exit ${cand.market}: ${(e as Error).message}`));
       }
+      // lane STRAT: a Rules custom strategy is fully deterministic (and every custom exit is): the daemon trades it as is
+      if (this.customAuto?.()) {
+        for (const cand of res.candidates.filter((x) => x.generator === "custom" && (x.leg === "close" || x.strategy?.kind === "rules"))) {
+          if (this.candidates.get(cand.candidateId)?.consumedBy) continue;
+          void this.runCustomCandidate(cand).catch((e) => this.o.log?.(`custom strategy ${cand.market}: ${(e as Error).message}`));
+        }
+      }
     }
+  }
+
+  private async runCustomCandidate(cand: Candidate) {
+    const name = cand.strategy?.name ?? "custom strategy";
+    const what = cand.side === "buy" ? "Bought" : "Sold";
+    const p = await this.callTool(
+      "agent",
+      "ate_propose",
+      {
+        market: cand.market,
+        side: cand.side,
+        amountIn: cand.maxAmountIn,
+        candidateId: cand.candidateId,
+        rationale: `[engine=rules] Summary: ${what} per your strategy “${name}”.\nDetails: ${cand.reason} (spec ${cand.strategy?.hash ?? "?"})`,
+      },
+      { engine: "rules" },
+    );
+    if (p.ok) await this.callTool("agent", "ate_execute", { proposalId: (p.data as ToolOutput<"ate_propose">).proposalId }, { engine: "rules" });
+  }
+
+  /** Lane STRAT (additive): the last read of a market's vault (limits, epoch), or undefined before the first read. */
+  vaultState(m: MarketId): VaultState | undefined {
+    const v = this.cycle?.markets[m]?.vault;
+    return v ? (v as VaultState) : undefined;
+  }
+
+  /**
+   * Lane STRAT (additive): a prepared human strategy change (using or stopping a custom strategy on a market).
+   * Riskier → pending change (Touch ID or the one-time code via /strategy/approve); safer → applied and journalled
+   * as strategy_change with the rationale (which carries the spec hash).
+   */
+  proposeStrategyChange(scope: CallerScope, next: StrategyParams, changes: StrategyFieldChange[], rationale: string, riskier: boolean): ToolResult<ToolOutput<"ate_strategy_set">> {
+    if (riskier) return this.pendStrategy({}, scope, rationale, changes, next);
+    const dec = this.applyStrategy(scope, next, changes, rationale);
+    return ok({ status: "applied", decisionId: dec, changes, clamped: false, strategy: this.strategy }, this.meta());
   }
 
   private setting<T>(key: string): T | null {
@@ -944,7 +990,7 @@ export class AteService {
     const tool = name as ToolName;
     if (scope !== "internal") {
       const allowed: readonly string[] =
-        scope === "agent" ? this.listTools("agent") : scope === "ui" ? this.listTools("ui") : scope === "chat" || scope === "session" ? CHAT_TOOL_ALLOWLIST : scope === "view" ? ["ate_market_get", "ate_candidates_get", "ate_positions", "ate_strategy_get", "ate_journal_read", "ate_chart", "ate_data"] : [];
+        scope === "agent" ? this.listTools("agent") : scope === "ui" ? this.listTools("ui") : scope === "chat" || scope === "session" ? CHAT_TOOL_ALLOWLIST : scope === "view" ? ["ate_market_get", "ate_candidates_get", "ate_positions", "ate_strategy_get", "ate_journal_read", "ate_chart", "ate_data", "ate_backtest"] : [];
       if (!allowed.includes(tool)) {
         return fail("ATE_TOOL_NOT_ALLOWED", `${tool} is not available to the ${scope} scope`, scope === "chat" ? `Chat may call only: ${CHAT_TOOL_ALLOWLIST.join(", ")}` : "Use an agent-scope token");
       }
@@ -990,6 +1036,17 @@ export class AteService {
         return this.journalRead(args as unknown as JournalReadInput);
       case "ate_pause":
         return this.pause(scope, String(args.rationale));
+      case "ate_backtest":
+      case "ate_strategy_save": {
+        if (!this.strategies) return fail("ATE_VENUE_ERROR", "strategies are not available in this daemon", "Restart the daemon");
+        try {
+          const data = tool === "ate_backtest" ? await this.strategies.backtestTool(args) : this.strategies.saveFromChat(args as { specJson: string; rationale: string }, scope);
+          return ok(data, this.meta());
+        } catch (e) {
+          const x = e as { code?: string; message: string };
+          return fail((x.code as never) ?? "ATE_INVALID_PARAMS", x.message);
+        }
+      }
       case "ate_signal_buy":
         return fail("ATE_PAYMENT_UNAVAILABLE", "HSP payments are not live in this daemon", "Payments run in ate-pay on the worker (§9)");
       case "ate_chart":

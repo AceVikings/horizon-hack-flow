@@ -90,6 +90,9 @@ export function createStubHandler(opts: StubOptions) {
       case "ate_chart":
       case "ate_data":
         return fail("ATE_VENUE_ERROR", "charts and tables need a live daemon (not served by the stub)", "Run ate-daemon");
+      case "ate_backtest":
+      case "ate_strategy_save":
+        return fail("ATE_VENUE_ERROR", "custom strategies need a live daemon (not served by the stub)", "Run ate-daemon");
       case "ate_market_get":
         return ok<ToolOutput<"ate_market_get">>({ markets: MARKET_IDS.filter((m) => !market || m === market).map((m) => STUB_MARKETS[m]) }, meta());
 

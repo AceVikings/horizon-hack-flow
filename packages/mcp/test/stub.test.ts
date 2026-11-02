@@ -12,7 +12,7 @@ describe("stub handler", () => {
 
   it("scopes tool lists", () => {
     expect(agent.listTools().map((t) => t.name)).not.toContain("ate_signal_buy");
-    expect(agent.listTools()).toHaveLength(13); // + ate_chart, ate_data (lane D4, additive)
+    expect(agent.listTools()).toHaveLength(14); // + ate_chart, ate_data (lane D4), ate_backtest (lane STRAT), additive
     expect(chat.listTools().map((t) => t.name)).toEqual([...CHAT_TOOL_ALLOWLIST]);
   });
 
