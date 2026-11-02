@@ -135,13 +135,7 @@ export function registerSetupIpc(o: { ipcMain: IpcMain; daemon: DaemonClient; ap
     if (status.key.unlocked) return { ok: true, data: state() };
     const s = sealed();
     if (!s) return err("The agent key was created outside Flow; its passphrase is not sealed in this app.", "ATE_DAEMON_LOCKED");
-    if (canTouchId()) {
-      try {
-        await systemPreferences.promptTouchID("unlock the Flow agent key");
-      } catch {
-        return err("Touch ID was cancelled", "ATE_APPROVAL_REQUIRED");
-      }
-    }
+    // v1 policy: opening the app never asks for Touch ID; the passphrase comes from the login keychain.
     setPhase("unlocking");
     let pass: string;
     try {
@@ -168,6 +162,10 @@ export function registerSetupIpc(o: { ipcMain: IpcMain; daemon: DaemonClient; ap
     ensureFallback();
     setPhase("attaching");
     daemon.resetToken();
+    if (sup.owned) {
+      for (let i = 0; i < 40 && !sup.uiToken; i++) await new Promise((r) => setTimeout(r, 100));
+      if (sup.uiToken) daemon.setToken(sup.uiToken);
+    }
     const info = await daemon.connect();
     if (info.mode !== "live") {
       setPhase("error", info.detail ?? "attach failed");
@@ -251,13 +249,6 @@ export function registerSetupIpc(o: { ipcMain: IpcMain; daemon: DaemonClient; ap
     },
     "setup.keygen": async (privateKey?: string) => {
       if (privateKey !== undefined && privateKey !== null && !PK.test(String(privateKey))) return err("a private key is 0x followed by 64 hex characters");
-      if (canTouchId()) {
-        try {
-          await systemPreferences.promptTouchID(privateKey ? "import the Flow agent key" : "create the Flow agent key");
-        } catch {
-          return err("Touch ID was cancelled", "ATE_APPROVAL_REQUIRED");
-        }
-      }
       const passphrase = randomBytes(32).toString("base64url");
       const r = await daemon.call<{ address: string; store: string; keyId: string }>("POST", "/setup/keygen", { passphrase, ...(privateKey ? { privateKey } : {}) });
       if (r.ok) storePass(r.data.keyId, passphrase);

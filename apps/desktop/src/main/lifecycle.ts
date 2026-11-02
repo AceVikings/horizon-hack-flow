@@ -70,6 +70,8 @@ export class DaemonSupervisor {
   private child: ChildProcess | null = null;
   private log: WriteStream | null = null;
   readonly codes: CodeLine[] = [];
+  /** ui token the app-owned daemon hands over on the private pipe (no attach prompt, v1 Touch ID policy). */
+  uiToken: string | null = null;
   private codeWaiters: ((c: CodeLine) => void)[] = [];
   owned = false;
   lastError = "";
@@ -135,6 +137,7 @@ export class DaemonSupervisor {
     if (!existsSync(bin)) throw new Error(`daemon not built: ${bin}`);
     mkdirSync(home, { recursive: true, mode: 0o700 });
     rmSync(join(home, "runtime.json"), { force: true });
+    this.uiToken = null;
     this.log = createWriteStream(join(home, "daemon.log"), { flags: "a", mode: 0o600 });
     const args = [bin, "start", "--setup", "--approval-fallback=armed", ...(process.env.ATE_DAEMON_ARGS ?? "").split(" ").filter(Boolean)];
     const env = { ...process.env, ATE_HOME: home, ATE_APPROVAL_CODE_FD: "3", ATE_APPROVAL_STDIN: "1", ELECTRON_RUN_AS_NODE: undefined };
@@ -153,7 +156,11 @@ export class DaemonSupervisor {
     if (fd3) {
       createInterface({ input: fd3 }).on("line", (l) => {
         try {
-          const j = JSON.parse(l) as { line: string; code: string | null };
+          const j = JSON.parse(l) as { type?: string; token?: string; line: string; code: string | null };
+          if (j.type === "ui.token" && j.token) {
+            this.uiToken = j.token;
+            return;
+          }
           const c = { code: j.code, line: j.line, at: Math.floor(Date.now() / 1000) };
           this.codes.push(c);
           if (this.codes.length > 20) this.codes.shift();

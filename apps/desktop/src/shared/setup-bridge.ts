@@ -90,5 +90,5 @@ export type SetupIpc = (typeof SETUP_IPC)[number];
 
 const PROV = "(anthropic|openai|gemini|openrouter|ollama|proxy)";
 export const SETUP_GET_RE = /^\/setup\/(status|networks|vaults|agent|doctor|limits|fund|handoff|config|model|model\/check)$|^\/engine\/providers$/;
-export const SETUP_POST_RE = new RegExp(`^/setup/(state|network|vaults|handoff|complete|model)$|^/engine/select$|^/engine/providers/${PROV}/test$`);
+export const SETUP_POST_RE = new RegExp(`^/setup/(state|network|vaults|handoff|complete|model|config)$|^/engine/select$|^/engine/providers/${PROV}/test$`);
 export const APPROVAL_RE = new RegExp(`^/setup/(config|model/key)$|^/engine/providers/${PROV}/credential$`);

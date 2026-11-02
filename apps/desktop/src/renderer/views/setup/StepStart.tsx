@@ -277,7 +277,7 @@ export default function StepStart() {
           {(
             [
               ["autonomous", "On its own", "Trades inside your limits without asking."],
-              ["confirm", "Ask me first", "Waits for your Touch ID on every trade."],
+              ["confirm", "Ask me first", "Waits for your OK on every trade."],
             ] as const
           ).map(([id, t, sub]) => (
             <button key={id} role="radio" aria-checked={mode === id} className={`optrow${mode === id ? " on" : ""}`} onClick={() => setMode(id)}>

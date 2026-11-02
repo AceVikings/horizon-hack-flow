@@ -39,6 +39,12 @@ export class DaemonClient {
   attacher: ((a: { nonce: string; expiresAt: number; pid: number; port: number }) => Promise<string>) | null = null;
   constructor(private onEvent: (e: DaemonEvent) => void) {}
 
+  /** A ui token handed over by an app-owned daemon (lane D2): connect() then skips /ui/attach. */
+  setToken(t: string): void {
+    this.uiToken = t;
+    this.mcpSession = null;
+  }
+
   /** Forget the ui token (the daemon restarted: tokens are per process). */
   resetToken(): void {
     this.uiToken = process.env.ATE_UI_TOKEN ?? null;

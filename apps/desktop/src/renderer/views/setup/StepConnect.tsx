@@ -233,7 +233,7 @@ function AgentPart({ enabled }: { enabled: boolean }) {
         <div style={{ marginTop: 12 }}><Spinner label="Reading the keystore…" /></div>
       ) : !d.exists ? (
         <>
-          <Btn kind="pri" size="lg" disabled={busy} onClick={() => void create()} style={{ marginTop: 14 }}>{busy ? "Working…" : "Create the key with Touch ID"}</Btn>
+          <Btn kind="pri" size="lg" disabled={busy} onClick={() => void create()} style={{ marginTop: 14 }}>{busy ? "Working…" : "Create the key"}</Btn>
           <Details summary="Advanced: use an existing key">
             <div className="row g12">
               <input className="textin" type="password" autoComplete="off" spellCheck={false} placeholder="Private key (0x…)" aria-label="Agent private key" value={pk} onChange={(e) => setPk(e.target.value)} />

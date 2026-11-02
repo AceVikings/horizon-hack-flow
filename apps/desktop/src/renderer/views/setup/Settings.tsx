@@ -58,8 +58,8 @@ export default function Settings() {
 
   const save = async () => {
     setError(null);
-    const r = await ap.run("/setup/config", { changes: changes.map(({ key, after }) => ({ key, after })) });
-    if (!r.ok) return r.error && setError(r.error);
+    const r = await s.post("/setup/config", { changes: changes.map(({ key, after }) => ({ key, after })) });
+    if (!r.ok) return setError(r.error);
     setSaved(true);
     c.reload();
   };
@@ -79,7 +79,7 @@ export default function Settings() {
 
   return (
     <div className="sw-col" data-shot="settings" style={{ paddingTop: 10 }}>
-      <PageHead title="Settings" sub={touch ? "Every save is signed with Touch ID." : "Every save is approved with a one-time code."} />
+      <PageHead title="Settings" sub="Changes save right away." />
       {!d ? (
         c.res?.ok === false ? <ErrLine error={c.res.error} /> : <Spinner label="Loading settings…" />
       ) : (
@@ -119,7 +119,7 @@ export default function Settings() {
 
           <Section title="AI account" sub={aiLabel ?? "The AI the agent thinks with."} right={<Btn size="sm" onClick={() => go("accounts")}>Manage accounts</Btn>} />
 
-          <Section title="Approvals" sub={touch ? "Touch ID approves logins, loosening changes and saves." : "Touch ID helper not installed: Flow shows a one-time code instead."}>
+          <Section title="Approvals" sub={`Flow asks for ${touch ? "Touch ID" : "a one-time code"} only to loosen limits, approve payments, or replace or remove a saved key.`}>
             <Details>
               <div className="kv sm"><span className="k">Method</span><span className="v">{touch ? `Touch ID · key ${d.approval.keyId ?? ""}` : "One-time code (single use, 60 s)"}</span></div>
               <div className="kv sm"><span className="k">Approval window</span><span className="v">{d.approval.windowSec} s</span></div>
@@ -190,7 +190,7 @@ export default function Settings() {
               <span className="hint">{changes.map((x) => x.text).join(" · ")}</span>
               <span className="grow" />
               <Btn kind="ghost" onClick={discard}>Discard</Btn>
-              <Btn kind="pri" size="lg" disabled={ap.busy} onClick={() => void save()}>{touch ? "Save with Touch ID" : "Save"}</Btn>
+              <Btn kind="pri" size="lg" disabled={ap.busy} onClick={() => void save()}>Save</Btn>
             </div>
           )}
           {saved && !changes.length && <p className="sm" role="status" style={{ marginTop: 14 }}>Saved. The daemon restarted with the new settings.</p>}

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import type { DaemonState } from "@shared/setup-bridge";
 import {Btn} from "../../src/ui";
-import { CodeInput, CodeShow, ErrLine, Logo, Spinner, go, useSetup, StatusText } from "./common";
+import { CodeInput, CodeShow, ErrLine, Logo, Spinner, go, useSetup } from "./common";
 
 const PHASE: Record<DaemonState["phase"], string> = {
   starting: "Starting the Flow daemon…",
@@ -84,11 +84,11 @@ export default function Unlock() {
         {locked && (
           <div style={{ marginTop: 18 }}>
             <p className="sm" style={{ color: "var(--sage)" }}>
-              Agent <span className="mono">{st?.agent?.address}</span> is locked. {st?.touchId.unlock ? "Touch ID releases its passphrase from the keychain." : "Its passphrase is sealed in your login keychain."}
+              Agent <span className="mono">{st?.agent?.address}</span> is locked. Its passphrase is kept in your login keychain.
             </p>
             <div className="row g10" style={{ marginTop: 18 }}>
               <Btn kind="pri" size="lg" disabled={busy} onClick={() => void unlock()}>
-                {st?.touchId.unlock ? "Unlock with Touch ID" : "Unlock"}
+                Unlock
               </Btn>
               <Btn kind="ghost" onClick={() => go("home")}>Continue read-only</Btn>
             </div>
@@ -105,9 +105,6 @@ export default function Unlock() {
           </div>
         )}
         <ErrLine error={error} />
-        <div className="row g8" style={{ marginTop: 30 }}>
-          <StatusText tone={st?.touchId.approve ? "ok" : "mute"}>Touch ID approvals {st?.touchId.approve ? "on" : "off · one-time codes"}</StatusText>
-        </div>
       </div>
     </div>
   );

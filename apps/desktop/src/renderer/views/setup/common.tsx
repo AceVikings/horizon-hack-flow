@@ -353,7 +353,7 @@ export function CodeShow({ code }: { code: string | null | undefined }) {
 }
 
 /**
- * Two-step approval for Settings saves and API-key changes: Touch ID (ate-approve) when installed; otherwise the
+ * Two-step approval for replacing/removing a saved key (v1 Touch ID policy): Touch ID (ate-approve) when installed; otherwise the
  * daemon's one-time code is shown here and typed back (single use, 60 s).
  */
 export function useApproval() {
