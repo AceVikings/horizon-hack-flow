@@ -8,7 +8,7 @@ import type { PauseEvent, ProofAttack, ProofRun, ProofState, Res } from "@shared
 import { useApp, useNow, useRemote } from "../src/app";
 import { short } from "../src/format";
 import { PageHead, useKillSwitch, useMode } from "../src/shell";
-import { Badge, Btn, Dialog, Link, QR } from "../src/ui";
+import { Btn, Dialog, Link, QR } from "../src/ui";
 import type { ViewProps } from "./registry";
 
 const ATTACKS: Record<ProofAttack["attack"], { name: string; stops: string }> = {
@@ -131,7 +131,7 @@ export default function Proof(_: ViewProps) {
             Run safety test
           </Btn>
         ) : (
-          s && <Badge glyph="i">Tests run on testnet only. On mainnet this page shows recorded results.</Badge>
+          s && <span className="sm fg2"><span aria-hidden="true">ⓘ</span> Tests run on testnet only. On mainnet this page shows recorded results.</span>
         )}
         {paused ? (
           <Btn onClick={() => setQr(true)}>Resume on owner device</Btn>
@@ -283,12 +283,15 @@ export default function Proof(_: ViewProps) {
   );
 }
 
+/** Plain text + icon (no pills). */
 function StatusBadge({ a }: { a: ProofAttack }) {
-  if (a.status === "reverted") return <Badge tone="ok">stopped</Badge>;
-  if (a.status === "running") return <Badge tone="warn" glyph="◌">trying</Badge>;
-  if (a.status === "queued") return <Badge glyph="·">next</Badge>;
-  if (a.status === "skipped") return <Badge glyph="–">skipped</Badge>;
-  return <Badge tone="bad">{a.status === "aborted" ? "aborted" : "not stopped"}</Badge>;
+  const [g, t, c] =
+    a.status === "reverted" ? ["✓", "Stopped", "ok"] : a.status === "running" ? ["◌", "Trying", "warn"] : a.status === "queued" ? ["·", "Next", "fg2"] : a.status === "skipped" ? ["–", "Skipped", "fg2"] : ["✕", a.status === "aborted" ? "Aborted" : "Not stopped", "bad"];
+  return (
+    <span className={`sm b7 ${c}`}>
+      <span aria-hidden="true">{g}</span> {t}
+    </span>
+  );
 }
 
 function PauseRow({ e, explorer }: { e: PauseEvent; explorer: string }) {

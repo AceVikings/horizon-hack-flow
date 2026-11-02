@@ -7,7 +7,7 @@ import type { AiHealth, EngineProviders, PendingChange, Res, TraderStatus } from
 import { useApp, useNow, useRemote } from "../src/app";
 import { ago, int } from "../src/format";
 import { PageHead, useNav } from "../src/shell";
-import { Badge, Btn, Seg } from "../src/ui";
+import { Btn, Seg } from "../src/ui";
 import type { ViewProps } from "./registry";
 
 type Mode = "autonomous" | "propose" | "watch";
@@ -104,7 +104,7 @@ export default function Agent(_: ViewProps) {
         <section className="card" style={{ border: "2px solid var(--c)", padding: "16px 20px", marginBottom: 22 }} aria-label="Needs your OK">
           <header className="ch">
             <h2 className="h4">Needs your OK</h2>
-            <Badge y glyph="">{pending.length}</Badge>
+            <span className="sm b7 num">{pending.length} waiting</span>
           </header>
           {pending.map((p, i) => (
             <div key={p.changeId} style={i ? { marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--line)" } : undefined}>
@@ -227,9 +227,9 @@ function StrategyTable({ s, m }: { s: StrategyGetOutput; m: MarketId }) {
     yours === now ? (
       fmt(now)
     ) : (
-      <Badge tone="info" glyph="">
-        {fmt(now)} · {now > yours === tighterWhenUp ? "tighter" : "looser"}
-      </Badge>
+      <span className="info b7">
+        <span aria-hidden="true">{now > yours === tighterWhenUp ? "↑" : "↓"}</span> {fmt(now)} · {now > yours === tighterWhenUp ? "tighter" : "looser"}
+      </span>
     );
   const rows: [string, string, React.ReactNode, string][] = [
     ["Trade size", `$${Number(anc.tradeSizeUsd)}`, tuned(Number(anc.tradeSizeUsd), Number(cur.tradeSizeUsd), (n) => `$${n}`, false), usdR(Number(anc.tradeSizeUsd))],

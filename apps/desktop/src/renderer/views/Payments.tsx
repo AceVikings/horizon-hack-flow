@@ -1,5 +1,4 @@
 // 80 Payments (Flow v1): HSP payments are not in v1. Visible, greyed out, no actions (FLOW.md screen 80).
-import { Badge } from "../src/ui";
 import type { ViewProps } from "./registry";
 
 export default function Payments(_: ViewProps) {
@@ -11,7 +10,7 @@ export default function Payments(_: ViewProps) {
           <div className="sub">Agent-to-agent payments over HSP</div>
         </div>
         <div className="acts">
-          <Badge lg glyph="">coming soon</Badge>
+          <span className="sm fg2">Coming soon</span>
         </div>
       </div>
       <div style={{ flex: 1, display: "grid", placeItems: "center" }}>
