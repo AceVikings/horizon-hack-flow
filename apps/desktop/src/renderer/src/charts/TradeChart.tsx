@@ -6,6 +6,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ANALYSIS_DISCLAIMER, CHART_INDICATORS, MARKETS, type ChartDrawing, type ChartIndicator, type ChartInput, type ChartInterval, type ChartSpec, type DataTable, type DrawingKind, type MarketId } from "@ate/core";
 import { useApp } from "../app";
+import { Markdown } from "../Markdown";
 import { ChartView, type Readout } from "./Chart";
 import { DataTableCard, INDICATOR_LABEL, sourceLine } from "./ChartCard";
 import { keepDrawings, useDrawings } from "./drawings";
@@ -338,7 +339,7 @@ function AskChart({ market, context, onChart }: { market: MarketId; context: str
           ))}
         </p>
       )}
-      {(reply || busy) && <p className="treply">{reply || "The agent is looking…"}</p>}
+      {(reply || busy) && <div className="treply">{reply ? <Markdown text={reply} /> : "The agent is looking…"}</div>}
     </div>
   );
 }

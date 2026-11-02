@@ -698,5 +698,17 @@ button.lnk.ico { text-decoration: none; font-size: 14px; color: var(--fg2); }
 .taskf input { flex: 1; min-width: 0; border: 1px solid var(--line2); border-radius: 8px; padding: 8px 10px; font: 400 13px var(--body); }
 .taskf input:focus { outline: 0; border-color: var(--c); box-shadow: 0 0 0 2px rgba(255,225,124,.7); }
 .tsugg { font-size: 12px; color: var(--fg2); margin-top: 8px; display: flex; flex-wrap: wrap; gap: 4px 14px; }
-.treply { font-size: 13px; margin-top: 10px; white-space: pre-wrap; line-height: 1.55; }
+.treply { font-size: 13px; margin-top: 10px; line-height: 1.55; }
+/* agent replies (Markdown.tsx) */
+.md { white-space: normal; }
+.md > * { margin: 0 0 8px; }
+.md > :last-child { margin-bottom: 0; }
+.md p { white-space: pre-line; }
+.md ul, .md ol { padding-left: 20px; }
+.md li { margin: 2px 0; }
+.md li::marker { color: var(--fg2); }
+.md code { font-size: .9em; }
+.md pre { font-family: var(--mono); font-size: 11.5px; background: var(--bg3); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; overflow-x: auto; white-space: pre; }
+.md pre code { background: none; border: 0; padding: 0; }
+.md a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 .chstate .chempty { margin: 0; }

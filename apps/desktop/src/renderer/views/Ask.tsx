@@ -11,6 +11,7 @@ import { baseDecimals, fmtUnits } from "../src/format";
 import { PageHead, useNav } from "../src/shell";
 import { Btn, Pill, TxLink } from "../src/ui";
 import { ToolResultBlock } from "../src/charts";
+import { Markdown } from "../src/Markdown";
 import { CodeApprove, approveRiskier } from "./approveCode";
 import { ChatModelPicker, McpToolsSheet } from "./AskTools";
 import type { ViewProps } from "./registry";
@@ -184,8 +185,8 @@ export default function Ask(_: ViewProps) {
               </div>
               {b.parts.map((p) =>
                 p.role === "agent" ? (
-                  <div key={p.id} style={{ whiteSpace: "pre-wrap", marginTop: 4 }}>
-                    {plain(p.text)}
+                  <div key={p.id} style={{ marginTop: 4 }}>
+                    <Markdown text={plain(p.text)} />
                     {p.error && i === blocks.length - 1 && !waiting && (
                       <div style={{ marginTop: 8 }}>
                         <Btn size="sm" onClick={() => void send(lastAsk(blocks, i))}>
