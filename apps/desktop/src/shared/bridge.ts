@@ -209,6 +209,25 @@ export interface EngineProviders {
 /** Credential change result: applied, or waiting for the daemon's one-time code (Touch ID unavailable). */
 export type EngineCredentialResult = { saved: true; provider: EngineProvider } | { needsCode: true; nonce: string; expiresAt: number };
 
+/** The daemon-managed CLIProxyAPI sidecar behind the default "subscription" provider. */
+export interface SubscriptionStatus {
+  installed: boolean;
+  bin: string | null;
+  source: "flow" | "user" | null;
+  version: string | null;
+  running: boolean;
+  owned: boolean;
+  pid: number | null;
+  port: number;
+  baseURL: string;
+  healthy: boolean;
+  models: string[];
+  lastError: string | null;
+  checkedAt: number | null;
+  loginFlags: string[];
+  selectedModel: string | null;
+}
+
 export interface AteBridge {
   readonly fixtures: boolean;
   connection(): Promise<ConnectionInfo>;
@@ -269,6 +288,8 @@ export interface AteBridge {
     confirm(id: EngineProvider["id"], nonce: string, code: string): Promise<Res<EngineCredentialResult>>;
     select(provider: EngineProvider["id"], model?: string): Promise<Res<EngineProviders>>;
   };
+  /** Additive (lane D3): your subscriptions through the CLIProxyAPI sidecar (install / start / stop / restart / check). */
+  subscription?: { status(): Promise<Res<SubscriptionStatus>>; op(op: "install" | "start" | "stop" | "restart" | "check"): Promise<Res<SubscriptionStatus>> };
   events: { subscribe(handler: (e: DaemonEvent) => void): () => void };
 }
 
@@ -315,6 +336,8 @@ export const IPC_METHODS = [
   "engine.credential",
   "engine.confirm",
   "engine.select",
+  "subscription.status",
+  "subscription.op",
   // lane D1 (additive)
   "candidates.get",
   // lane D4 (additive)

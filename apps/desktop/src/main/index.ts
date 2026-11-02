@@ -169,6 +169,10 @@ async function invoke(method: IpcMethod, arg: any, arg2?: any): Promise<unknown>
     }
     case "proof.stop":
       return daemon.call("POST", "/proof/stop", {});
+    case "subscription.status":
+      return daemon.call("GET", "/engine/subscription");
+    case "subscription.op":
+      return /^(install|start|stop|restart|check)$/.test(String(arg)) ? daemon.call("POST", `/engine/subscription/${arg}`, {}) : bad("unknown operation");
     case "engine.providers":
       return daemon.call("GET", "/engine/providers");
     case "engine.test":
