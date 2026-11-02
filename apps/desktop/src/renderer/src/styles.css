@@ -291,3 +291,4 @@ input.num { font-size: 22px; font-weight: 700; text-align: right; padding: 10px 
 }
 .card { overflow-x: auto; }
 .tbl td.mono, .tbl td .mono { word-break: break-all; }
+.grid4 .stat { justify-content: space-between; }
