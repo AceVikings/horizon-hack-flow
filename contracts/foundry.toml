@@ -6,6 +6,8 @@ solc_version = "0.8.24"
 optimizer = true
 optimizer_runs = 200
 evm_version = "cancun"
+# DeployTestnet.s.sol writes deployments/133.json
+fs_permissions = [{ access = "read-write", path = "../deployments" }]
 remappings = [
   "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
   "forge-std/=lib/forge-std/src/",
@@ -22,6 +24,7 @@ depth = 100
 
 [rpc_endpoints]
 hsk = "https://mainnet.hsk.xyz"
+hsk_testnet = "https://testnet.hsk.xyz"
 
 [etherscan]
 hsk = { key = "verifyContract", url = "https://hsk.blockscout.com/api" }

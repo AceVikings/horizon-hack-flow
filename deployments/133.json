@@ -1,0 +1,99 @@
+{
+  "agent": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+  "candidateTtlSec": 180,
+  "chainId": 133,
+  "deployedAt": 1793597932,
+  "deployedBlock": 35205638,
+  "eas": {
+    "address": "0x4200000000000000000000000000000000000021",
+    "schema": "bytes32 proposalId,bytes32 rationaleHash,bytes32 txHash,uint256 notionalUsd,bool exitPath,string engine,string origin",
+    "schemaRegistry": "0x4200000000000000000000000000000000000020",
+    "schemaUid": "0x1c0c01e337924a140372f0043e9a9a3125e0e276b6dae78382676b3d0e53a04f"
+  },
+  "explorer": "https://testnet-explorer.hskchain.net",
+  "guardian": "0x8aAcC0D83C22644f76185EF0c082112D80Cdb66B",
+  "hskdex": {
+    "factory": "0x2dC2c21D1049F786C535bF9d45F999dB5474f3A0",
+    "multicall3": "0xcA11bde05977b3631167028862bE2a173976CA11",
+    "positionManager": "0x73dEc6bfa6751509b08480bd97f54b874E3b20e8",
+    "quoter": "0x73820d9eE5Bf1BfcD429580320FC7A374E8fa1cC",
+    "router": "0xa6914E66690c6794244B5f66a09eAEbf66254237",
+    "routerKind": "swaprouter02",
+    "weth9": "0xCA8aAceEC5Db1e91B9Ed3a344bA026c4a2B3ebF6"
+  },
+  "label": "testnet",
+  "limits": {
+    "cooldown": 60,
+    "epochDuration": 86400,
+    "maxEpochUsd": 25000000000,
+    "maxExitDiscountBps": 500,
+    "maxExposureUsd": 15000000000,
+    "maxOracleAge": 90000,
+    "maxOracleDeviationBps": 250,
+    "maxSlippageBps": 250,
+    "maxTradeUsd": 10000000000
+  },
+  "markets": {
+    "hsk-dex:WBTC/USDT:3000": {
+      "adapter": "0x9bbb840B9e1086177507D958E40668f3cEF99372",
+      "adapterConstructorArgs": "0x0000000000000000000000006cd59830aad978446e6cc7f6cc173af7656fb91700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000001e4254432f5553442028537570726120746573746e657420706169722030290000",
+      "fee": 3000,
+      "initPriceSupra18": 78577050000000000000000,
+      "initSqrtPriceX96": 2220892021050474177496512004077,
+      "pool": "0x9d6A06ae873aD5d34ef13Ac8afE3BA80d1A5eF07",
+      "poolUsd": 100000,
+      "priceDecimals": 8,
+      "priceToken": "0x2C7A171A58AE1690Cf1e01e296aB0CF9Dfc04aA2",
+      "quoteToken": "0xD57a8171b83E154145f47DcE512786173a9A36ca",
+      "supraPair": 0,
+      "vault": "0x6Da0c6EF7328d3aD6b0b8781770D941D065a6693",
+      "vaultConstructorArgs": "0x000000000000000000000000d57a8171b83e154145f47dce512786173a9a36ca0000000000000000000000002c7a171a58ae1690cf1e01e296ab0cf9dfc04aa20000000000000000000000009bbb840b9e1086177507d958e40668f3cef99372000000000000000000000000a6914e66690c6794244b5f66a09eaebf662542370000000000000000000000009d6a06ae873ad5d34ef13ac8afe3ba80d1a5ef070000000000000000000000002dc2c21d1049f786c535bf9d45f999db5474f3a0"
+    },
+    "hsk-dex:WHSK/USDT:3000": {
+      "adapter": "0xeCC8Fe21c7C0D39988856b6B67860bAe55A8c9A2",
+      "adapterConstructorArgs": "0x0000000000000000000000006cd59830aad978446e6cc7f6cc173af7656fb91700000000000000000000000000000000000000000000000000000000000002050000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000002048534b2f5553442028537570726120746573746e657420706169722035313729",
+      "fee": 3000,
+      "initPriceSupra18": 87415000000000000,
+      "initSqrtPriceX96": 23424620556133384227500,
+      "pool": "0x840fa6e439F52cEa60dABec8BBB820DE80dDb542",
+      "poolUsd": 440000,
+      "priceDecimals": 18,
+      "priceToken": "0x198c3EC5530463290e2F16988Bf6B8006F4C6995",
+      "quoteToken": "0xD57a8171b83E154145f47DcE512786173a9A36ca",
+      "supraPair": 517,
+      "vault": "0xF80A74F4D9C17Db8a2a0F32558a9FC3A63e2Bcd2",
+      "vaultConstructorArgs": "0x000000000000000000000000d57a8171b83e154145f47dce512786173a9a36ca000000000000000000000000198c3ec5530463290e2f16988bf6b8006f4c6995000000000000000000000000ecc8fe21c7c0d39988856b6b67860bae55a8c9a2000000000000000000000000a6914e66690c6794244b5f66a09eaebf66254237000000000000000000000000840fa6e439f52cea60dabec8bbb820de80ddb5420000000000000000000000002dc2c21d1049f786c535bf9d45f999db5474f3a0"
+    }
+  },
+  "network": "hashkey-testnet",
+  "owner": "0xFF7Df888C4DE9df4c044Fd0C7144AAfd1937569e",
+  "rpcUrls": [
+    "https://testnet.hsk.xyz"
+  ],
+  "supra": {
+    "chainType": "evm",
+    "proofUrl": "https://rpc-testnet-dora-2.supra.com/get_proof",
+    "pull": "0x443A0f4Da5d2fdC47de3eeD45Af41d399F0E5702",
+    "storage": "0x6Cd59830AAD978446e6cc7f6cc173aF7656Fb917"
+  },
+  "tokens": {
+    "USDT": {
+      "address": "0xD57a8171b83E154145f47DcE512786173a9A36ca",
+      "decimals": 6,
+      "faucetAmount": 1000000000,
+      "symbol": "tUSDT"
+    },
+    "WBTC": {
+      "address": "0x2C7A171A58AE1690Cf1e01e296aB0CF9Dfc04aA2",
+      "decimals": 8,
+      "faucetAmount": 1000000,
+      "symbol": "tWBTC"
+    },
+    "WHSK": {
+      "address": "0x198c3EC5530463290e2F16988Bf6B8006F4C6995",
+      "decimals": 18,
+      "faucetAmount": 10000000000000000000000,
+      "symbol": "tWHSK"
+    }
+  }
+}
