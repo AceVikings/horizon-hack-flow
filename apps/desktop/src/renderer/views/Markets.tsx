@@ -16,8 +16,8 @@ import { useResume } from "./Overview";
 const ORDER: MarketId[] = [MARKET_WBTC, MARKET_WHSK];
 const FEE_BPS = 30;
 const byLabel = (s?: string): MarketId => ORDER.find((m) => MARKETS[m].label.toLowerCase() === (s ?? "").toLowerCase()) ?? MARKET_WBTC;
-/** CEX mid vs pool, bps; positive = pool below HashKey Global. */
-const gapBps = (mv: MarketView): number | null => (mv.cex ? Math.round(((Number(mv.cex.mid) - Number(mv.pool.price)) / Number(mv.pool.price)) * 10_000) : null);
+/** On-chain oracle price vs pool, bps; positive = pool below the oracle price (the spread-revert reference). */
+const gapBps = (mv: MarketView): number | null => (Number(mv.oracle.price) > 0 && Number(mv.pool.price) > 0 ? Math.round(((Number(mv.oracle.price) - Number(mv.pool.price)) / Number(mv.pool.price)) * 10_000) : null);
 
 export default function Trade(props: ViewProps) {
   const [mode] = useMode();
@@ -33,16 +33,16 @@ function SimpleTrade({ params }: ViewProps) {
   const mkd = MARKETS[market];
   const mv = mkOk?.find((m) => m.market === market);
   const g = mv ? gapBps(mv) : null;
-  const cost = FEE_BPS + (mv?.cex?.halfSpreadBps ?? 0) + 5;
+  const cost = FEE_BPS + 5;
   const pct = (bps: number) => `${(Math.abs(bps) / 100).toFixed(2)}%`;
   const line =
     g === null
-      ? "HashKey Global has no price right now, so the agent waits."
+      ? "The on-chain oracle has no price right now, so the agent waits."
       : g > cost
-        ? `The pool is ${pct(g)} cheaper than HashKey Global. That beats the ${pct(cost)} trading cost, so buying can pay.`
+        ? `The pool is ${pct(g)} cheaper than the on-chain oracle price. That beats the ${pct(cost)} trading cost, so buying can pay.`
         : g > 0
-          ? `The pool is ${pct(g)} cheaper than HashKey Global. Costs are about ${pct(cost)}, so there's no edge yet.`
-          : `The pool is ${pct(g)} dearer than HashKey Global. No reason to buy here now.`;
+          ? `The pool is ${pct(g)} cheaper than the on-chain oracle price. Costs are about ${pct(cost)}, so there's no edge yet.`
+          : `The pool is ${pct(g)} dearer than the on-chain oracle price. No reason to buy here now.`;
   return (
     <div className="page1">
       <PageHead title="Trade" sub="Prices, what they mean, and an order panel if you want to trade yourself" acts={<Seg label="Market" value={mkd.label} onChange={(l) => go(`trade/${l.toLowerCase()}`)} options={[{ id: "BTC", label: "BTC" }, { id: "HSK", label: "HSK" }]} />} />
@@ -52,10 +52,10 @@ function SimpleTrade({ params }: ViewProps) {
         <div className="col" style={{ gap: 16 }}>
           {mv.vault.paused && <Banner tone="paused" icon="❚❚" title="Trading is paused" sub="Prices keep updating. Orders wait until you resume." action={<ResumeBtn />} />}
           <section className={`card${stale ? " dim" : ""}`} style={{ padding: "22px 24px" }} aria-label={`${mkd.base} price`}>
-            <div className="lbl">{mkd.label} price on HashKey Global</div>
-            <div className="huge num" style={{ marginTop: 10 }}>{mv.cex ? price8(mv.cex.mid) : price8(mv.pool.price)}</div>
+            <div className="lbl">{mkd.label} price on HSKSwap</div>
+            <div className="huge num" style={{ marginTop: 10 }}>{price8(mv.pool.price)}</div>
             <p style={{ fontSize: 15, marginTop: 12, maxWidth: 640 }}>{line}</p>
-            <p className="sm fg2" style={{ marginTop: 6 }}>Pool {price8(mv.pool.price)} · oracle {price8(mv.oracle.price)}, updated {age(mv.oracle.ageSec + Math.max(0, now - mv.at))} ago</p>
+            <p className="sm fg2" style={{ marginTop: 6 }}>Oracle {price8(mv.oracle.price)}{mv.pool.twap ? ` · pool TWAP ${price8(mv.pool.twap)}` : ""}, updated {age(mv.oracle.ageSec + Math.max(0, now - mv.at))} ago</p>
           </section>
           <PriceChart market={market} />
           <ManualOrder key={market + (params[1] ?? "")} mv={mv} disabled={mv.vault.paused} initialOpen={params[1] === "order"} />
@@ -98,7 +98,7 @@ function Markets({ params }: ViewProps) {
   const sup = (cands.last?.suppressed ?? []).filter((x) => x.market === market);
   const mc = allC.filter((c) => c.market === market);
   const entry = mc.find((c) => c.generator === "spread-revert" || c.generator === "rebalance");
-  const costBps = entry ? Math.round(entry.costBps) : FEE_BPS + (mv?.cex?.halfSpreadBps ?? 0) + 5;
+  const costBps = entry ? Math.round(entry.costBps) : FEE_BPS + 5;
   const minNet = s?.markets[market]?.minNetEdgeBps;
   const net = gap !== null ? gap - costBps : null;
 
@@ -129,7 +129,7 @@ function Markets({ params }: ViewProps) {
             const v = mkOk?.find((x) => x.market === m);
             const g = v ? gapBps(v) : null;
             const c = allC.find((x) => x.market === m && (x.generator === "spread-revert" || x.generator === "rebalance"));
-            const cost = c ? Math.round(c.costBps) : FEE_BPS + (v?.cex?.halfSpreadBps ?? 0) + 5;
+            const cost = c ? Math.round(c.costBps) : FEE_BPS + 5;
             const on = m === market;
             return (
               <button key={m} role="radio" aria-checked={on} className={`card tight mbtn${on ? " on" : ""}`} style={{ textAlign: "left", opacity: enabledAny ? 1 : 0.5 }} onClick={() => go(`trade/${MARKETS[m].label.toLowerCase()}`)}>
@@ -137,7 +137,7 @@ function Markets({ params }: ViewProps) {
                   <span className="h3">{MARKETS[m].base}/{MARKETS[m].quote}</span>
                   {g !== null && <Badge glyph="" y={on && g > cost}>{g > 0 ? "+" : g < 0 ? "−" : ""}{Math.abs(g)}</Badge>}
                 </div>
-                <div className="xs fg2 mt4">{g === null ? "no HashKey Global quote" : g > cost ? "gap bps vs HashKey Global" : `below cost ${cost} bps`} · Vault-{MARKETS[m].label}</div>
+                <div className="xs fg2 mt4">{g === null ? "no oracle price" : g > cost ? "gap bps vs the oracle" : `below cost ${cost} bps`} · Vault-{MARKETS[m].label}</div>
               </button>
             );
           })}
@@ -147,7 +147,6 @@ function Markets({ params }: ViewProps) {
           <>
             <KV k="Supra oracle" className="sm mt8" vClass={oracleStale ? "bad b7" : ""}>{age(oracleAge)}</KV>
             <KV k="Pool TWAP" className="sm">{mv.pool.twap ? "300 s" : "unavailable"}</KV>
-            <KV k="HashKey Global" className="sm">{mv.cex ? age(Math.max(0, now - mv.cex.at)) : "—"}</KV>
             <KV k="APRO" className="sm" vClass="fg2">{mv.apro ? `${age(mv.apro.ageSec)} · ${mv.apro.disagreeBps} bps` : "off on this chain"}</KV>
           </>
         ) : (
@@ -200,15 +199,15 @@ function Markets({ params }: ViewProps) {
                   <span className="xs" style={{ color: "var(--sage)" }}>{mv.pool.deviationBps > 0 ? "+" : mv.pool.deviationBps < 0 ? "−" : ""}{Math.abs(mv.pool.deviationBps)} bps vs oracle</span>
                 </div>
                 <div>
-                  <div className="lbl" style={{ color: "var(--sage)" }}>HashKey Global</div>
-                  <div className="pv num" style={{ color: "var(--y)" }}>{mv.cex ? price8(mv.cex.mid) : "—"}</div>
-                  <span className="xs" style={{ color: "var(--sage)" }}>{mv.cex ? `mid · ${mv.cex.halfSpreadBps} bps half-spread` : "no quote"}</span>
+                  <div className="lbl" style={{ color: "var(--sage)" }}>Pool TWAP</div>
+                  <div className="pv num" style={{ color: "var(--y)" }}>{mv.pool.twap ? price8(mv.pool.twap) : "—"}</div>
+                  <span className="xs" style={{ color: "var(--sage)" }}>{mv.pool.twap ? `300 s${mv.pool.twapDeviationBps === null ? "" : ` · ${mv.pool.twapDeviationBps} bps vs oracle`}` : "unavailable"}</span>
                 </div>
               </div>
             </section>
             <div className="grid" style={{ gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)" }}>
-              <Card tight title="Gap vs cost" right={net === null ? <Badge>no CEX quote</Badge> : <Badge tone={net >= (minNet ?? 0) ? "ok" : net >= 0 ? "warn" : "mute"}>net {net >= 0 ? "+" : "−"}{Math.abs(net)} bps</Badge>}>
-                {gap !== null ? <Gauge cost={costBps} gap={Math.max(0, gap)} under={minNet !== undefined ? `min net edge ${minNet}` : undefined} /> : <p className="sm fg2">HashKey Global has no quote right now.</p>}
+              <Card tight title="Gap vs cost" right={net === null ? <Badge>no oracle price</Badge> : <Badge tone={net >= (minNet ?? 0) ? "ok" : net >= 0 ? "warn" : "mute"}>net {net >= 0 ? "+" : "−"}{Math.abs(net)} bps</Badge>}>
+                {gap !== null ? <Gauge cost={costBps} gap={Math.max(0, gap)} under={minNet !== undefined ? `min net edge ${minNet}` : undefined} /> : <p className="sm fg2">The on-chain oracle has no price right now.</p>}
               </Card>
               <Card tight title="Gap · 6 h" right={<span className="xs fg2">cost line {costBps} bps</span>} className="chart">
                 <GapChart entries={hist.last?.entries ?? []} market={market} now={now} cost={costBps} live={gap} />
@@ -261,11 +260,11 @@ function CandState({ c, sup, paused, entries }: { c: Candidate; sup: { side: Sid
   return skipped ? <Badge>{skipped.verdict.message === "llm_veto" ? "vetoed" : "not taken"}</Badge> : <Badge tone="info">open</Badge>;
 }
 
-/** Gap (bps, CEX mid vs pool) over the last 6 h from the prices journalled with every decision, plus the live point. */
+/** Gap (bps, on-chain oracle vs pool) over the last 6 h from the prices journalled with every decision, plus the live point. */
 function GapChart({ entries, market, now, cost, live }: { entries: JournalEntry[]; market: MarketId; now: number; cost: number; live: number | null }) {
   const pts = entries
-    .filter((e) => marketOf(e) === market && e.context.cex && Number(e.context.cex.mid) > 0 && e.at >= now - 6 * 3600 && !clean(e.rationale).startsWith("[rogue]"))
-    .map((e) => ({ t: e.at, g: ((Number(e.context.cex!.mid) - Number(e.context.pool.price)) / Number(e.context.pool.price)) * 10_000 }))
+    .filter((e) => marketOf(e) === market && Number(e.context.oracle?.price) > 0 && Number(e.context.pool?.price) > 0 && e.at >= now - 6 * 3600 && !clean(e.rationale).startsWith("[rogue]"))
+    .map((e) => ({ t: e.at, g: ((Number(e.context.oracle.price) - Number(e.context.pool.price)) / Number(e.context.pool.price)) * 10_000 }))
     .filter((p) => Math.abs(p.g) < 1500)
     .sort((a, b) => a.t - b.t);
   if (live !== null) pts.push({ t: now, g: live });
@@ -329,7 +328,7 @@ function MarketsLoading() {
         {[0, 1].map((i) => <div key={i} className="card" style={{ height: 120 }}><Skeleton w="40%" h={16} /><Skeleton h={12} style={{ marginTop: 40 }} /></div>)}
       </div>
       <div className="card" style={{ height: 150 }}>{[0, 1, 2, 3].map((i) => <Skeleton key={i} h={12} style={{ margin: "14px 0" }} />)}</div>
-      <div className="xs fg2 c">Reading Supra, the pool TWAP and HashKey Global…</div>
+      <div className="xs fg2 c">Reading Supra, the pool and its TWAP…</div>
     </div>
   );
 }

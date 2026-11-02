@@ -316,7 +316,6 @@ function Record({ id }: { id: string }) {
   const next = idx > 0 ? visible[idx - 1] : undefined;
   const sig = ctx.signal;
   const oracleDev = ctx.pool.deviationBps;
-  const cex = ctx.cex;
   const tradeLike = !!(e.intent || prop?.intent);
   const intent = e.intent ?? prop?.intent;
 
@@ -338,8 +337,9 @@ function Record({ id }: { id: string }) {
     `Exposure ≤ ${lim ? money(Number(lim.maxExposureUsdE8) / 1e8, 0) : "$150"}`,
   ];
   const failed = e.verdict.ok ? -1 : (CODE_CHECK[e.verdict.code] ?? -2);
-  const gapBps = sig ? sig.edgeBps : cex ? ((Number(cex.mid) - Number(ctx.pool.price)) / Number(ctx.pool.price)) * 10_000 : null;
-  const costBps = sig ? sig.costBps : cex ? 30 + (ctx.quote?.impactBps ?? 0) + cex.halfSpreadBps : null;
+  // Without a signal record, the gap is the pool vs the on-chain oracle price (positive = pool cheaper).
+  const gapBps = sig ? sig.edgeBps : Number(ctx.oracle.price) > 0 ? -oracleDev : null;
+  const costBps = sig ? sig.costBps : gapBps !== null ? 30 + (ctx.quote?.impactBps ?? 0) : null;
   const story = buildStory({ e, prop, exec, mk, ctx, intent, notional, gapBps, costBps, lim, generator: sig?.generator });
   const why = splitReasoning(clean((prop ?? e).thesis ? `${(prop ?? e).thesis}\n${(prop ?? e).rationale}` : (prop ?? e).rationale));
 
@@ -420,9 +420,9 @@ function Record({ id }: { id: string }) {
               <Badge tone={Math.abs(oracleDev) <= (lim?.maxOracleDeviationBps ?? 250) ? "ok" : "bad"}>{oracleDev > 0 ? "+" : oracleDev < 0 ? "−" : ""}{Math.abs(oracleDev)} bps vs oracle · max {lim?.maxOracleDeviationBps ?? 250}</Badge>
             </div>
             <div>
-              <div className="lbl" style={{ color: "var(--sage)" }}>HashKey Global mid</div>
-              <div className="pv num" style={{ color: "var(--y)" }}>{cex ? price8(cex.mid) : "—"}</div>
-              {cex && <Badge>half-spread {cex.halfSpreadBps} bps · depth {money(Number(cex.topDepthUsd), 0)}</Badge>}
+              <div className="lbl" style={{ color: "var(--sage)" }}>Pool TWAP</div>
+              <div className="pv num" style={{ color: "var(--y)" }}>{ctx.pool.twap ? price8(ctx.pool.twap) : "—"}</div>
+              {ctx.pool.twap && <Badge>300 s · {ctx.pool.twapDeviationBps > 0 ? "+" : ctx.pool.twapDeviationBps < 0 ? "−" : ""}{Math.abs(ctx.pool.twapDeviationBps)} bps vs oracle</Badge>}
             </div>
           </div>
         </section>
@@ -516,8 +516,8 @@ function buildStory(o: {
     gapBps === null || costBps === null
       ? ""
       : gapBps > 0
-        ? ` The pool was ${pct(gapBps)} cheaper than HashKey Global; costs were ${pct(costBps)}, so ${edge! >= 0 ? `about ${pct(edge!)} was left as edge` : "there was no edge left"}.`
-        : ` The pool was ${pct(gapBps)} dearer than HashKey Global; costs were ${pct(costBps)}.`;
+        ? ` The pool was ${pct(gapBps)} cheaper than the reference price (the on-chain oracle by default); costs were ${pct(costBps)}, so ${edge! >= 0 ? `about ${pct(edge!)} was left as edge` : "there was no edge left"}.`
+        : ` The pool was ${pct(gapBps)} dearer than the reference price (the on-chain oracle by default); costs were ${pct(costBps)}.`;
   const rebalance = o.generator === "rebalance" ? " This was a rebalance toward your target mix, not a price bet." : "";
   const refused = !e.verdict.ok || !!exec?.execution?.reverted;
   const reason = REASON[e.verdict.code] ?? (e.verdict.message ? clean(e.verdict.message) : "the vault said no");
@@ -547,8 +547,8 @@ function buildStory(o: {
   if (intent) rows.push(["Budget left today", money(Math.max(0, Number(ctx.policy.epochRemainingUsd) - (refused ? 0 : notional)))]);
 
   const checks: [CheckState, string][] = [];
-  const cexFresh = ctx.cex && Math.abs(e.at - ctx.cex.at) < 300;
-  checks.push(ctx.cex ? [cexFresh ? "ok" : "warn", cexFresh ? "Price confirmed on HashKey Global" : "HashKey Global price was a few minutes old"] : ["warn", "No HashKey Global price to confirm against"]);
+  const oracleFresh = Number(ctx.oracle.price) > 0 && ctx.oracle.ageSec <= (lim?.maxOracleAge ?? 3600);
+  checks.push(Number(ctx.oracle.price) > 0 ? [oracleFresh ? "ok" : "warn", oracleFresh ? "Price confirmed by the on-chain oracle" : "The on-chain oracle price was old"] : ["warn", "No on-chain oracle price to confirm against"]);
   if (intent) {
     const inside = notional <= Number(ctx.policy.maxTradeUsd) && notional <= Number(ctx.policy.epochRemainingUsd) + 0.005;
     checks.push([inside ? "ok" : "bad", inside ? "Inside your vault limits" : "Over a vault limit"]);
