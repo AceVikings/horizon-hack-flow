@@ -23,8 +23,9 @@ clear thing, let the user ask for more. This brief overrides layout density in t
 | **Activity** | Decisions, trades and positions in one plain timeline |
 | ⋯ menu | Safety & proof, Tools & guides, Accounts, Settings, Payments (greyed) |
 
-Remove the always-on right inspector and the dense evidence footer. Keep a slim status bar:
-network · vaults OK/paused · agent running/stopped · "Details" link.
+Remove the always-on right inspector. **No footer of any kind** — no evidence footer, no status
+bar, nothing pinned to the bottom of the window. Network, vault and agent status live on Home
+(one sentence) and in the ⋯ menu; Pro mode does not bring the footer back.
 
 ## Home
 
