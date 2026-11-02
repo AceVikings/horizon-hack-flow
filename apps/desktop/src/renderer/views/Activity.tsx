@@ -9,7 +9,7 @@ import { useApp, useRemote } from "../src/app";
 import { PageHead, useMode, useNav } from "../src/shell";
 import { Btn, Empty, ErrorBox, Seg, Skeleton } from "../src/ui";
 import { dayKey, dayName, hm, money, tokenAmt } from "../src/format";
-import { clean, decidedBy, marketOf, tradeLine } from "../src/journal";
+import { REASON, clean, decidedBy, marketOf, tradeLine } from "../src/journal";
 
 export default function Activity({ params }: ViewProps) {
   const [mode] = useMode();
@@ -26,20 +26,6 @@ export default function Activity({ params }: ViewProps) {
   );
 }
 
-const REASON: Record<string, string> = {
-  ATE_POLICY_COOLDOWN: "too soon after the last trade",
-  ATE_POLICY_EPOCH_CAP: "today's budget is used up",
-  ATE_POLICY_TRADE_CAP: "over the per-trade limit",
-  ATE_POLICY_EXPOSURE: "it would hold too much",
-  ATE_ORACLE_DEVIATION: "the pool price was too far from the oracle",
-  ATE_ORACLE_STALE: "the oracle price was too old",
-  ATE_POLICY_PAUSED: "trading is paused",
-  ATE_STRATEGY_BLOCKED: "your strategy doesn't allow it",
-  ATE_SLIPPAGE: "the price moved too much",
-  ATE_TOOL_NOT_ALLOWED: "that key isn't allowed to do it",
-  ATE_POLICY_NOT_AGENT: "that key isn't allowed to do it",
-  ATE_INSUFFICIENT_BALANCE: "not enough funds in the vault",
-};
 
 /** One plain sentence per record (no bps, hashes or codes). null = not shown in the simple timeline. */
 function plain(e: JournalEntry): { icon: string; text: string; tone: "ok" | "bad" | "" } | null {

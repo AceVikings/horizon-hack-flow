@@ -3,10 +3,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { MARKETS, MARKET_IDS, type JournalEntry, type MarketId } from "@ate/core";
 import type { ViewProps } from "./registry";
 import { useApp, useRemote } from "../src/app";
-import { ContextPanel, Inspector, PageHead, useNav } from "../src/shell";
-import { Badge, Btn, Card, Empty, ErrorBox, Eyebrow, Gauge, KV, Link, Pill, Skeleton, TxLink } from "../src/ui";
+import { ContextPanel, Inspector, PageHead, useMode, useNav } from "../src/shell";
+import { Badge, Btn, Card, Check, Empty, ErrorBox, Eyebrow, Gauge, KV, Link, Pill, Skeleton, TxLink } from "../src/ui";
 import { clock, dayKey, dayName, explorer, int, money, price8, short, tokenAmt } from "../src/format";
-import { SHOW, clean, decidedBy, kindLabel, marketOf, result, summary, tag, tradeLine, type ShowKey } from "../src/journal";
+import { REASON, SHOW, clean, decidedBy, kindLabel, marketOf, result, summary, tag, tradeLine, type ShowKey } from "../src/journal";
 
 const HIDDEN = new Set(["attestation", "oracle_refresh", "payment_update"]);
 const SHOW_LABEL: Record<ShowKey, string> = { all: "All", trades: "Trades", notrade: "No trade", rejected: "Rejected", exit: "Exit path", discretionary: "Discretionary", you: "You" };
@@ -290,10 +290,11 @@ const CODE_CHECK: Record<string, number> = {
 
 function Record({ id }: { id: string }) {
   const { ate, mkOk, vsOk } = useApp();
+  const [mode] = useMode();
+  const [showWhy, setShowWhy] = useState(false);
   const go = useNav();
   const { entries } = useJournal();
   const r = useRemote(() => ate.journal.get(id), [id], { onEvents: false });
-  const strat = useRemote(() => ate.strategy.get(), [], { onEvents: false });
   const e = r.last;
   if (r.res && !r.res.ok) return <><PageHead title="Record" crumb={<><button className="linkbtn" onClick={() => go("activity")}>Decisions</button> / {id}</>} /><ErrorBox code={r.res.error.code} message="Can't read this record" hint={r.res.error.message} /></>;
   if (!e) return <div aria-busy="true" style={{ paddingTop: 26 }}><Skeleton w={420} h={52} /><Skeleton h={150} style={{ marginTop: 24, borderRadius: 14 }} /></div>;
@@ -307,7 +308,6 @@ function Record({ id }: { id: string }) {
   const att = entries.find((x) => x.kind === "attestation" && x.refId === propId);
   const ctx = (prop ?? e).context;
   const lim = mkOk?.find((x) => x.market === m)?.vault.limits;
-  const ms = m ? strat.last?.strategy.markets[m] : undefined;
   const p = m ? vsOk?.positions.markets.find((x) => x.market === m) : undefined;
   const res = result(e);
   const visible = entries.filter((x) => !HIDDEN.has(x.kind));
@@ -338,12 +338,15 @@ function Record({ id }: { id: string }) {
     `Exposure ≤ ${lim ? money(Number(lim.maxExposureUsdE8) / 1e8, 0) : "$150"}`,
   ];
   const failed = e.verdict.ok ? -1 : (CODE_CHECK[e.verdict.code] ?? -2);
-  const reverted = !!exec?.execution?.reverted;
+  const gapBps = sig ? sig.edgeBps : cex ? ((Number(cex.mid) - Number(ctx.pool.price)) / Number(ctx.pool.price)) * 10_000 : null;
+  const costBps = sig ? sig.costBps : cex ? 30 + (ctx.quote?.impactBps ?? 0) + cex.halfSpreadBps : null;
+  const story = buildStory({ e, prop, exec, mk, ctx, intent, notional, gapBps, costBps, lim, generator: sig?.generator });
+  const why = splitReasoning(clean((prop ?? e).thesis ? `${(prop ?? e).thesis}\n${(prop ?? e).rationale}` : (prop ?? e).rationale));
 
   return (
     <>
       <PageHead
-        crumb={<><button className="linkbtn" onClick={() => go("activity")}>Decisions</button> / {clock(e.at)} · {mk ? `${mk.base}/${mk.quote}` : "portfolio"} · {e.id}</>}
+        crumb={<><button className="linkbtn" onClick={() => go("activity")}>Activity</button> / {clock(e.at)} · {mk ? `${mk.base}/${mk.quote}` : "portfolio"}{mode === "pro" ? ` · ${e.id}` : ""}</>}
         title={headline(e).replace(/ \S+$/, "")}
         hl={headline(e).split(" ").pop()}
         sub={subline(e, mk?.label)}
@@ -355,66 +358,78 @@ function Record({ id }: { id: string }) {
           </>
         }
       />
-      <section className="card dk" style={{ padding: "18px 24px" }} aria-label="Prices at the decision">
-        <div className="row sb">
-          <div className="eb">Prices at the decision</div>
-          <span className="xs" style={{ color: "var(--sage)" }}>block {int(ctx.blockNumber)} · {clock((prop ?? e).at)}</span>
-        </div>
-        <div className="px3" style={{ marginTop: 12 }}>
-          <div>
-            <div className="lbl" style={{ color: "var(--sage)" }}>Supra oracle</div>
-            <div className="pv num">{price8(ctx.oracle.price)}</div>
-            <Badge tone={lim && ctx.oracle.ageSec > lim.maxOracleAge ? "bad" : "ok"}>{Math.round(ctx.oracle.ageSec / 60)} min old · max {lim ? Math.round(lim.maxOracleAge / 3600) : 25} h</Badge>
-          </div>
-          <div>
-            <div className="lbl" style={{ color: "var(--sage)" }}>HSKSwap pool</div>
-            <div className="pv num">{price8(ctx.pool.price)}</div>
-            <Badge tone={Math.abs(oracleDev) <= (lim?.maxOracleDeviationBps ?? 250) ? "ok" : "bad"}>{oracleDev > 0 ? "+" : oracleDev < 0 ? "−" : ""}{Math.abs(oracleDev)} bps vs oracle · max {lim?.maxOracleDeviationBps ?? 250}</Badge>
-          </div>
-          <div>
-            <div className="lbl" style={{ color: "var(--sage)" }}>HashKey Global mid</div>
-            <div className="pv num" style={{ color: "var(--y)" }}>{cex ? price8(cex.mid) : "—"}</div>
-            {cex && <Badge>half-spread {cex.halfSpreadBps} bps · depth {money(Number(cex.topDepthUsd), 0)}</Badge>}
-          </div>
-        </div>
-      </section>
-
-      <div className="grid" style={{ gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", marginTop: 16 }}>
-        <Card title="Why" right={<span className="xs fg2">{decidedBy(e) === "AI" ? "AI rationale" : "rationale"} · hash {exec ? "on-chain" : "in journal"}</span>}>
-          <p style={{ fontSize: 14, lineHeight: 1.55, background: "rgba(255,225,124,.22)", borderRadius: 10, padding: "10px 14px", maxHeight: 190, overflow: "auto" }}>{clean((prop ?? e).rationale)}</p>
-          {(prop ?? e).thesis && <p className="sm fg2 mt8"><b>Thesis:</b> {clean((prop ?? e).thesis)}</p>}
-          {sig && (
-            <>
-              <div className="lbl" style={{ marginTop: 16 }}>Gap vs cost</div>
-              <Gauge cost={Math.round(sig.costBps)} gap={Math.round(sig.edgeBps)} under={`net ${sig.edgeBps - sig.costBps >= 0 ? "+" : "−"}${Math.abs(Math.round(sig.edgeBps - sig.costBps))} bps`} />
-              <div className="row g6" style={{ flexWrap: "wrap", marginTop: 6 }}>
-                {ctx.quote && <Badge glyph="">impact {ctx.quote.impactBps} bps</Badge>}
-                {ms && <Badge glyph="">min net edge {ms.minNetEdgeBps}</Badge>}
-                <Badge glyph="" className="mono">{sig.id}</Badge>
-              </div>
-            </>
-          )}
-        </Card>
-        <Card title="Vault checks" right={tradeLike ? failed === -1 ? reverted ? <Badge tone="bad">reverted on-chain</Badge> : <Badge tone="ok">13 of 13 passed</Badge> : failed === -2 ? <Badge tone="warn">blocked off-chain</Badge> : <Badge tone="bad">refused: {checks[failed]!.split(" ")[0]}</Badge> : <Badge>not a trade</Badge>}>
-          {tradeLike ? (
-            <>
-              <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: "0 18px" }}>
-                {checks.map((c, i) => (
-                  <div key={i} className="row g8 xs" style={{ padding: "4px 0", borderBottom: "1px solid var(--line)" }}>
-                    {failed === i ? <span className="bad b7" aria-label="failed">✕</span> : failed === -1 || i < failed ? <span className="ok b7" aria-label="passed">✓</span> : <span className="fg2" aria-label="not reached">·</span>}
-                    {c}
-                  </div>
-                ))}
-              </div>
-              {!e.verdict.ok && <p className="xs mt8"><b>{e.verdict.code}</b> {e.verdict.message ? "· " + clean(e.verdict.message) : ""}</p>}
-            </>
+      <p className="sentence" style={{ fontSize: 20, margin: "4px 0 20px" }}>{story.sentence}</p>
+      <div className="grid" style={{ gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)" }}>
+        <Card title="The numbers">
+          {story.rows.length ? (
+            story.rows.map(([k, v, cls]) => <KV key={k} k={k} vClass={cls}>{v}</KV>)
           ) : (
-            <p className="sm fg2">{e.kind === "no_trade" ? "No trade was proposed, so the vault was never asked. The reason above is journalled with its hash." : e.kind === "strategy_change" ? "A strategy change runs off-chain; tighter changes apply at once, looser ones need Touch ID." : "No vault call for this record."}</p>
+            <p className="sm fg2">No prices were needed for this record.</p>
+          )}
+          {gapBps !== null && costBps !== null && <Gauge cost={Math.round(costBps)} gap={Math.max(0, Math.round(gapBps))} under={`edge ${pctS(gapBps - costBps)}`} fmt={pct} />}
+        </Card>
+        <Card title="Checks">
+          {story.checks.map(([state, text], i) => (
+            <Check key={i} state={state}>{text}</Check>
+          ))}
+          {mode === "pro" && tradeLike && (
+            <details style={{ marginTop: 10 }}>
+              <summary className="disclose">All 13 vault checks</summary>
+              <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: "0 18px" }}>
+                  {checks.map((c, i) => (
+                    <div key={i} className="row g8 xs" style={{ padding: "4px 0", borderBottom: "1px solid var(--line)" }}>
+                      {failed === i ? <span className="bad b7" aria-label="failed">✕</span> : failed === -1 || i < failed ? <span className="ok b7" aria-label="passed">✓</span> : <span className="fg2" aria-label="not reached">·</span>}
+                      {c}
+                    </div>
+                  ))}
+                </div>
+              {!e.verdict.ok && <p className="xs mt8"><b>{e.verdict.code}</b> {e.verdict.message ? "· " + clean(e.verdict.message) : ""}</p>}
+            </details>
           )}
         </Card>
       </div>
+      <section className="card" style={{ marginTop: 16 }} aria-label="AI's reasoning">
+        <button className="disclose" aria-expanded={showWhy} onClick={() => setShowWhy((x) => !x)}>
+          <span aria-hidden="true">{showWhy ? "▾" : "▸"}</span> {showWhy ? "Hide reasoning" : decidedBy(e) === "AI" ? "Show the AI's reasoning" : "Show the reasoning"}
+        </button>
+        {why.summary && <p style={{ fontSize: 14, marginTop: 6 }}>{why.summary}</p>}
+        {showWhy && (
+          <ul style={{ margin: "10px 0 0", paddingLeft: 18, fontSize: 13.5, lineHeight: 1.6, maxHeight: 360, overflowY: "auto" }}>
+            {why.bullets.map((t, i) => <li key={i} style={{ marginBottom: 4 }}>{t}</li>)}
+          </ul>
+        )}
+        <p className="xs fg2" style={{ marginTop: 10 }}>
+          {exec?.execution ? <>A fingerprint of this text is stored on-chain with the trade · <Link href={explorer.tx(exec.execution.txHash)} mono>{short(exec.execution.txHash, 6, 4)}</Link></> : "A fingerprint of this text is kept in the tamper-evident journal."}
+        </p>
+      </section>
+      {mode === "pro" && <div style={{ marginTop: 16 }}>
+      <section className="card dk" style={{ padding: "18px 24px" }} aria-label="Prices at the decision">
+          <div className="row sb">
+            <div className="eb">Prices at the decision</div>
+            <span className="xs" style={{ color: "var(--sage)" }}>block {int(ctx.blockNumber)} · {clock((prop ?? e).at)}</span>
+          </div>
+          <div className="px3" style={{ marginTop: 12 }}>
+            <div>
+              <div className="lbl" style={{ color: "var(--sage)" }}>Supra oracle</div>
+              <div className="pv num">{price8(ctx.oracle.price)}</div>
+              <Badge tone={lim && ctx.oracle.ageSec > lim.maxOracleAge ? "bad" : "ok"}>{Math.round(ctx.oracle.ageSec / 60)} min old · max {lim ? Math.round(lim.maxOracleAge / 3600) : 25} h</Badge>
+            </div>
+            <div>
+              <div className="lbl" style={{ color: "var(--sage)" }}>HSKSwap pool</div>
+              <div className="pv num">{price8(ctx.pool.price)}</div>
+              <Badge tone={Math.abs(oracleDev) <= (lim?.maxOracleDeviationBps ?? 250) ? "ok" : "bad"}>{oracleDev > 0 ? "+" : oracleDev < 0 ? "−" : ""}{Math.abs(oracleDev)} bps vs oracle · max {lim?.maxOracleDeviationBps ?? 250}</Badge>
+            </div>
+            <div>
+              <div className="lbl" style={{ color: "var(--sage)" }}>HashKey Global mid</div>
+              <div className="pv num" style={{ color: "var(--y)" }}>{cex ? price8(cex.mid) : "—"}</div>
+              {cex && <Badge>half-spread {cex.halfSpreadBps} bps · depth {money(Number(cex.topDepthUsd), 0)}</Badge>}
+            </div>
+          </div>
+        </section>
 
-      {exec?.execution && (
+      </div>}
+
+      {mode === "pro" && exec?.execution && (
         <section className="card" style={{ marginTop: 16, padding: "14px 20px" }} aria-label="Transaction">
           <div className="grid" style={{ gridTemplateColumns: "2.1fr 1fr 1fr 1fr 1fr", gap: 18 }}>
             <div><div className="lbl">Trade tx</div><div className="mono mt4" style={{ fontSize: 11, wordBreak: "break-all" }}><Link href={explorer.tx(exec.execution.txHash)} mono>{exec.execution.txHash}</Link></div></div>
@@ -474,3 +489,91 @@ function subline(e: JournalEntry, mlabel?: string): string {
   return `${tl ? tl + (mlabel ? ` · Vault-${mlabel}` : "") + " · " : ""}${by}${appr}`;
 }
 
+
+// ---------------------------------------------------------------- plain-language story for a record
+
+const pctS = (bps: number): string => `${bps < 0 ? "−" : ""}${(Math.abs(bps) / 100).toFixed(2)}%`;
+const pct = (bps: number): string => `${(Math.abs(bps) / 100).toFixed(2)}%`;
+
+type CheckState = "ok" | "bad" | "warn" | "q";
+function buildStory(o: {
+  e: JournalEntry;
+  prop?: JournalEntry;
+  exec?: JournalEntry;
+  mk?: (typeof MARKETS)[MarketId];
+  ctx: JournalEntry["context"];
+  intent?: JournalEntry["intent"];
+  notional: number;
+  gapBps: number | null;
+  costBps: number | null;
+  lim?: { maxOracleAge: number; maxOracleDeviationBps: number; maxExposureUsdE8: string };
+  generator?: string;
+}): { sentence: string; rows: [string, string, string?][]; checks: [CheckState, string][] } {
+  const { e, exec, mk, ctx, intent, notional, gapBps, costBps, lim } = o;
+  const label = mk?.label ?? "the market";
+  const edge = gapBps !== null && costBps !== null ? gapBps - costBps : null;
+  const gapLine =
+    gapBps === null || costBps === null
+      ? ""
+      : gapBps > 0
+        ? ` The pool was ${pct(gapBps)} cheaper than HashKey Global; costs were ${pct(costBps)}, so ${edge! >= 0 ? `about ${pct(edge!)} was left as edge` : "there was no edge left"}.`
+        : ` The pool was ${pct(gapBps)} dearer than HashKey Global; costs were ${pct(costBps)}.`;
+  const rebalance = o.generator === "rebalance" ? " This was a rebalance toward your target mix, not a price bet." : "";
+  const refused = !e.verdict.ok || !!exec?.execution?.reverted;
+  const reason = REASON[e.verdict.code] ?? (e.verdict.message ? clean(e.verdict.message) : "the vault said no");
+  let sentence = "";
+  if (intent && mk) {
+    const amt = intent.side === "buy" ? `${money(notional)} of ${label}` : `${tokenAmt(intent.amountIn, mk.baseDecimals)} ${mk.base}`;
+    const done = exec?.execution && !exec.execution.reverted;
+    if (refused) sentence = `Wanted to ${intent.side} ${amt}, but it didn't go through: ${reason}.`;
+    else if (done) sentence = `${intent.side === "buy" ? "Bought" : "Sold"} ${amt}${intent.side === "sell" ? ` for ${money(Number(exec!.execution!.amountOut) / 1e6)}` : ""}.${gapLine}${rebalance}`;
+    else sentence = `Planned to ${intent.side} ${amt}.${gapLine}${rebalance}`;
+  } else if (e.kind === "no_trade") {
+    sentence = `${e.verdict.message === "llm_veto" ? `The AI turned down a ${label} trade.` : `No trade on ${label}.`}${gapBps !== null && costBps !== null ? ` The price gap (${pct(gapBps)}) ${edge! > 0 ? "beat" : "didn't beat"} the cost of trading (${pct(costBps)}).` : ""}`;
+  } else if (e.kind === "strategy_change") sentence = `You changed the strategy: “${clean(e.rationale).replace(/\.$/, "")}”.`;
+  else if (e.kind === "pause") sentence = "Trading was paused on both vaults.";
+  else if (e.kind === "outcome" && e.outcome) sentence = `Thirty minutes after a skipped trade, skipping it ${e.outcome.savedBps >= 0 ? "saved" : "cost"} ${money(Math.abs(Number(e.outcome.savedUsd)))}.`;
+  else sentence = clean(e.rationale).split(/(?<=[.!?])\s+/)[0] ?? "";
+
+  const rows: [string, string, string?][] = [];
+  if (gapBps !== null) rows.push(["Price gap", `${pct(gapBps)} ${gapBps >= 0 ? "pool cheaper" : "pool dearer"}`]);
+  if (costBps !== null) rows.push(["Trading cost", pct(costBps)]);
+  if (edge !== null) rows.push(["Edge after costs", pctS(edge), edge >= 0 ? "ok b7" : "bad b7"]);
+  if (intent && ctx.position && mk) {
+    const before = (Number(ctx.position.qty) / 10 ** mk.baseDecimals) * (Number(ctx.position.mark) / 1e8);
+    const after = intent.side === "buy" ? before + notional : Math.max(0, before - notional);
+    rows.push(["Exposure after trade", `${money(after)}${lim ? ` of ${money(Number(lim.maxExposureUsdE8) / 1e8, 0)}` : ""}`]);
+  }
+  if (intent) rows.push(["Budget left today", money(Math.max(0, Number(ctx.policy.epochRemainingUsd) - (refused ? 0 : notional)))]);
+
+  const checks: [CheckState, string][] = [];
+  const cexFresh = ctx.cex && Math.abs(e.at - ctx.cex.at) < 300;
+  checks.push(ctx.cex ? [cexFresh ? "ok" : "warn", cexFresh ? "Price confirmed on HashKey Global" : "HashKey Global price was a few minutes old"] : ["warn", "No HashKey Global price to confirm against"]);
+  if (intent) {
+    const inside = notional <= Number(ctx.policy.maxTradeUsd) && notional <= Number(ctx.policy.epochRemainingUsd) + 0.005;
+    checks.push([inside ? "ok" : "bad", inside ? "Inside your vault limits" : "Over a vault limit"]);
+  }
+  const ageOk = !lim || ctx.oracle.ageSec <= lim.maxOracleAge;
+  const devOk = !lim || Math.abs(ctx.pool.deviationBps) <= lim.maxOracleDeviationBps;
+  const ageTxt = ctx.oracle.ageSec >= 3600 ? `${(ctx.oracle.ageSec / 3600).toFixed(1)} h old` : `${Math.max(1, Math.round(ctx.oracle.ageSec / 60))} min old`;
+  checks.push([ageOk && devOk ? "ok" : "bad", `Oracle ${ageOk && devOk ? "within range" : "out of range"} (${ageTxt})`]);
+  if (intent) checks.push(refused ? ["bad", `Vault check failed: ${reason}`] : exec?.execution ? ["ok", "Vault check passed"] : ["q", "Not sent to the vault yet"]);
+  else if (e.kind === "no_trade") checks.push(["q", "Nothing was sent to the vault"]);
+  return { sentence, rows, checks };
+}
+
+/** "Summary: …" first line → summary; the rest split into short bullets at sentence boundaries (no clipping). */
+function splitReasoning(text: string): { summary: string | null; bullets: string[] } {
+  let t = text.trim();
+  let summary: string | null = null;
+  const m = /^summary:\s*(.+?)(?:\n|(?<=[.!?])\s|$)/i.exec(t);
+  if (m) {
+    summary = m[1]!.trim();
+    t = t.slice(m[0].length).trim();
+  }
+  const bullets = t
+    .split(/\n+|(?<=[.!?])\s+(?=[A-Z(“"])/)
+    .map((x) => x.replace(/^[-•*]\s*/, "").trim())
+    .filter(Boolean);
+  return { summary, bullets };
+}

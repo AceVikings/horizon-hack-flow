@@ -433,7 +433,7 @@ export function QR({ data, size = 120, pad = 10, label }: { data: string; size?:
 }
 
 /** Gap-vs-cost gauge (Markets, Decision record): cost hatched in red, gap in yellow, labels above/below. */
-export function Gauge({ cost, gap, max, under }: { cost: number; gap: number; max?: number; under?: ReactNode }) {
+export function Gauge({ cost, gap, max, under, fmt = (v: number) => String(v) }: { cost: number; gap: number; max?: number; under?: ReactNode; fmt?(bps: number): string }) {
   const top = Math.max(max ?? 0, gap * 1.35, cost * 1.6, 40);
   const pc = (v: number) => `${Math.max(0, Math.min(100, (v / top) * 100))}%`;
   const net = gap - cost;
@@ -443,10 +443,10 @@ export function Gauge({ cost, gap, max, under }: { cost: number; gap: number; ma
       <div className="cost" style={{ left: 0, width: pc(cost) }} />
       {gap > cost && <div className="gp" style={{ left: pc(cost), width: `calc(${pc(gap)} - ${pc(cost)})` }} />}
       <span className="lab" style={{ left: `calc(${pc(cost)} / 2)`, color: "var(--bad)" }}>
-        cost {cost}
+        cost {fmt(cost)}
       </span>
       <span className="lab" style={{ left: `calc(${pc(gap)} - 2%)` }}>
-        gap {gap}
+        gap {fmt(gap)}
       </span>
       {under && <span className="lab2" style={{ left: "50%" }}>{under}</span>}
     </div>
