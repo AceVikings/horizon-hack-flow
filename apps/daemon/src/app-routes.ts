@@ -22,7 +22,7 @@ import { createPublicClient, http as viemHttp, type Address, type Hex, type Publ
 import { chatMcpSpec } from "./chat.js";
 import { randomBytes } from "node:crypto";
 import { configPayload, type ApprovalPayload } from "@ate/approve";
-import { DEFAULT_MODEL, type AiConfig, type AiEngine } from "./engine.js";
+import { DEFAULT_MODEL, findClaudeBin, type AiConfig, type AiEngine } from "./engine.js";
 import { PROVIDERS, PROVIDER_IDS, isProviderId, type ProviderId } from "./providers.js";
 import { createSdkTraderExecutor } from "./engine-agents.js";
 import type { Routes, TokenRegistry } from "./http.js";
@@ -161,7 +161,7 @@ class TraderSupervisor {
       engine === "rules"
         ? t.createRulesExecutor(getTools, { markets, dryRun, log })
         : viaCli
-          ? t.createClaudeExecutor({ promptFile: t.TRADER_PROMPT_PATH, mcp: chatMcpSpec(this.o.home, this.token), dryRun, context, model, effort: this.o.ai.config.traderEffort === "high" ? "high" : this.o.ai.config.traderEffort, log })
+          ? t.createClaudeExecutor({ claudeBin: findClaudeBin() ?? "claude", promptFile: t.TRADER_PROMPT_PATH, mcp: chatMcpSpec(this.o.home, this.token), dryRun, context, model, effort: this.o.ai.config.traderEffort === "high" ? "high" : this.o.ai.config.traderEffort, log })
           : createSdkTraderExecutor({ ai: this.o.ai, service: svc, promptFile: t.TRADER_PROMPT_PATH, toolNames, dryRun, context, log });
     const cyclesFile = join(this.o.home, "trader-cycles.jsonl");
     const runner = new t.TraderRunner({

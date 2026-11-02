@@ -44,7 +44,8 @@ function AiPart({ onState, rules, setRules }: { onState(ok: boolean): void; rule
       if (r.data.credential !== "none" && !r.data.lastCheck) void ate.ai!.check().then((c) => c.ok && setH(c.data));
     });
   }, [ate]);
-  const ok = !!h && h.credential !== "none" && h.lastCheck?.reachable !== false;
+  const cli = !!h && h.engine === "claude-code" && !!h.claudeCli;
+  const ok = cli || (!!h && h.credential !== "none" && h.lastCheck?.reachable !== false);
   useEffect(() => onState(ok), [ok, onState]);
   const save = async () => {
     if (!ate.ai) return;
@@ -55,6 +56,15 @@ function AiPart({ onState, rules, setRules }: { onState(ok: boolean): void; rule
     setBusy(false);
     if (!r.ok) return setError(r.error);
     setH(r.data);
+  };
+  const useEngine = async (engine: "sdk" | "claude-code") => {
+    setBusy(true);
+    setError(null);
+    const r = await ate.ai!.config({ engine });
+    const c = r.ok ? await ate.ai!.check() : r;
+    setBusy(false);
+    if (!c.ok) return setError(c.error);
+    setH(c.data);
   };
   const recheck = async () => {
     setBusy(true);
@@ -68,6 +78,13 @@ function AiPart({ onState, rules, setRules }: { onState(ok: boolean): void; rule
         <p className="sm fg2" style={{ marginTop: 8 }}>The AI engine is not available in this build.</p>
       ) : !h ? (
         <div style={{ marginTop: 12 }}><Spinner label="Looking for an account…" /></div>
+      ) : cli ? (
+        <div className="row g12" style={{ marginTop: 12 }}>
+          <span className="sm">{h.modelLabel} · Claude Code on this Mac</span>
+          <StatusText tone="ok">ready</StatusText>
+          <span className="grow" />
+          <button className="linkbtn sm" disabled={busy} onClick={() => void useEngine("sdk")}>Use an API key instead</button>
+        </div>
       ) : h.credential === "none" ? (
         <>
           <div className="row g12" style={{ marginTop: 14 }}>
@@ -75,6 +92,11 @@ function AiPart({ onState, rules, setRules }: { onState(ok: boolean): void; rule
             <Btn kind="solid" disabled={busy || !/^sk-ant-/.test(key.trim())} onClick={() => void save()}>{busy ? "Checking…" : "Save"}</Btn>
           </div>
           <div className="xs fg2" style={{ marginTop: 6 }}>Kept in your macOS keychain. Never shown again.</div>
+          {h.claudeCli && (
+            <Btn size="sm" disabled={busy} style={{ marginTop: 12 }} onClick={() => void useEngine("claude-code")}>
+              Use Claude Code on this Mac
+            </Btn>
+          )}
           <label className="row g10 sm" style={{ marginTop: 12, cursor: "pointer" }}>
             <input type="checkbox" checked={rules} onChange={(e) => setRules(e.target.checked)} style={{ width: 18, height: 18, accentColor: "#171e19" }} />
             Start without AI for now: a simple rules trader runs until you add an account.

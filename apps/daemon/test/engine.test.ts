@@ -161,6 +161,16 @@ describe("AiEngine", () => {
     expect(ai2.configured("proxy")).toBe(true);
     expect(ai2.providers().find((p) => p.id === "proxy")!.warning).toMatch(/terms/);
   });
+
+  it("claude-code engine: health names the CLI, check() only looks for it (no API key needed)", async () => {
+    const h = home();
+    const bin = join(h, "claude");
+    writeFileSync(bin, "#!/bin/sh\n", { mode: 0o755 });
+    const ai = new AiEngine(h, { ATE_KEYSTORE: "file", ATE_CLAUDE_BIN: bin, PATH: "" });
+    expect(ai.health()).toMatchObject({ credential: "none", claudeCli: bin });
+    ai.setConfig({ engine: "claude-code" });
+    expect((await ai.check()).lastCheck).toMatchObject({ reachable: true });
+  });
 });
 
 describe("OpenAI-compatible and Gemini loops", () => {

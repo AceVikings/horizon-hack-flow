@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 import { AteError, e8ToUsd, type TokenScope } from "@ate/core";
 import type { Routes, TokenRegistry } from "./http.js";
 import type { AteService } from "./service.js";
-import { describeAiError, type AiEngine } from "./engine.js";
+import { describeAiError, findClaudeBin, type AiEngine } from "./engine.js";
 import { runSdkChatTurn } from "./engine-agents.js";
 
 export interface ChatRoutesOptions {
@@ -68,7 +68,7 @@ async function defaultRunTurn(
   const mcp = chatMcpSpec(home, o.chatToken);
   // optional fallback: the Claude Code CLI engine
   if (process.env.ATE_CHAT_ENGINE !== "rules" && co.ai?.config.engine === "claude-code") {
-    const r = await chat.runChatTurn({ sessionId: o.claudeSession, firstTurn: o.firstTurn, text: o.text, mcp });
+    const r = await chat.runChatTurn({ claudeBin: findClaudeBin() ?? "claude", sessionId: o.claudeSession, firstTurn: o.firstTurn, text: o.text, mcp });
     if (r.ok) return { reply: r.reply, engine: "llm" };
   }
   let tools: Awaited<ReturnType<typeof trader.connectAte>> | null = null;

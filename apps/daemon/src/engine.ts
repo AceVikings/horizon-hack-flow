@@ -18,7 +18,8 @@ import type { BetaContentBlockParam, BetaMessage, BetaMessageParam, BetaTool, Be
 import type { Content } from "@google/genai";
 import OpenAI from "openai";
 import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import type { ToolName } from "@ate/core";
 import { TOOL_DEFINITIONS } from "@ate/mcp";
@@ -78,6 +79,8 @@ export interface AiHealth {
   chatEffort: Effort;
   lastCheck: { at: number; reachable: boolean; error?: { kind: string; message: string } } | null;
   lastUsage: { at: number; kind: "trader" | "chat"; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number } | null;
+  /** Path of the Claude Code CLI on this machine (the optional `engine: "claude-code"` runs it), or null. */
+  claudeCli: string | null;
 }
 export interface ProviderStatus {
   id: ProviderId;
@@ -92,6 +95,17 @@ export interface ProviderStatus {
   caps: { tools: boolean; streaming: boolean };
   health: { at: number; ok: boolean; error?: { kind: string; message: string } } | null;
   models: ModelInfo[];
+}
+
+/**
+ * The Claude Code CLI (`claude`), for the optional "claude-code" engine: ATE_CLAUDE_BIN, PATH, then the usual install
+ * dirs (an app opened from Finder has a minimal PATH).
+ */
+export function findClaudeBin(env: NodeJS.ProcessEnv = process.env): string | null {
+  if (env.ATE_CLAUDE_BIN && existsSync(env.ATE_CLAUDE_BIN)) return env.ATE_CLAUDE_BIN;
+  const dirs = [...(env.PATH ?? "").split(":"), join(homedir(), ".local/bin"), join(homedir(), ".claude/local"), "/opt/homebrew/bin", "/usr/local/bin"];
+  for (const d of dirs) if (d && existsSync(join(d, "claude"))) return join(d, "claude");
+  return null;
 }
 
 const isEffort = (e: unknown): e is Effort => e === "low" || e === "medium" || e === "high";
@@ -450,9 +464,16 @@ export class AiEngine {
       chatEffort: this.cfg.chatEffort,
       lastCheck: this.lastCheck,
       lastUsage: this.lastUsage,
+      claudeCli: findClaudeBin(this.env),
     };
   }
   async check(): Promise<AiHealth> {
+    if (this.cfg.engine === "claude-code") {
+      // the CLI brings its own login; Flow only checks that it is installed (no tokens spent)
+      const cli = findClaudeBin(this.env);
+      this.lastCheck = { at: nowSec(), reachable: !!cli, ...(cli ? {} : { error: { kind: "no_credentials", message: "Claude Code is not installed on this Mac" } }) };
+      return this.health();
+    }
     await this.test(this.cfg.provider);
     return this.health();
   }

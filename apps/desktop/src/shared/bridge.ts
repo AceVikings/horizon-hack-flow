@@ -178,6 +178,8 @@ export interface AiHealth {
   chatEffort: "low" | "medium" | "high";
   lastCheck: { at: number; reachable: boolean; error?: { kind: string; message: string } } | null;
   lastUsage: { at: number; kind: "trader" | "chat"; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number } | null;
+  /** Claude Code CLI found on this Mac (the optional "claude-code" engine runs it with its own login). */
+  claudeCli?: string | null;
 }
 export interface AiConfigPatch {
   model?: string;
