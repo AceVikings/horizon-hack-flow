@@ -4,7 +4,7 @@
 import { randomBytes } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { dialog, safeStorage, shell, systemPreferences, type BrowserWindow, type IpcMain } from "electron";
 import { uiAttachPayload, type ApprovalPayload } from "@ate/approve";
@@ -17,7 +17,7 @@ import { DaemonSupervisor, ateHome, findStrategyCode } from "./lifecycle";
 const err = <T>(message: string, code = "ATE_INTERNAL"): Res<T> => ({ ok: false, error: { code: code as never, message } });
 const PK = /^0x[0-9a-fA-F]{64}$/;
 const CODE = /^[0-9]{8}$/;
-const OPEN_OK = /^https:\/\/(testnet-explorer\.hskchain\.net|hsk\.blockscout\.com|faucet\.hsk\.xyz|flowverse\.cloud|console\.anthropic\.com)\//;
+const OPEN_OK = /^https:\/\/(testnet-explorer\.hskchain\.net|hsk\.blockscout\.com|faucet\.hsk\.xyz|flowverse\.cloud|console\.anthropic\.com|github\.com\/router-for-me)\//;
 /** Re-attaches after an app-initiated restart reuse the user's confirmation for this long (the code still flows). */
 const CONFIRM_TTL_MS = 15 * 60_000;
 
@@ -271,6 +271,75 @@ export function registerSetupIpc(o: { ipcMain: IpcMain; daemon: DaemonClient; ap
       writeFileSync(r.filePath, JSON.stringify(data, null, 2));
       return { ok: true, data: { path: r.filePath } };
     },
+  };
+  // ---- CLIProxyAPI (user-installed, never bundled): detect, sign in through the user's own Terminal, list models.
+  const proxyCfgPath = () => join(ateHome(), "flow-proxy.json");
+  const proxyBin = (): string | null => {
+    try {
+      const b = (JSON.parse(readFileSync(proxyCfgPath(), "utf8")) as { bin?: string }).bin;
+      if (b && existsSync(b)) return b;
+    } catch {
+      /* none picked */
+    }
+    const dirs = [...(process.env.PATH ?? "").split(":"), "/opt/homebrew/bin", "/usr/local/bin", join(homedir(), ".local/bin"), join(homedir(), "go/bin")];
+    for (const d of dirs) for (const n of ["cli-proxy-api", "cliproxyapi", "CLIProxyAPI"]) if (d && existsSync(join(d, n))) return join(d, n);
+    return null;
+  };
+  /** Login flags as the installed binary reports them in --help (never hard-coded): --claude-login, --codex-login, --login… */
+  const loginFlags = (bin: string): string[] => {
+    let out = "";
+    try {
+      out = execFileSync(bin, ["--help"], { encoding: "utf8", timeout: 5000, stdio: ["ignore", "pipe", "pipe"] });
+    } catch (e) {
+      out = String((e as { stdout?: string; stderr?: string }).stdout ?? "") + String((e as { stderr?: string }).stderr ?? "");
+    }
+    return [...new Set([...out.matchAll(/(?:^|\s)(--?[a-z][a-z0-9-]*login)\b/gm)].map((m) => m[1]!.replace(/^-(?!-)/, "--")))];
+  };
+  const SAFE_PATH = /^\/[A-Za-z0-9 ._\/-]+$/;
+  handlers["setup.proxyCli"] = async (q: { op?: string; flag?: string; baseURL?: string; apiKey?: string }) => {
+    const op = String(q?.op ?? "");
+    if (op === "pick") {
+      const w = o.win();
+      const r = w ? await dialog.showOpenDialog(w, { title: "Choose the CLIProxyAPI program", properties: ["openFile"] }) : { canceled: true, filePaths: [] as string[] };
+      if (r.canceled || !r.filePaths[0]) return err("cancelled");
+      if (!SAFE_PATH.test(r.filePaths[0])) return err("unsupported characters in that path");
+      writeFileSync(proxyCfgPath(), JSON.stringify({ bin: r.filePaths[0] }), { mode: 0o600 });
+    }
+    const bin = proxyBin();
+    if (op === "detect" || op === "pick") {
+      const flags = bin ? loginFlags(bin) : [];
+      return { ok: true, data: { bin, flags, platform: process.platform, install: "https://github.com/router-for-me/CLIProxyAPI" } };
+    }
+    if (op === "login") {
+      if (!bin || !SAFE_PATH.test(bin)) return err("CLIProxyAPI not found");
+      const flag = String(q.flag ?? "");
+      if (!loginFlags(bin).includes(flag)) return err("that sign-in option is not offered by your CLIProxyAPI");
+      const command = `'${bin}' ${flag}`;
+      if (process.platform !== "darwin") return { ok: true, data: { opened: false, command } };
+      const script = join(tmpdir(), `flow-proxy-login-${randomBytes(4).toString("hex")}.command`);
+      writeFileSync(script, `#!/bin/sh\n# Opened by Flow: sign in to your CLIProxyAPI. Flow never sees this login.\nexec ${command}\n`, { mode: 0o700 });
+      execFileSync("/usr/bin/open", ["-a", "Terminal", script]);
+      return { ok: true, data: { opened: true, command } };
+    }
+    if (op === "models") {
+      let u: URL;
+      try {
+        u = new URL(String(q.baseURL ?? "http://127.0.0.1:8317"));
+      } catch {
+        return err("bad URL");
+      }
+      const local = ["127.0.0.1", "localhost", "[::1]"].includes(u.hostname);
+      if (!(u.protocol === "https:" || (u.protocol === "http:" && local))) return err("proxy must be https or on this Mac");
+      try {
+        const r = await fetch(`${u.origin}/v1/models`, { headers: q.apiKey ? { authorization: `Bearer ${String(q.apiKey)}` } : {}, signal: AbortSignal.timeout(5000) });
+        if (!r.ok) return { ok: true, data: { running: true, status: r.status, models: [] } };
+        const j = (await r.json().catch(() => ({}))) as { data?: { id: string; owned_by?: string }[] };
+        return { ok: true, data: { running: true, status: r.status, models: (j.data ?? []).map((m) => ({ id: m.id, owner: m.owned_by ?? null })) } };
+      } catch {
+        return { ok: true, data: { running: false, status: null, models: [] } };
+      }
+    }
+    return err("bad op");
   };
   /** D3: the one-time code for a pending loosening change when Touch ID (ate-approve) is unavailable. */
   handlers["setup.strategyCode"] = async (changeId: string) => {

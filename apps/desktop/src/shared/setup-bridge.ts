@@ -83,11 +83,16 @@ export interface SetupBridge {
    * op: "accounts" | "auth-url" (opens the provider's login page in the browser) | "status".
    */
   /** One-time code for a pending loosening change (Touch ID not set up): null when none was issued. */
+  /**
+   * The user's own CLIProxyAPI (never bundled): detect the binary and its login flags (from its --help), pick it by
+   * hand, open Terminal on one allowlisted login flag, or list the models its server reports at /v1/models.
+   */
+  proxyCli(o: { op: "detect" | "pick" | "login" | "models"; flag?: string; baseURL?: string; apiKey?: string }): Promise<Res<any>>;
   strategyCode(changeId: string): Promise<{ code: string; expiresAt: number } | null>;
   proxy(o: { baseURL: string; mgmtKey: string; op: "accounts" | "auth-url" | "status"; provider?: string; state?: string }): Promise<Res<unknown>>;
 }
 
-export const SETUP_IPC = ["setup.daemon", "setup.start", "setup.stop", "setup.submitCode", "setup.unlock", "setup.get", "setup.post", "setup.keygen", "setup.approveStart", "setup.approveFinish", "setup.open", "setup.saveJson", "setup.proxy", "setup.strategyCode"] as const;
+export const SETUP_IPC = ["setup.daemon", "setup.start", "setup.stop", "setup.submitCode", "setup.unlock", "setup.get", "setup.post", "setup.keygen", "setup.approveStart", "setup.approveFinish", "setup.open", "setup.saveJson", "setup.proxy", "setup.strategyCode", "setup.proxyCli"] as const;
 export type SetupIpc = (typeof SETUP_IPC)[number];
 
 const PROV = "(anthropic|openai|gemini|openrouter|ollama|proxy)";

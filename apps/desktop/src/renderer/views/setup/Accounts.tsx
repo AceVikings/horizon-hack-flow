@@ -1,7 +1,7 @@
 // Accounts (⋯ menu; from Setup's AI step and Settings): the AI providers the in-app agent can use, over lane D3's
 // /engine/providers routes. Simple by default: one card per provider with status, Test, and the key. Replacing or
 // removing a stored key needs Touch ID (or the daemon's one-time code). The local proxy lives under "Advanced".
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {Btn} from "../../src/ui";
 import { PageHead } from "../../src/shell";
 import { Details, ErrLine, Spinner, useApproval, useSetup, useSetupGet, StatusText } from "./common";
@@ -122,6 +122,69 @@ function ProviderCard({ p, selectedModel, onChanged }: { p: Provider; selectedMo
   );
 }
 
+const FLAG_LABEL: Record<string, string> = { "--claude-login": "Claude", "--codex-login": "Codex / ChatGPT", "--login": "Gemini", "--antigravity-login": "Antigravity", "--xai-login": "Grok", "--grok-login": "Grok", "--kimi-login": "Kimi", "--qwen-login": "Qwen", "--iflow-login": "iFlow" };
+
+/** The user's own CLIProxyAPI: sign-in happens in their Terminal; Flow only opens it and lists what the proxy reports. */
+function ProxyCli({ baseURL }: { baseURL: string }) {
+  const s = useSetup();
+  const [info, setInfo] = useState<{ bin: string | null; flags: string[]; platform: string; install: string } | null>(null);
+  const [models, setModels] = useState<{ running: boolean; models: { id: string }[] } | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const detect = async (op: "detect" | "pick" = "detect") => {
+    const r = await s.proxyCli({ op });
+    if (r.ok) setInfo(r.data);
+    const m = await s.proxyCli({ op: "models", baseURL: baseURL || "http://127.0.0.1:8317" });
+    if (m.ok) setModels(m.data);
+  };
+  useEffect(() => void detect(), []); // eslint-disable-line react-hooks/exhaustive-deps
+  const login = async (flag: string) => {
+    const r = await s.proxyCli({ op: "login", flag });
+    if (!r.ok) return setMsg(r.error.message);
+    if (!r.data.opened) {
+      void navigator.clipboard?.writeText(r.data.command);
+      setMsg("Copied. Paste it into your terminal to sign in.");
+    } else setMsg("Terminal opened. Finish the sign-in there, then press Refresh.");
+  };
+  const copy = (flag: string) => {
+    if (!info?.bin) return;
+    void navigator.clipboard?.writeText(`'${info.bin}' ${flag}`);
+    setMsg("Command copied.");
+  };
+  if (!info) return <Spinner label="Looking for CLIProxyAPI…" />;
+  return (
+    <div style={{ marginTop: 14 }}>
+      <div className="row g10 sm">
+        {info.bin ? <StatusText tone="ok">CLIProxyAPI found</StatusText> : <StatusText tone="warn">CLIProxyAPI not found</StatusText>}
+        {models && <StatusText tone={models.running ? "ok" : "mute"}>{models.running ? `server running · ${models.models.length} models` : "server not running"}</StatusText>}
+        <span className="grow" />
+        <button className="linkbtn sm" onClick={() => void detect("pick")}>Choose the program…</button>
+        <button className="linkbtn sm" onClick={() => void detect()}>Refresh</button>
+      </div>
+      {!info.bin && (
+        <p className="sm fg2" style={{ marginTop: 8 }}>
+          Flow does not include or install it. <button className="linkbtn" onClick={() => void s.open(info.install + "/")}>Get CLIProxyAPI ↗</button>
+        </p>
+      )}
+      {info.bin && (
+        <div style={{ marginTop: 10 }}>
+          {info.flags.length === 0 && <p className="sm fg2">This version lists no sign-in options in its help.</p>}
+          {info.flags.map((f) => (
+            <div key={f} className="kv sm">
+              <span className="k">{FLAG_LABEL[f] ?? (f.replace(/^--|-login$/g, "") || "Gemini")}</span>
+              <span className="v row g8">
+                {info.platform === "darwin" && <Btn size="sm" onClick={() => void login(f)}>Sign in in Terminal</Btn>}
+                <Btn size="sm" kind="ghost" onClick={() => copy(f)}>Copy command</Btn>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+      {models?.models.length ? <div className="xs fg2" style={{ marginTop: 8 }}>Models: {models.models.slice(0, 12).map((m) => m.id).join(", ")}{models.models.length > 12 ? "…" : ""}</div> : null}
+      {msg && <p className="sm" role="status" style={{ marginTop: 8 }}>{msg}</p>}
+    </div>
+  );
+}
+
 function ProxyAccounts({ baseURL }: { baseURL: string }) {
   const s = useSetup();
   const [mgmt, setMgmt] = useState("");
@@ -197,7 +260,8 @@ export default function Accounts() {
               </div>
               <p className="sm fg2" style={{ marginBottom: 10 }}>Flow does not include a proxy. Run your own and point Flow at it.</p>
               <ProviderCard p={proxy} selectedModel={d.selected.model} onChanged={pr.reload} />
-              {proxy.settings.baseURL && <ProxyAccounts baseURL={proxy.settings.baseURL} />}
+              <ProxyCli baseURL={proxy.settings.baseURL ?? ""} />
+              {proxy.settings.baseURL && <Details summary="Proxy management key (optional)"><ProxyAccounts baseURL={proxy.settings.baseURL} /></Details>}
             </Details>
           )}
         </>
