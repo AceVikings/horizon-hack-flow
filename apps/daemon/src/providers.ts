@@ -51,6 +51,8 @@ export const PROVIDERS: Record<ProviderId, ProviderDef> = {
     id: "proxy",
     label: "Local proxy (advanced)",
     protocol: "openai",
+    // e.g. a CLIProxyAPI the user runs (sign-in happens in their terminal; Flow handles no OAuth)
+    baseURL: "http://127.0.0.1:8317/v1",
     key: "optional",
     caps: { streaming: true },
     warning: "Advanced: Flow sends requests to a proxy you run yourself and does not alter them. Routing a consumer subscription (for example a chat plan) through a proxy may violate the provider's terms; use an API plan where you can.",

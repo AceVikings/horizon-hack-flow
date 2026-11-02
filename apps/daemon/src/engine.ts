@@ -365,7 +365,8 @@ export class AiEngine {
   }
   configured(id: ProviderId): boolean {
     const def = PROVIDERS[id];
-    if (id === "proxy") return !!this.cfg.providers.proxy?.baseURL;
+    // the proxy has a default URL; it counts as set up once the user saved settings or a test reached it
+    if (id === "proxy") return !!this.cfg.providers.proxy?.baseURL || !!this.health_.proxy?.ok;
     if (def.key === "none") return true;
     return this.credentialOf(id).source !== "none";
   }
@@ -414,7 +415,7 @@ export class AiEngine {
   async test(id: ProviderId): Promise<ProviderStatus> {
     const at = nowSec();
     try {
-      if (!this.configured(id)) throw Object.assign(new Error(id === "proxy" ? "Set the proxy base URL first" : "No API key for this provider"), { kind: "no_credentials" });
+      if (id !== "proxy" && !this.configured(id)) throw Object.assign(new Error("No API key for this provider"), { kind: "no_credentials" });
       const proto = this.protocolOf(id);
       const client = proto === "anthropic" ? this.anthropicClient(id) : proto === "gemini" ? this.geminiClient() : this.openaiClient(id);
       const ms = await listModels(id, client, { baseURL: this.baseURL(id) });

@@ -57,7 +57,7 @@ export default function Agent(_: ViewProps) {
   const st = vsOk?.status;
   const s = strat.last;
   const pending = (pend.last ?? []).filter((p) => p.expiresAt > now);
-  const mode: Mode = t?.running ? t.mode : t?.external ? "autonomous" : "watch";
+  const mode: Mode | "" = !t ? "" : t.running ? t.mode : t.external ? "autonomous" : "watch";
   const ph = profileOf(s, HSK);
   const pb = profileOf(s, BTC);
   const preset = ph && ph === pb ? ph : null;
@@ -68,7 +68,8 @@ export default function Agent(_: ViewProps) {
     setBusy(key);
     try {
       const r = await f();
-      if (!r.ok) toast({ kind: r.error.code === "ATE_APPROVAL_REQUIRED" ? "info" : "error", text: r.error.message, ...(r.error.hint ? { sub: r.error.hint } : {}) });
+      // approval-required results are explained by the caller (they land under "Needs your OK")
+      if (!r.ok && r.error.code !== "ATE_APPROVAL_REQUIRED") toast({ kind: "error", text: r.error.message, ...(r.error.hint ? { sub: r.error.hint } : {}) });
       else if (okText) toast({ kind: "ok", text: okText });
       return r;
     } finally {
@@ -83,7 +84,9 @@ export default function Agent(_: ViewProps) {
   const setMode = (m: Mode) => {
     if (!ate.trader || m === mode) return;
     if (m === "watch") return void act("mode", () => ate.trader!.stop(), "Agent paused. The vault still sells to protect you.");
-    void act("mode", () => ate.trader!.start({ mode: m, engine: t?.engine ?? "llm" }), m === "propose" ? "The agent now only suggests trades" : "The agent is trading");
+    // without an AI account the agent runs on simple rules (same guard, same limits) until one is connected
+    const engine = ai.last?.credential === "none" ? "rules" : "llm";
+    void act("mode", () => ate.trader!.start({ mode: m, engine }), `${m === "propose" ? "The agent now only suggests trades" : "The agent is trading"}${engine === "rules" ? " on simple rules (no AI account yet)" : ""}`);
   };
   const setPreset = async (p: RiskProfile) => {
     const r = await act("preset", () => ate.strategy.set({ riskProfile: p }, `Desktop: trade ${PRESETS.find((x) => x.id === p)!.name.toLowerCase()} (${p})`));
@@ -94,7 +97,7 @@ export default function Agent(_: ViewProps) {
   const approve = (p: PendingChange) => act(p.changeId, () => ate.strategy.approve(p.changeId), p.confirm === "sells_now" ? "Confirmed. The vault sells now." : "Approved");
   const reject = (p: PendingChange) => act(p.changeId, () => (ate.approvals ? ate.approvals.reject(p.changeId) : Promise.resolve({ ok: true as const, data: null })), "Rejected. Nothing changed.");
 
-  const status = t?.stopping ? "Stopping after this check." : t?.running ? (t.mode === "propose" ? "Your agent suggests trades. It does not trade." : "Your agent is trading.") : t?.external ? "Your agent is trading (started outside Flow)." : t ? "Your agent is off. The vault still sells to protect you." : "";
+  const status = t?.stopping ? "Stopping after this check." : t?.running ? (t.mode === "propose" ? "Your agent suggests trades. It does not trade." : t.runtime === "rules" ? "Your agent is trading on simple rules (no AI account yet)." : "Your agent is trading.") : t?.external ? "Your agent is trading (started outside Flow)." : t ? "Your agent is off. The vault still sells to protect you." : "";
 
   return (
     <div className="page1">
@@ -138,10 +141,10 @@ export default function Agent(_: ViewProps) {
         {status || "Reading your agent…"}
       </div>
       <div style={{ marginTop: 14 }}>
-        <Seg<Mode>
+        <Seg<Mode | "">
           label="Agent"
           value={mode}
-          onChange={setMode}
+          onChange={(m) => m && setMode(m)}
           options={[
             { id: "autonomous", label: "Let it trade" },
             { id: "propose", label: "Only suggest" },
