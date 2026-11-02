@@ -12,6 +12,23 @@ If the agent makes a mistake, gets a bad prompt or loses its key, the contract s
 
 Built by team Vikings for the HSK Chain Horizon Hackathon (AI Agent Trading). Apache-2.0.
 
+## How Flow meets Track 1
+
+| Track 1 item | What Flow does | Where to see it |
+|---|---|---|
+| HSKSwap DEX | Each trade is a swap on an HSKSwap pool (WHSK/USDT, WBTC/USDT). The vault calls `SwapRouter02`. The output stays in the vault. | `contracts/src/PolicyVault.sol` · Blockscout links below |
+| AI agent as core engine | An LLM trader (Claude, or any MCP agent) reads the market, then takes, sizes down or vetoes each candidate trade. It writes a rationale for each decision. | `agents/trader/PROMPT.md` · desktop Decisions |
+| Market monitoring | The daemon reads both markets each cycle (120 s), with a fast scan each 20 s. A large gap starts a cycle at once. | `apps/daemon/src/service.ts` · desktop Trade |
+| On-chain data analysis | Flow reads the pool price, the pool's 300 s TWAP, the oracle price (Supra, the price the vault checks, with an APRO cross-check), recent pool swaps and the QuoterV2 price impact. The agent charts the pool with the oracle line. Its rationale states these numbers. | `ate_market_get`, `ate_chart` · `packages/strategy/src/market.ts` · desktop Charts |
+| Signal identification | `spread-revert` finds a gap between the pool and the oracle price that is larger than the fee and impact. Custom strategies add rules (EMA/SMA cross, RSI, breakouts, volatility, trend, pool volume). | `packages/strategy/src/generators.ts` · `packages/strategy/src/custom/` · desktop Strategy |
+| Order execution, no manual steps | In `autonomous` mode the agent proposes and executes in the same run. The daemon signs and sends the transaction. No person clicks. | `ate_propose`, `ate_execute` · `docs/testnet-133-journal-run2.json` (71-minute unattended run) |
+| Arbitrage and price spreads | The agent buys when the pool is below the oracle price and sells when it is above, if the gap is larger than the cost. The trade has one leg, on HSKSwap. | `packages/strategy/src/generators.ts` · `ate replay` |
+| Strict risk control and stop-loss | On-chain: the PolicyVault limits trade size, daily spend, exposure, price deviation from the oracle and slippage, and allows one pool and one router only. Off-chain: the guard applies stop-loss, take-profit, a daily loss breaker and turnover limits. | `contracts/src/PolicyVault.sol` · `packages/strategy/src/guard.ts` · [rogue reverts](docs/JUDGE.md) |
+| Natural-language view of positions and P&L | `ate chat` and the desktop Ask screen call `ate_positions`. They show realised P&L, the P&L if sold now, and the P&L at the oracle price. | `agents/chat/PROMPT.md` · desktop Ask |
+| Change size, frequency, risk appetite and target assets in chat | `ate_strategy_set` changes `tradeSizeUsd` and `maxPositionUsd` (size), `cycleSeconds` (frequency), `riskProfile`, `stopLossBps` and loss limits (risk appetite) and `targetAssets`. A change that increases risk needs Touch ID or a one-time code. | `packages/strategy/src/patcher.ts` · section 9 below |
+
+HashKey Global is optional context only. It is off by default (strategy `reference` is `"oracle"`). Every trade is on HSKSwap.
+
 ## See it working
 
 These links are on the HashKey Chain **testnet** (chain 133), with test tokens. Click in this order.
