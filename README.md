@@ -102,7 +102,7 @@ flowchart TB
     subgraph Watch["1 · Watch"]
         W1["HSKSwap pools<br/>WHSK/USDT · WBTC/USDT"]
         W2["Supra oracle<br/>HSK/USD · BTC/USD"]
-        W3["HashKey Global<br/>order books"]
+        W3["Pool TWAP · swap flow<br/>QuoterV2 impact"]
     end
     subgraph Think["2 · Decide"]
         T1["Daemon makes<br/>candidate trades"]
@@ -124,7 +124,7 @@ flowchart TB
 
 | Step | What Flow does |
 |---|---|
-| Watch | Flow reads the pool price, the oracle price and the exchange price for each market. |
+| Watch | Flow reads on-chain data for each market: the pool price, the pool's 300 s TWAP, the oracle price (Supra, the price the vault checks), recent pool swaps and the price impact of a trade. |
 | Decide | The daemon makes candidate trades. The AI trader selects one trade, or it makes no trade. The guard checks each trade. |
 | Trade | The vault does a check of each limit. Then it swaps on HSKSwap. The output stays in the vault. |
 | Record | Flow writes each decision to the journal. The vault writes the rationale hash on-chain. |
@@ -150,7 +150,7 @@ flowchart TB
         EAS["EAS"]
     end
     subgraph Ext["Outside data"]
-        HG["HashKey Global API"]
+        HG["HashKey Global API<br/>(optional context, off by default)"]
         SU["Supra DORA"]
     end
     UI <--> D
@@ -161,7 +161,7 @@ flowchart TB
     V1 & V2 --> SA
     V1 & V2 --> SW
     D --> EAS
-    D --> HG
+    D -. "optional" .-> HG
     D -- "price refresh (anyone can send)" --> SU
 ```
 
@@ -469,7 +469,7 @@ flowchart LR
     ATE --> AP["APRO<br/>cross-check"]
     ATE --> EA["EAS predeploy<br/>attestations"]
     ATE --> BS["Blockscout<br/>verified source · decoded reverts"]
-    ATE --> HG["hashkey-public-market<br/>exchange data"]
+    ATE -. "optional context" .-> HG["hashkey-public-market<br/>exchange data"]
     ATE -. "optional" .-> HSP["HSP + OKX Agentic Wallet<br/>agent-to-agent payments"]
 ```
 
@@ -479,8 +479,9 @@ flowchart LR
 
 - The spread trade has one leg. Flow does not trade on the exchange.
 - The pools have low volume. The 7-day replay shows many gaps, but most counterfactual lots stay open at a loss. It does not prove profit.
-  Refer to [`docs/replay-7d.md`](docs/replay-7d.md).
-- The WBTC pool price can stay below the exchange price for days.
+  Refer to [`docs/replay-7d.md`](docs/replay-7d.md). That report used the earlier reference (the HashKey Global price). `ate replay` now measures each pool against its own 300 s TWAP from the swap logs, because the Supra oracle keeps no price history that we can read.
+- The WBTC pool price can stay away from the oracle price for days. Each trade is one leg on HSKSwap, so a gap is a profit only if the pool moves back.
+- Flow does not trade between two HSKSwap pools of the same asset. Each vault has one pool.
 - HSP payments are optional. They need access from the HSP operations team.
 - Each vault supports one fixed pool. A new pool needs a new vault.
 
