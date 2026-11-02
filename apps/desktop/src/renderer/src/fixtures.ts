@@ -16,9 +16,17 @@ import {
   type StatusResponse,
   type StrategyGetOutput,
 } from "@ate/core";
-import { FIXTURE_NOW, FIXTURE_PRICES, FIXTURE_STRATEGY, FIXTURE_VAULT_STATES, FIXTURE_AGENT } from "@ate/core/fixtures";
+import { FIXTURE_NOW, FIXTURE_PRICES, FIXTURE_STRATEGY, FIXTURE_VAULT_STATES as CORE_VAULT_STATES, FIXTURE_AGENT } from "@ate/core/fixtures";
 import type { AteBridge, ChatMessage, JournalFilter, PaymentsList, Res, Settings } from "@shared/bridge";
 import { fmtUnits } from "./format";
+
+/** Deployed defaults (§19 step 3): maxTradeUsd $100, maxEpochUsd $250 per UTC day, maxExposureUsd $150. */
+const FIXTURE_VAULT_STATES = Object.fromEntries(
+  (Object.entries(CORE_VAULT_STATES) as [MarketId, (typeof CORE_VAULT_STATES)[MarketId]][]).map(([m, v]) => [
+    m,
+    { ...v, limits: { ...v.limits, maxTradeUsdE8: "10000000000", maxEpochUsdE8: "25000000000", maxExposureUsdE8: "15000000000", epochDuration: 86_400 } },
+  ]),
+) as typeof CORE_VAULT_STATES;
 
 export const NOW = FIXTURE_NOW;
 const ok = <T,>(data: T): Res<T> => ({ ok: true, data });
@@ -45,7 +53,7 @@ function ctx(market: MarketId, dt: number, extra: Partial<Decision["context"]> =
     oracle: { price: p.oracle.price, updatedAt: NOW - dt - 7_920, roundId: p.oracle.roundId, ageSec: 7_920 },
     pool: { price: p.pool.price, twap: p.pool.twap ?? "0", liquidity: p.pool.liquidity, deviationBps: p.pool.deviationBps, twapDeviationBps: p.pool.twapDeviationBps ?? 0 },
     cex: p.cex ? { mid: p.cex.mid, halfSpreadBps: p.cex.halfSpreadBps, topDepthUsd: p.cex.topDepthUsd, at: NOW - dt - 2 } : undefined,
-    policy: { maxTradeUsd: "25", epochRemainingUsd: "225", turnoverRemainingUsd: "175", cooldownRemainingSec: 0 },
+    policy: { maxTradeUsd: "100", epochRemainingUsd: "225", turnoverRemainingUsd: "175", cooldownRemainingSec: 0 },
     blockNumber: String(12_345_678 - Math.floor(dt / 2)),
     ...(v ? {} : {}),
     ...extra,
@@ -74,7 +82,7 @@ const pBtc = push(
   rec(9_100, {
     kind: "proposal", market: MARKET_WBTC, engine: "llm", actor: agent, origin: "candidate", candidateId: "cand_0b5e2c7a9d1f4e60",
     intent: { market: MARKET_WBTC, vault: FIXTURE_VAULT_STATES[MARKET_WBTC].address, side: "buy", tokenIn: MARKETS[MARKET_WBTC].quoteToken, amountIn: "25000000" },
-    rationale: "WBTC pool sits 112.6 bps below HashKey Global BTCUSDT mid; gap 113 bps vs cost 35 bps leaves 78 bps net. Oracle and TWAP agree within 12 bps. Taking the full $25 trade cap, no size-down.",
+    rationale: "WBTC pool sits 112.6 bps below HashKey Global BTCUSDT mid; gap 113 bps vs cost 35 bps leaves 78 bps net. Oracle and TWAP agree within 12 bps. Taking the full $25 strategy trade size (vault cap $100), no size-down.",
     context: ctx(MARKET_WBTC, 9_100, { signal: { id: "cand_0b5e2c7a9d1f4e60", generator: "spread-revert", leg: "open", edgeBps: 113, costBps: 35 }, quote: { amountOut: "32083", impactBps: 5, minOutFloor: "31121", exitPath: false, source: "simulation" } }),
     verdict: { ok: true, code: "OK", approvedBy: "policy" },
   }),
@@ -84,10 +92,10 @@ push(rec(9_085, { kind: "attestation", refId: pBtc.id, market: MARKET_WBTC, engi
 push(rec(7_200, { kind: "no_trade", market: MARKET_WHSK, engine: "llm", actor: agent, rationale: "HSK pool is 30 bps under CEX mid; round-trip cost is 36 bps (30 fee + 6 impact). Net edge negative, sitting out.", context: ctx(MARKET_WHSK, 7_200, { signal: { id: "cand_93aa01b2c3d4e5f6", generator: "spread-revert", leg: "open", edgeBps: 30, costBps: 36 } }), verdict: { ok: true, code: "NO_TRADE", message: "awaiting_signal" } }));
 push(rec(5_400, { kind: "no_trade", market: MARKET_WBTC, engine: "rules", actor: guard, rationale: "WBTC entry suppressed: minEntryIntervalSec 1800 not elapsed since last fill.", context: ctx(MARKET_WBTC, 5_400, { suppressed: { cause: "entry_interval", side: "buy", bps: 0 } }), verdict: { ok: true, code: "NO_TRADE", message: "guard" } }));
 const veto = push(rec(3_500, { kind: "no_trade", market: MARKET_WBTC, engine: "llm", actor: agent, candidateId: "cand_5d3c1ab29e7f4408", rationale: "VETO: WBTC candidate gap widened only because Supra feed is 600 s old and disagrees by 71 bps; declining until the cross-check converges.", context: ctx(MARKET_WBTC, 3_500, { suppressed: { cause: "oracle_disagree", side: "buy", bps: 71, supra: "7737000000000" } }), verdict: { ok: true, code: "NO_TRADE", message: "llm_veto" } }));
-push(rec(3_000, { kind: "proposal", market: MARKET_WHSK, engine: "llm", actor: agent, origin: "candidate", candidateId: "cand_aa11bb22cc33dd44", intent: { market: MARKET_WHSK, vault: FIXTURE_VAULT_STATES[MARKET_WHSK].address, side: "buy", tokenIn: MARKETS[MARKET_WHSK].quoteToken, amountIn: "25000000" }, rationale: "Rebalance buy toward 33% HSK target.", context: ctx(MARKET_WHSK, 3_000), verdict: { ok: false, code: "ATE_ORACLE_DEVIATION", message: "Pool spot is 251 bps from APRO; maxOracleDeviationBps is 250." } }));
+push(rec(3_000, { kind: "proposal", market: MARKET_WHSK, engine: "llm", actor: agent, origin: "candidate", candidateId: "cand_aa11bb22cc33dd44", intent: { market: MARKET_WHSK, vault: FIXTURE_VAULT_STATES[MARKET_WHSK].address, side: "buy", tokenIn: MARKETS[MARKET_WHSK].quoteToken, amountIn: "25000000" }, rationale: "Rebalance buy toward 33% HSK target.", context: ctx(MARKET_WHSK, 3_000), verdict: { ok: false, code: "ATE_ORACLE_DEVIATION", message: "Pool spot is 251 bps from the Supra oracle; maxOracleDeviationBps is 250." } }));
 push(rec(1_700, { kind: "outcome", refId: veto.id, market: MARKET_WBTC, engine: "guard", actor: guard, rationale: "30-minute counterfactual for vetoed candidate: declining saved 42 bps.", context: ctx(MARKET_WBTC, 1_700), verdict: { ok: true, code: "OK" }, outcome: { horizonSec: 1800, declinedAmountIn: "25000000", markThen: "7701200000000", savedBps: 42, savedUsd: "1.05" } }));
-const pExit = push(rec(1_500, { kind: "proposal", market: MARKET_WHSK, engine: "llm", actor: agent, origin: "discretionary", thesis: "APRO is 2.2 h old while CEX is up 40 bps; trimming 13 WHSK is cheap insurance before the oracle updates.", intent: { market: MARKET_WHSK, vault: FIXTURE_VAULT_STATES[MARKET_WHSK].address, side: "sell", tokenIn: MARKETS[MARKET_WHSK].baseToken, amountIn: "13000000000000000000" }, rationale: "Discretionary trim, 1 of 3 today.", context: ctx(MARKET_WHSK, 1_500), verdict: { ok: true, code: "OK", approvedBy: "policy" } }));
-push(rec(1_490, { kind: "execution", refId: pExit.id, market: MARKET_WHSK, engine: "llm", actor: agent, origin: "discretionary", rationale: "Executed on the exit path (floor min(APRO, TWAP)).", context: ctx(MARKET_WHSK, 1_490), verdict: { ok: true, code: "OK", approvedBy: "policy" }, execution: { txHash: hex("tx-hsk-exit"), blockNumber: 12_344_100, gasUsed: "188201", amountOut: "1137500", exitPath: true } }));
+const pExit = push(rec(1_500, { kind: "proposal", market: MARKET_WHSK, engine: "llm", actor: agent, origin: "discretionary", thesis: "The Supra oracle is 2.2 h old while CEX is up 40 bps; trimming 13 WHSK is cheap insurance before the oracle updates.", intent: { market: MARKET_WHSK, vault: FIXTURE_VAULT_STATES[MARKET_WHSK].address, side: "sell", tokenIn: MARKETS[MARKET_WHSK].baseToken, amountIn: "13000000000000000000" }, rationale: "Discretionary trim, 1 of 3 today.", context: ctx(MARKET_WHSK, 1_500), verdict: { ok: true, code: "OK", approvedBy: "policy" } }));
+push(rec(1_490, { kind: "execution", refId: pExit.id, market: MARKET_WHSK, engine: "llm", actor: agent, origin: "discretionary", rationale: "Executed on the exit path (floor min(oracle, TWAP)).", context: ctx(MARKET_WHSK, 1_490), verdict: { ok: true, code: "OK", approvedBy: "policy" }, execution: { txHash: hex("tx-hsk-exit"), blockNumber: 12_344_100, gasUsed: "188201", amountOut: "1137500", exitPath: true } }));
 push(rec(900, { kind: "strategy_change", market: MARKET_WHSK, engine: "human", actor: human, origin: "human", rationale: "Go to cash on HSK, keep the BTC", context: ctx(MARKET_WHSK, 900), verdict: { ok: true, code: "OK", approvedBy: "human" } }));
 const pG = push(rec(880, { kind: "proposal", market: MARKET_WHSK, engine: "guard", actor: guard, origin: "guard", intent: { market: MARKET_WHSK, vault: FIXTURE_VAULT_STATES[MARKET_WHSK].address, side: "sell", tokenIn: MARKETS[MARKET_WHSK].baseToken, amountIn: "407000000000000000000" }, rationale: "reason=target_assets: WHSK de-selected; guard sells the position down (no LLM).", context: ctx(MARKET_WHSK, 880), verdict: { ok: true, code: "OK", approvedBy: "policy" } }));
 push(rec(868, { kind: "execution", refId: pG.id, market: MARKET_WHSK, engine: "guard", actor: guard, origin: "guard", rationale: "Guard exit executed.", context: ctx(MARKET_WHSK, 868), verdict: { ok: true, code: "OK", approvedBy: "policy" }, execution: { txHash: hex("tx-hsk-guard"), blockNumber: 12_344_700, gasUsed: "190114", amountOut: "35540000", exitPath: true } }));
@@ -215,13 +223,13 @@ function runChat(sessionId: string, turnId: string, text: string): void {
     ]);
   } else if (/aggressive/.test(t)) {
     seqRun([
-      () => tool("ate_strategy_set", { patch: { riskProfile: "aggressive" }, rationale: text }, { error: { code: "ATE_APPROVAL_REQUIRED", message: "Loosening change needs a Touch ID signature", details: { renderedDiff: "tradeSizeUsd 25 → 50\nentrySpreadBps 60 → 45\nminNetEdgeBps 15 → 10\nstopLossBps 300 → 400" } } }),
+      () => tool("ate_strategy_set", { patch: { riskProfile: "aggressive" }, rationale: text }, { error: { code: "ATE_APPROVAL_REQUIRED", message: "Loosening change needs a Touch ID signature", details: { changeId: "chg_5e1f0a9c3b7d2e48", renderedDiff: "tradeSizeUsd 25 → 50\nentrySpreadBps 60 → 45\nminNetEdgeBps 15 → 10\nstopLossBps 300 → 400" } } }),
       () => say("That loosens several limits, so it needs your Touch ID approval before it applies. Approve the diff above to continue."),
     ]);
   } else if (/why did you sell/.test(t)) {
     seqRun([
       () => tool("ate_journal_read", { kind: ["proposal"], limit: 3 }, { entries: 2 }, entries[9]?.id),
-      () => say("At 02:35 the guard sold the WHSK position because you set target assets to WBTC only (reason=target_assets); before that, a 13 WHSK discretionary trim was filed on the exit path with the thesis \"APRO is 2.2 h old while CEX is up 40 bps\"."),
+      () => say("At 02:35 the guard sold the WHSK position because you set target assets to WBTC only (reason=target_assets); before that, a 13 WHSK discretionary trim was filed on the exit path with the thesis \"The Supra oracle is 2.2 h old while CEX is up 40 bps\"."),
     ]);
   } else {
     seqRun([() => say("I can show how you are doing, explain a trade, tune the strategy (size, spread, stop-loss, target assets) or pause the vaults. Loosening changes need a Touch ID signature; tightening ones apply immediately. What would you like?")]);
@@ -243,6 +251,7 @@ export function createFixtureBridge(): AteBridge {
     strategy: {
       get: () => delay(ok(strategy)),
       set: (patch) => delay(ok({ status: "applied" as const, decisionId: "strat_fixture", changes: [], clamped: false, strategy: { ...strategy.strategy, ...(patch.enabled !== undefined ? { enabled: patch.enabled } : {}) } })),
+      approve: () => delay(ok({ applied: true as const, decisionId: "strat_fixture_approved", changes: [] }), 600),
     },
     journal: {
       list: (f: JournalFilter) => {

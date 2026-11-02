@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { MARKET_IDS, MARKETS, type MarketId } from "@ate/core";
+import { MARKET_IDS, MARKETS, type MarketId, type StrategyApprovalPending, type StrategyPatch } from "@ate/core";
 import { useApp, useRemote } from "../app";
 import { ContextPanel, Inspector } from "../shell";
 import { AddrLink, Badge, Bar, Card, Empty, ErrorBox, KV, PnL } from "../ui";
 import { ago, bps, label, short, usd } from "../format";
+import { LooseningApproval } from "../approval";
 
 export default function Agents() {
   const { ate, vs, toast, refresh } = useApp();
@@ -120,8 +121,10 @@ export default function Agents() {
             </tbody>
           </table>
         )}
-        <p className="small muted">Tuned values stay within ×0.5 to ×1.5 of the human anchor. Human changes are made in Chat (loosening needs Touch ID).</p>
+        <p className="small muted">Tuned values stay within ×0.5 to ×1.5 of the human anchor. Human changes are made here or in Chat (loosening needs Touch ID).</p>
       </Card>
+
+      <StrategyEditor />
 
       <Inspector>
         <h2>Key fingerprints</h2>
@@ -135,6 +138,66 @@ export default function Agents() {
         ) : <span className="muted">—</span>}
       </Inspector>
     </>
+  );
+}
+
+const FIELDS = {
+  stopLossBps: "num", takeProfitBps: "num", entrySpreadBps: "num", minNetEdgeBps: "num", rebalanceTargetPct: "num", cycleSeconds: "num",
+  tradeSizeUsd: "usd", maxPositionUsd: "usd",
+} as const satisfies Partial<Record<keyof StrategyPatch, "num" | "usd">>;
+type Field = keyof typeof FIELDS;
+
+/** Human strategy edits (ui scope, actor=human). Tightening applies at once; loosening returns ATE_APPROVAL_REQUIRED. */
+function StrategyEditor() {
+  const { ate, toast, refresh } = useApp();
+  const [market, setMarket] = useState<MarketId | "all">("all");
+  const [field, setField] = useState<Field>("stopLossBps");
+  const [value, setValue] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState<StrategyApprovalPending | null>(null);
+  const [err, setErr] = useState<{ code: string; message: string; hint?: string } | null>(null);
+
+  async function apply(patch: StrategyPatch, what: string) {
+    setBusy(true);
+    setErr(null);
+    setPending(null);
+    const r = await ate.strategy.set(market === "all" ? patch : { ...patch, market }, `user (desktop): ${what}`);
+    setBusy(false);
+    if (r.ok) {
+      toast({ kind: "ok", text: `Applied: ${what}${r.data.clamped ? " (clamped to limits)" : ""}` });
+      refresh();
+    } else if (r.error.code === "ATE_APPROVAL_REQUIRED" && r.error.details && typeof r.error.details.changeId === "string") {
+      setPending(r.error.details as unknown as StrategyApprovalPending);
+    } else setErr({ code: r.error.code, message: r.error.message, ...(r.error.hint ? { hint: r.error.hint } : {}) });
+  }
+  function applyField() {
+    const v = value.trim();
+    if (!/^\d+(\.\d+)?$/.test(v)) return setErr({ code: "ATE_CONFIG_INVALID", message: "Enter a non-negative number" });
+    void apply({ [field]: FIELDS[field] === "num" ? Number(v) : v } as StrategyPatch, `${field} → ${v}`);
+  }
+
+  return (
+    <Card title="Change strategy" right={<span className="muted small">actor=human · tightening applies at once</span>}>
+      <div className="seg" role="radiogroup" aria-label="Scope">
+        {(["all", ...MARKET_IDS] as const).map((m) => (
+          <button key={m} role="radio" aria-checked={market === m} className={market === m ? "on" : ""} onClick={() => setMarket(m)}>{m === "all" ? "Both markets" : MARKETS[m].label}</button>
+        ))}
+      </div>
+      <div className="chips">
+        {(["conservative", "balanced", "aggressive"] as const).map((p) => (
+          <button key={p} className="chip" disabled={busy} onClick={() => void apply({ riskProfile: p }, `risk profile ${p}`)}>{p}</button>
+        ))}
+      </div>
+      <div className="composer" style={{ marginTop: 8 }}>
+        <select value={field} onChange={(e) => setField(e.target.value as Field)} aria-label="Field" className="btn">
+          {(Object.keys(FIELDS) as Field[]).map((f) => <option key={f} value={f}>{f}</option>)}
+        </select>
+        <input value={value} onChange={(e) => setValue(e.target.value.replace(/[^0-9.]/g, ""))} placeholder={FIELDS[field] === "usd" ? "USD, e.g. 25" : "e.g. 200"} aria-label="Value" inputMode="decimal" />
+        <button className="btn primary" disabled={busy || !value} onClick={applyField}>{busy ? "Applying…" : "Apply"}</button>
+      </div>
+      {pending && <LooseningApproval key={pending.changeId} changeId={pending.changeId} renderedDiff={pending.renderedDiff} />}
+      {err && <ErrorBox {...err} />}
+    </Card>
   );
 }
 

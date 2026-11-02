@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { MARKET_IDS, MARKETS, type JournalEntry, type MarketId } from "@ate/core";
+import { MARKET_IDS, MARKETS, SUPRA_PAIRS, type JournalEntry, type MarketId } from "@ate/core";
 import { useApp, useRemote } from "../app";
 import { ContextPanel, Inspector } from "../shell";
 import { Badge, Empty, ErrorBox, KV, Link, TxLink, type Tone } from "../ui";
@@ -164,10 +164,15 @@ function Record({ e }: { e: JournalEntry }) {
       </div>
       <div className="grid3">
         <div>
-          <h4>Oracle (APRO)</h4>
+          <h4>Oracle (Supra, enforcement)</h4>
+          <KV k="Supra pair">{e.market ? SUPRA_PAIRS[e.market] : "—"} (adapter)</KV>
           <KV k="price">${px8(c.oracle.price, 2)}</KV>
           <KV k="age">{c.oracle.ageSec} s</KV>
           <KV k="round" mono>{short(c.oracle.roundId, 6, 4)}</KV>
+          {(() => {
+            const apro = (c as { apro?: { price: string; ageSec: number; disagreeBps: number } | null }).apro;
+            return <KV k="APRO cross-check">{apro ? `$${px8(apro.price, 2)} · ${apro.ageSec} s · ${bps(apro.disagreeBps)}` : "not recorded"}</KV>;
+          })()}
         </div>
         <div>
           <h4>Pool</h4>

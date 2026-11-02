@@ -1,3 +1,5 @@
+import { useState } from "react";
+import type { PaymentRow } from "@shared/bridge";
 import { useApp, useRemote } from "../app";
 import { ContextPanel, Inspector } from "../shell";
 import { Badge, Card, Empty, ErrorBox, KV, TxLink, type Tone } from "../ui";
@@ -8,11 +10,21 @@ const FLOW = ["CREATED", "PREPARED", "SIGN_APPROVED", "SIGNED", "AUTH_FINALIZED"
 const TERMINAL: Record<string, Tone> = { SETTLED: "ok", SETTLED_UNATTRIBUTED: "warn", FAILED: "bad", EXPIRED: "warn", UNCERTAIN: "warn" };
 
 export default function Payments() {
-  const { ate } = useApp();
-  const { res } = useRemote(() => ate.payments.list(), [], { every: 10000 });
+  const { ate, toast } = useApp();
+  const { res, reload } = useRemote(() => ate.payments.list(), [], { every: 10000 });
+  const [busy, setBusy] = useState<string | null>(null);
   if (res && !res.ok) return <ErrorBox {...res.error} />;
   const gate = res?.ok ? res.data.gate : "no-go";
   const rows = res?.ok ? res.data.rows : [];
+  const awaiting = rows.filter((r) => r.needsApproval);
+
+  async function act(r: PaymentRow, approve: boolean) {
+    setBusy(r.paymentId);
+    const out = approve ? await ate.payments.approve(r.paymentId, r.digest ?? "") : await ate.payments.deny(r.paymentId);
+    setBusy(null);
+    toast(out.ok ? { kind: "ok", text: `${r.paymentId} ${approve ? "approved" : "denied"}` } : { kind: "error", text: `${out.error.code}: ${out.error.message}` });
+    reload();
+  }
   return (
     <>
       <ContextPanel>
@@ -54,7 +66,19 @@ export default function Payments() {
       </Card>
       <Inspector>
         <h2>Approval dialog</h2>
-        <p className="small muted">When a mandate needs approval, the full preview (amount, token, payTo, chainId, digest) shows here and Touch ID prompts from the same payload. Nothing is pending.</p>
+        {awaiting.length === 0 ? (
+          <p className="small muted">When a mandate needs approval, the full preview (amount, token, payTo, chainId, digest) shows here and Touch ID prompts from the same payload. Nothing is pending.</p>
+        ) : awaiting.map((r) => (
+          <div key={r.paymentId} className="notice warn" role="alertdialog" aria-label={`Approve payment ${r.paymentId}`}>
+            <Badge tone="warn">approval #{r.needsApproval} of 2</Badge> <span className="mono small">{r.paymentId}</span>
+            {r.approvalPrompt && <p className="small">{r.approvalPrompt}</p>}
+            {r.digest && <div className="mono small wrap muted">digest {r.digest}</div>}
+            <div className="actions">
+              <button className="btn primary" disabled={busy === r.paymentId} onClick={() => void act(r, true)}>{busy === r.paymentId ? "Waiting for Touch ID…" : "Approve (Touch ID)"}</button>
+              <button className="btn danger" disabled={busy === r.paymentId} onClick={() => void act(r, false)}>Deny</button>
+            </div>
+          </div>
+        ))}
       </Inspector>
     </>
   );

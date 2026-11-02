@@ -16,6 +16,7 @@ import type {
   PauseOutput,
   StatusResponse,
   StrategyGetOutput,
+  StrategyApproveResponse,
   StrategyPatch,
   StrategySetOutput,
   ToolError,
@@ -53,6 +54,8 @@ export interface ChatMessage {
   text: string;
   at: number;
   turnId?: string;
+  /** Additive: engine reported by the daemon's chat.delta (llm | rules). */
+  engine?: string;
   tool?: { name: string; args: unknown; result: unknown; decisionId?: string };
 }
 
@@ -65,6 +68,9 @@ export interface PaymentRow {
   at: number;
   needsApproval?: 1 | 2;
   gatewayTx?: string;
+  /** Additive (live): ate-approve prompt text and the EIP-712 digest being approved, rebuilt from the worker's payload. */
+  approvalPrompt?: string;
+  digest?: string;
 }
 export interface PaymentsList {
   /** "no-go": G-HSP is not live; the leg is built and tested on recorded responses (SPEC §9, §21.4). */
@@ -89,7 +95,16 @@ export interface AteBridge {
     execute(id: string): Promise<Res<ExecuteOutput>>;
   };
   vaults: { status(): Promise<Res<VaultsStatus>>; pause(): Promise<Res<PauseOutput>> };
-  strategy: { get(): Promise<Res<StrategyGetOutput>>; set(patch: StrategyPatch, rationale: string): Promise<Res<StrategySetOutput>> };
+  strategy: {
+    get(): Promise<Res<StrategyGetOutput>>;
+    set(patch: StrategyPatch, rationale: string): Promise<Res<StrategySetOutput>>;
+    /**
+     * ADDITIVE (not in the frozen §10.2 list; needed for in-UI loosening approval, §11.5): approve a pending change
+     * that `set` (or a chat turn) returned as ATE_APPROVAL_REQUIRED. Main signs `strategyPayload(details)` with
+     * ate-approve (Touch ID); `ttyCode` (8 digits, §10.1 armed fallback) is used instead when given. → /strategy/approve.
+     */
+    approve(changeId: string, ttyCode?: string): Promise<Res<StrategyApproveResponse>>;
+  };
   journal: { list(filter: JournalFilter): Promise<Res<JournalPage>>; get(id: string): Promise<Res<JournalEntry>> };
   chat: {
     send(sessionId: string, text: string): Promise<Res<{ turnId: string }>>;
@@ -117,6 +132,7 @@ export const IPC_METHODS = [
   "vaults.pause",
   "strategy.get",
   "strategy.set",
+  "strategy.approve", // additive: see AteBridge.strategy.approve
   "journal.list",
   "journal.get",
   "chat.send",

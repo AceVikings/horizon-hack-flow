@@ -3,9 +3,9 @@ import { defineConfig, externalizeDepsPlugin } from "electron-vite";
 import react from "@vitejs/plugin-react";
 
 export default defineConfig({
-  main: { plugins: [externalizeDepsPlugin({ exclude: ["@ate/core"] })] },
+  main: { plugins: [externalizeDepsPlugin({ exclude: ["@ate/core", "@ate/approve"] })] },
   preload: {
-    plugins: [externalizeDepsPlugin({ exclude: ["@ate/core"] })],
+    plugins: [externalizeDepsPlugin({ exclude: ["@ate/core", "@ate/approve"] })],
   },
   renderer: {
     plugins: [react()],

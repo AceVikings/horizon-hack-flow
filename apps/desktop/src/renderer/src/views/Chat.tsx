@@ -4,6 +4,7 @@ import { useApp, useRemote } from "../app";
 import { ContextPanel, Inspector } from "../shell";
 import { Badge, Empty } from "../ui";
 import { clock } from "../format";
+import { LooseningApproval, changeIdsIn } from "../approval";
 
 const PROMPTS = ["How am I doing today?", "Go to cash on HSK, keep the BTC", "Only trade BTC", "Be more conservative, stop out at 2%", "Why did you sell at 3am?", "Pause"];
 const sid = (): string => {
@@ -15,7 +16,7 @@ const sid = (): string => {
 export default function Chat() {
   const { ate, vs, toast } = useApp();
   const session = useMemo(sid, []);
-  const { res } = useRemote(() => ate.chat.history(session), [session]);
+  const { res, reload } = useRemote(() => ate.chat.history(session), [session]);
   const [pending, setPending] = useState(false);
   const [text, setText] = useState("");
   const end = useRef<HTMLDivElement>(null);
@@ -33,6 +34,7 @@ export default function Chat() {
     setText("");
     setPending(true);
     const r = await ate.chat.send(session, v);
+    reload();
     if (!r.ok) { setPending(false); toast({ kind: "error", text: `${r.error.code}: ${r.error.message}` }); }
   }
 
@@ -50,7 +52,11 @@ export default function Chat() {
       <div className="chat">
         <div className="msgs" aria-live="polite">
           {msgs.length === 0 && <Empty title="Talk to the agent">Ask how you are doing, change the strategy in plain words, or pause everything. Try a quick prompt on the left.</Empty>}
-          {msgs.map((m) => <Msg key={m.id} m={m} engine={engine} />)}
+          {(() => {
+            // A pending change is offered once: on its tool card when the result carried the details, else on the reply quoting its id.
+            const shown = new Set<string>();
+            return msgs.map((m) => <Msg key={m.id} m={m} engine={engine} shown={shown} />);
+          })()}
           {waiting && <div className="msg agent"><div className="bubble thinking"><span className="dots" aria-hidden="true">●●●</span> {toolRunning ? "thinking / calling tools…" : "thinking…"}</div></div>}
           <div ref={end} />
         </div>
@@ -70,26 +76,33 @@ export default function Chat() {
   );
 }
 
-function Msg({ m, engine }: { m: ChatMessage; engine: string }) {
+function Msg({ m, engine, shown }: { m: ChatMessage; engine: string; shown: Set<string> }) {
   if (m.role === "tool" && m.tool) {
     const r = m.tool.result as any;
     const approval = r?.error?.code === "ATE_APPROVAL_REQUIRED";
+    const changeId: string | undefined = approval ? r.error.details?.changeId : undefined;
+    if (changeId) shown.add(changeId);
     const clamped = r?.clamped === true || (Array.isArray(r?.changes) && r.changes.some((c: any) => c.clampedBy));
     return (
       <div className="msg agent">
         <div className="toolcard">
           <div className="th"><Badge tone={approval ? "warn" : "info"}>tool</Badge> <b className="mono">{m.tool.name}</b>{m.tool.decisionId && <span className="muted small"> → journal <span className="mono">{m.tool.decisionId}</span></span>}</div>
-          {approval && <div className="notice warn" role="status"><Badge tone="warn">Touch ID required</Badge> This change loosens limits.<pre className="raw">{r.error.details?.renderedDiff}</pre></div>}
+          {approval && (changeId
+            ? <LooseningApproval changeId={changeId} renderedDiff={r.error.details?.renderedDiff} />
+            : <div className="notice warn" role="status"><Badge tone="warn">Touch ID required</Badge> This change loosens limits.<pre className="raw">{r.error.details?.renderedDiff}</pre></div>)}
           {clamped && <div className="notice"><Badge tone="warn">clamped</Badge> The value was clamped to on-chain limits.</div>}
           <details><summary>args and result</summary><pre className="raw">{JSON.stringify({ args: m.tool.args, result: m.tool.result }, null, 2)}</pre></details>
         </div>
       </div>
     );
   }
+  const ids = m.role === "agent" ? changeIdsIn(m.text).filter((id) => !shown.has(id)) : [];
+  ids.forEach((id) => shown.add(id));
   return (
     <div className={`msg ${m.role}`}>
       <div className="bubble">{m.text}</div>
-      <div className="meta small muted">{m.role === "user" ? "you" : `agent · engine=${engine}`} · {clock(m.at)}</div>
+      {ids.map((id) => <LooseningApproval key={id} changeId={id} />)}
+      <div className="meta small muted">{m.role === "user" ? "you" : `agent · engine=${m.engine ?? engine}`} · {clock(m.at)}</div>
     </div>
   );
 }

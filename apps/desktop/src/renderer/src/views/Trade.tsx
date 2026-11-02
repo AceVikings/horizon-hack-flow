@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { MARKET_IDS, MARKETS, reasonName, type MarketId, type MarketView, type ProposeOutput, type Quote, type Side } from "@ate/core";
+import { MARKET_IDS, MARKETS, SUPRA_PAIRS, reasonName, type MarketId, type MarketView, type ProposeOutput, type Quote, type Side } from "@ate/core";
 import { useApp, useNow, useRemote } from "../app";
 import { ContextPanel, Inspector } from "../shell";
 import { Badge, Card, Empty, ErrorBox, KV, Link, TxLink, type Tone } from "../ui";
@@ -9,8 +9,8 @@ const QUOTE_FRESH_SEC = 15;
 const HINTS: Record<string, string> = {
   ATE_POLICY_TRADE_CAP: "Lower the amount below the per-trade cap shown in the checklist.",
   ATE_POLICY_EPOCH_CAP: "The epoch budget is spent. Wait for the epoch reset or trade smaller.",
-  ATE_ORACLE_DEVIATION: "Pool spot is too far from APRO. Wait for the pool to converge; do not force it.",
-  ATE_ORACLE_STALE: "APRO is older than maxOracleAge. Entries wait; exits use the min(APRO, TWAP) floor.",
+  ATE_ORACLE_DEVIATION: "Pool spot is too far from the Supra oracle. Wait for the pool to converge; do not force it.",
+  ATE_ORACLE_STALE: "The Supra oracle is older than maxOracleAge. Entries wait; exits use the min(oracle, TWAP) floor.",
   ATE_POLICY_COOLDOWN: "Cooldown between trades has not elapsed.",
   ATE_POLICY_PAUSED: "Vault is paused. Unpause is owner-only: run `ate-owner unpause --all` on the owner's device.",
   ATE_POLICY_ZERO_AMOUNT: "Enter an amount greater than zero.",
@@ -65,12 +65,25 @@ export default function Trade() {
   const fresh = age !== null && age < QUOTE_FRESH_SEC;
   const blockedCode = quote && quote.policy.code !== "OK" ? quote.policy.code : null;
   const phaseV: Phase = !amountIn || amountIn === "0" ? "empty" : phase === "proposing" ? "proposing" : phase === "submitting" ? "submitting" : phase === "filled" ? "filled" : phase === "error" ? "error" : loading ? "loading" : blockedCode ? "blocked" : quote ? (proposal ? "proposed" : "quoted") : qErr ? "error" : "loading";
-  const canExecute = !!proposal && fresh && !blockedCode && phase === "idle";
+  const needsHuman = proposal?.status === "awaiting_human";
+  const canExecute = !!proposal && !needsHuman && fresh && !blockedCode && phase === "idle";
+  const [approving, setApproving] = useState(false);
+
+  /** confirm mode: Touch ID over the daemon-issued trade payload (main does /trade/approve both steps). */
+  async function doApprove() {
+    if (!proposal) return;
+    setApproving(true);
+    const r = await ate.trade.approve(proposal.proposalId, proposal.journalHash);
+    setApproving(false);
+    if (r.ok) { setProposal({ ...proposal, status: "approved", approvedBy: "human" }); toast({ kind: "ok", text: "Trade approved (Touch ID). Execute when ready." }); }
+    else { setQErr({ code: r.error.code, message: r.error.message, ...(r.error.hint ? { hint: r.error.hint } : {}) }); toast({ kind: "error", text: `${r.error.code}: ${r.error.message}` }); }
+  }
 
   async function doPropose() {
     if (!quote) return;
     setPhase("proposing");
-    const r = await ate.trade.propose({ market, side, amountIn: quote.amountIn, origin: "discretionary", thesis: "Manual trade proposed from the desktop UI", rationale: "Manual trade from desktop UI" });
+    // No origin: a ui-scope proposal is origin=human (approved in autonomous mode, awaiting_human in confirm mode).
+    const r = await ate.trade.propose({ market, side, amountIn: quote.amountIn, rationale: "Manual trade from desktop UI" });
     if (r.ok) { setProposal(r.data); setPhase("idle"); } else { setPhase("error"); setQErr({ code: r.error.code, message: r.error.message, ...(r.error.hint ? { hint: r.error.hint } : {}) }); }
   }
   async function doExecute() {
@@ -132,7 +145,7 @@ export default function Trade() {
               <KV k="Price impact">{quote.impactBps} bps</KV>
               <KV k="minOutFloor (on-chain)">{fmtUnits(quote.minOutFloor, side === "buy" ? baseDp : 6, 2)}</KV>
               <KV k="Notional">{usdE8(quote.policy.notionalUsdE8)}</KV>
-              <KV k="Path">{quote.exitPath ? "exit path (floor min(APRO, TWAP))" : "normal"}</KV>
+              <KV k="Path">{quote.exitPath ? "exit path (floor min(oracle, TWAP))" : "normal"}</KV>
               <KV k="Quote age"><span className={fresh ? "" : "stale"}>{age} s {fresh ? "" : "(stale: re-quote)"}</span></KV>
             </div>
           )}
@@ -145,10 +158,11 @@ export default function Trade() {
           )}
           <div className="actions">
             <button className="btn" disabled={!quote || !!blockedCode || phase !== "idle" || !!proposal} onClick={doPropose}>{phase === "proposing" ? "Proposing…" : "Propose"}</button>
+            {needsHuman && <button className="btn primary" disabled={approving || !fresh} onClick={doApprove} title="confirm mode: approve this trade with Touch ID">{approving ? "Waiting for Touch ID…" : "Approve (Touch ID)"}</button>}
             <button className="btn primary" disabled={!canExecute} onClick={doExecute} title={canExecute ? "⌘Enter" : "Needs a proposal, a fresh quote and check() = OK"}>{phase === "submitting" ? "Submitting…" : "Execute  ⌘↵"}</button>
             <button className="btn ghost" onClick={() => { setProposal(null); setAmount(""); }}>Cancel  Esc</button>
           </div>
-          {proposal && <p className="small muted">Proposal <span className="mono">{proposal.proposalId}</span> valid until {new Date(proposal.expiresAt * 1000).toLocaleTimeString()} · reserved turnover ${proposal.reservedTurnoverUsd}</p>}
+          {proposal && <p className="small muted">Proposal <span className="mono">{proposal.proposalId}</span> · {proposal.status === "awaiting_human" ? <Badge tone="warn">awaiting your approval (confirm mode)</Badge> : <Badge tone="ok">{proposal.status}{proposal.approvedBy ? ` · ${proposal.approvedBy}` : ""}</Badge>} · valid until {new Date(proposal.expiresAt * 1000).toLocaleTimeString()} · reserved turnover ${proposal.reservedTurnoverUsd}</p>}
           {phase === "filled" && fill && (
             <div className="filled" role="status"><Badge tone="ok">filled</Badge> tx <TxLink hash={fill.txHash} /> · amountOut {fill.amountOut}</div>
           )}
@@ -202,12 +216,12 @@ function MarketHeader({ mv, market }: { mv: MarketView | null; market: MarketId 
     <div className="mhead">
       <div className="mtitle"><h2>{m.base}/USDT</h2><span className="muted">{m.cexSymbol}</span></div>
       <div className="mstats">
-        <div><span className="k">APRO oracle</span><span className="big num">${px8(o.price)}</span><Badge tone={o.health === "fresh" ? "ok" : o.health === "aging" ? "warn" : "bad"}>{o.health} · {o.ageSec} s old</Badge></div>
+        <div><span className="k">Supra oracle (pair {SUPRA_PAIRS[market]})</span><span className="big num">${px8(o.price)}</span><Badge tone={o.health === "fresh" ? "ok" : o.health === "aging" ? "warn" : "bad"}>{o.health} · {o.ageSec} s old</Badge></div>
         <div><span className="k">Pool spot</span><span className="big num">${px8(mv.pool.price)}</span><span className="muted num">TWAP ${px8(mv.pool.twap)}</span></div>
         <div><span className="k">CEX mid</span><span className="big num">{mv.cex ? "$" + px8(mv.cex.mid) : "—"}</span><span className="muted num">half-spread {mv.cex?.halfSpreadBps ?? "—"} bps</span></div>
         <div className="badges">
           <Badge tone={Math.abs(mv.pool.deviationBps) > 150 ? "warn" : "ok"}>oracle deviation {bps(mv.pool.deviationBps)}</Badge>
-          <Badge tone={mv.supra?.active ? (Math.abs(mv.supra.disagreeBps ?? 0) > 50 ? "warn" : "ok") : "mute"} title="Supra cross-check">Supra {mv.supra?.active ? bps(mv.supra.disagreeBps) : "inactive"}</Badge>
+          <Badge tone={mv.supra?.active ? (Math.abs(mv.supra.disagreeBps ?? 0) > 50 ? "warn" : "ok") : "mute"} title="APRO cross-check: Supra vs APRO">APRO cross-check {mv.supra?.active ? bps(mv.supra.disagreeBps) : "inactive"}</Badge>
           <Badge tone={cexGap !== null && cexGap > 60 ? "info" : "mute"}>CEX gap {cexGap === null ? "—" : bps(cexGap)}</Badge>
           {mv.readOnly && <Badge tone="bad">read-only</Badge>}
           {mv.vault.paused && <Badge tone="bad">vault paused</Badge>}

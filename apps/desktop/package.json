@@ -15,7 +15,8 @@
   },
   "dependencies": {
     "@ate/core": "workspace:*",
-    "ws": "^8.18.0"
+    "ws": "^8.18.0",
+    "@ate/approve": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",

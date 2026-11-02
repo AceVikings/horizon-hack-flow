@@ -5,6 +5,7 @@ import type { DaemonEvent, MarketId } from "@ate/core";
 import { MARKET_IDS } from "@ate/core";
 import { EVENT_CHANNEL, IPC_METHODS, type ChatMessage, type IpcMethod, type JournalFilter, type PaymentsList, type Res, type Settings } from "../shared/bridge";
 import { DaemonClient } from "./daemon";
+import { approvePayment, approveStrategy, approveTrade, denyPayment, listPayments, rememberPending } from "./live";
 
 const FIXTURES = process.env.ATE_FIXTURES === "1";
 const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'";
@@ -22,12 +23,19 @@ const daemon = new DaemonClient((e: DaemonEvent) => {
 
 function handleEvent(e: DaemonEvent): void {
   if (e.type === "chat.delta") {
+    // The daemon echoes the user's turn (role "user"); main already logged it at send time.
+    if ((e.data as { role?: string }).role === "user") return;
     const log = chatLog.get(e.data.sessionId) ?? [];
     const last = log[log.length - 1];
     if (last && last.role === "agent" && last.turnId === e.data.turnId) last.text += e.data.text;
-    else log.push({ id: `${e.data.turnId}:a`, role: "agent", text: e.data.text, at: e.at, turnId: e.data.turnId });
+    else {
+      const engine = (e.data as { engine?: string }).engine;
+      log.push({ id: `${e.data.turnId}:a`, role: "agent", text: e.data.text, at: e.at, turnId: e.data.turnId, ...(engine ? { engine } : {}) });
+    }
     chatLog.set(e.data.sessionId, log);
   } else if (e.type === "chat.tool") {
+    const r = e.data.result as { error?: { code?: string; details?: unknown } } | undefined;
+    if (r?.error?.code === "ATE_APPROVAL_REQUIRED") rememberPending(r.error.details);
     const log = chatLog.get(e.data.sessionId) ?? [];
     log.push({ id: `${e.data.turnId}:${log.length}`, role: "tool", text: e.data.tool, at: e.at, turnId: e.data.turnId, tool: { name: e.data.tool, args: e.data.args, result: e.data.result, decisionId: e.data.decisionId } });
     chatLog.set(e.data.sessionId, log);
@@ -59,8 +67,9 @@ async function invoke(method: IpcMethod, arg: any, arg2?: any): Promise<unknown>
     case "trade.execute":
       return daemon.tool("ate_execute", { proposalId: String(arg) });
     case "trade.approve":
-      // confirm-mode approvals are signed by ate-approve over the digest and posted by the daemon route (Lane E/B).
-      return bad("confirm-mode approval route not wired");
+      // confirm mode: daemon nonce + trade body → ate-approve (Touch ID) over tradePayload → /trade/approve. The
+      // renderer's `digest` is not trusted: the payload is rebuilt from the daemon's step-1 response.
+      return approveTrade(daemon, String(arg));
     case "vaults.status": {
       const [st, pos] = await Promise.all([daemon.status().then((d) => ({ ok: true as const, d })).catch((e: Error) => ({ ok: false as const, e })), daemon.tool("ate_positions", {})]);
       if (!st.ok) return bad(st.e.message);
@@ -71,8 +80,13 @@ async function invoke(method: IpcMethod, arg: any, arg2?: any): Promise<unknown>
       return daemon.tool("ate_pause", { rationale: "Pause-all from desktop UI" });
     case "strategy.get":
       return daemon.tool("ate_strategy_get", {});
-    case "strategy.set":
-      return daemon.tool("ate_strategy_set", { patch: arg, rationale: String(arg2 ?? "desktop UI") });
+    case "strategy.set": {
+      const r = await daemon.tool("ate_strategy_set", { patch: arg, rationale: String(arg2 ?? "desktop UI").padEnd(16, ".") });
+      if (!r.ok && r.error.code === "ATE_APPROVAL_REQUIRED") rememberPending(r.error.details);
+      return r;
+    }
+    case "strategy.approve":
+      return approveStrategy(daemon, String(arg), arg2 === undefined || arg2 === null ? undefined : String(arg2));
     case "journal.list": {
       const f = (arg ?? {}) as JournalFilter;
       return daemon.tool("ate_journal_read", { limit: Math.min(f.limit ?? 100, 200), ...(f.market ? { market: f.market } : {}), ...(f.kind ? { kind: f.kind } : {}), ...(f.before ? { before: f.before } : {}) });
@@ -95,10 +109,11 @@ async function invoke(method: IpcMethod, arg: any, arg2?: any): Promise<unknown>
     case "chat.history":
       return { ok: true, data: chatLog.get(String(arg)) ?? [] };
     case "payments.list":
-      return { ok: true, data: payments };
+      return listPayments(payments);
     case "payments.approve":
+      return approvePayment(String(arg), String(arg2 ?? ""));
     case "payments.deny":
-      return bad("payments are not live (G-HSP no-go); approval dialogs ship with ate-pay");
+      return denyPayment(String(arg));
     case "settings.get":
       return { ok: true, data: { ...settings, daemonPort: daemon.connection().port ?? null } };
     case "settings.set":
@@ -141,24 +156,45 @@ function createWindow(): void {
 }
 
 const VIEWS = ["decisions", "trade", "agents", "positions", "chat", "payments"];
+/** Type into a React-controlled input (selector) and optionally submit via a button (selector). */
+const typeJs = (input: string, value: string, submit?: string) =>
+  `(()=>{const i=document.querySelector(${JSON.stringify(input)});if(!i)return;const set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;set.call(i,${JSON.stringify(value)});i.dispatchEvent(new Event('input',{bubbles:true}));${submit ? `setTimeout(()=>document.querySelector(${JSON.stringify(submit)})?.click(),80)` : ""}})()`;
+const clickText = (sel: string, text: string) => `[...document.querySelectorAll(${JSON.stringify(sel)})].find(x=>x.textContent.trim()===${JSON.stringify(text)})?.click()`;
+
 async function takeScreenshots(dir: string): Promise<void> {
   const out = resolve(dir);
+  const prefix = process.env.ATE_SCREENSHOT_PREFIX ?? "";
   mkdirSync(out, { recursive: true });
   const w = win!;
+  const js = (s: string) => w.webContents.executeJavaScript(s);
+  const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
   w.setSize(1480, 920);
-  await new Promise((r) => setTimeout(r, 1500));
+  await wait(FIXTURES ? 1500 : 4000);
   for (const v of VIEWS) {
-    await w.webContents.executeJavaScript(`location.hash = "#/${v}"`);
+    await js(`location.hash = "#/${v}"`);
+    await wait(800);
     if (v === "chat") {
-      for (const q of ["How am I doing today?", "Be more aggressive"]) {
-        await w.webContents.executeJavaScript(`(()=>{const b=[...document.querySelectorAll('.chip.wide')].find(x=>x.textContent==='${q}'||('${q}'==='Be more aggressive'&&x.textContent.startsWith('Be more conservative')));if('${q}'==='Be more aggressive'){const i=document.querySelector('.composer input');const set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;set.call(i,'${q}');i.dispatchEvent(new Event('input',{bubbles:true}));setTimeout(()=>document.querySelector('.composer button').click(),50)}else b?.click()})()`);
-        await new Promise((r) => setTimeout(r, 2800));
+      // fixtures: canned replies; live: daemon chat turns (a loosening stop-loss shows the in-UI approval card)
+      const prompts = FIXTURES ? ["How am I doing today?", "Be more aggressive"] : ["How am I doing today?", "Stop out HSK at 5%"];
+      for (const q of prompts) {
+        await js(typeJs(".composer input", q, ".composer button"));
+        await wait(FIXTURES ? 2800 : 9000);
       }
     }
-    if (v === "decisions") await w.webContents.executeJavaScript(`document.querySelector('[data-testid="row"]')?.click()`);
-    await new Promise((r) => setTimeout(r, 1800));
+    if (v === "decisions") await js(`document.querySelector('[data-testid="row"]')?.click()`);
+    if (v === "trade" && !FIXTURES) {
+      await js(clickText(".chip", "$5"));
+      await wait(3000);
+      await js(clickText(".actions .btn", "Propose"));
+    }
+    if (v === "agents" && !FIXTURES) {
+      await js(clickText(".chip", "aggressive"));
+      await wait(4000);
+      await js(`document.querySelector('[aria-label="Approve loosening change"]')?.scrollIntoView({block:"center"})`);
+    }
+    await wait(FIXTURES ? 1800 : 3500);
     const img = await w.webContents.capturePage();
-    writeFileSync(join(out, `${v}.png`), img.toPNG());
+    writeFileSync(join(out, `${prefix}${v}.png`), img.toPNG());
   }
   app.quit();
 }

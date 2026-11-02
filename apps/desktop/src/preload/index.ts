@@ -16,7 +16,7 @@ const ate = Object.freeze({
     execute: (id: string) => call("trade.execute", id),
   }),
   vaults: Object.freeze({ status: () => call("vaults.status"), pause: () => call("vaults.pause") }),
-  strategy: Object.freeze({ get: () => call("strategy.get"), set: (patch: unknown, rationale: string) => call("strategy.set", patch, rationale) }),
+  strategy: Object.freeze({ get: () => call("strategy.get"), set: (patch: unknown, rationale: string) => call("strategy.set", patch, rationale), approve: (changeId: string, ttyCode?: string) => call("strategy.approve", changeId, ttyCode) }),
   journal: Object.freeze({ list: (f: unknown) => call("journal.list", f), get: (id: string) => call("journal.get", id) }),
   chat: Object.freeze({ send: (s: string, t: string) => call("chat.send", s, t), history: (s: string) => call("chat.history", s) }),
   payments: Object.freeze({ list: () => call("payments.list"), approve: (id: string, d: string) => call("payments.approve", id, d), deny: (id: string) => call("payments.deny", id) }),

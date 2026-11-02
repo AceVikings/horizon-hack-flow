@@ -1,7 +1,6 @@
 // Daemon client (main process only). Reads ~/.ate/runtime.json, attaches for a `ui` token (SPEC §10.1),
 // calls MCP tools over Streamable HTTP /mcp, and relays WS /events. Tokens never leave main.
 
-import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -19,7 +18,10 @@ import type {
   UiAttachStep1Response,
   UiAttachStep2Response,
 } from "@ate/core";
+import { uiAttachPayload } from "@ate/approve";
+import type { AteErrorCode } from "@ate/core";
 import type { ConnectionInfo, Res } from "../shared/bridge";
+import { signApproval } from "./approve";
 
 const ORIGIN = "ate://local";
 
@@ -44,7 +46,7 @@ export class DaemonClient {
   /** (Re)load runtime.json and attach. Never restarts the trader. */
   async connect(): Promise<ConnectionInfo> {
     try {
-      const path = process.env.ATE_RUNTIME_JSON ?? join(homedir(), ".ate", "runtime.json");
+      const path = process.env.ATE_RUNTIME_JSON ?? join(process.env.ATE_HOME ?? join(homedir(), ".ate"), "runtime.json");
       this.rt = JSON.parse(await readFile(path, "utf8")) as RuntimeJson;
     } catch {
       this.info = { mode: "offline", detail: "daemon not running (no ~/.ate/runtime.json)" };
@@ -62,21 +64,55 @@ export class DaemonClient {
     return this.info;
   }
 
-  /** POST /ui/attach: nonce, then an ate-approve (Touch ID) signature over it. */
+  /**
+   * POST /ui/attach: nonce, then an ate-approve (Touch ID) signature over uiAttachPayload. Step 2 carries the agent
+   * token from runtime.json as its bearer (Lane E route). Without ate-approve, set ATE_UI_TOKEN (dev only).
+   */
   private async attach(): Promise<string> {
     const r1 = await this.http<UiAttachStep1Response>("POST", "/ui/attach", {}, false);
-    const approval = await signWithAteApprove({ kind: "ui_attach", nonce: r1.nonce, pid: this.rt!.pid, port: this.rt!.port });
-    const r2 = await this.http<UiAttachStep2Response>("POST", "/ui/attach", { nonce: r1.nonce, approval }, false);
+    const s = await signApproval(uiAttachPayload({ nonce: r1.nonce, expiresAt: r1.expiresAt, pid: this.rt!.pid, port: this.rt!.port }));
+    if (!s.ok) throw new Error(`ate-approve ${s.code}: ${s.message}`);
+    const r2 = await this.http<UiAttachStep2Response>("POST", "/ui/attach", { nonce: r1.nonce, approval: s.signature }, false, this.rt!.agentToken);
     return r2.uiToken;
   }
 
-  private async http<T>(method: "GET" | "POST", path: string, body?: unknown, auth = true): Promise<T> {
+  /** Structured call for the approval routes: daemon errors (`{error:{code,message,details}}`) become Res errors. */
+  async call<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<Res<T>> {
+    if (this.info.mode !== "live" || !this.rt) return { ok: false, error: { code: "ATE_DAEMON_LOCKED", message: this.info.detail ?? "daemon offline" } };
+    try {
+      const res = await fetch(this.base() + path, {
+        method,
+        headers: { "content-type": "application/json", origin: ORIGIN, authorization: `Bearer ${this.uiToken}` },
+        body: body === undefined ? undefined : JSON.stringify(body),
+        signal: AbortSignal.timeout(20_000),
+      });
+      const text = await res.text();
+      let j: any = {};
+      try {
+        j = text ? JSON.parse(text) : {};
+      } catch {
+        j = { error: text.slice(0, 200) };
+      }
+      if (!res.ok || j?.ok === false) {
+        const e = j?.error;
+        const code = (typeof e === "object" && e?.code ? e.code : res.status === 401 ? "ATE_APPROVAL_REQUIRED" : "ATE_INTERNAL") as AteErrorCode;
+        const message = typeof e === "object" && e ? String(e.message ?? code) : String(e ?? `HTTP ${res.status}`);
+        return { ok: false, error: { code, message, ...(typeof e === "object" && e?.hint ? { hint: e.hint } : {}), ...(typeof e === "object" && e?.details ? { details: e.details } : {}) } };
+      }
+      return { ok: true, data: (j && typeof j === "object" && "ok" in j && "data" in j ? j.data : j) as T };
+    } catch (e) {
+      return { ok: false, error: { code: "ATE_INTERNAL", message: (e as Error).message } };
+    }
+  }
+
+  private async http<T>(method: "GET" | "POST", path: string, body?: unknown, auth = true, bearer?: string): Promise<T> {
+    const token = bearer ?? (auth ? this.uiToken : null);
     const res = await fetch(this.base() + path, {
       method,
       headers: {
         "content-type": "application/json",
         origin: ORIGIN,
-        ...(auth && this.uiToken ? { authorization: `Bearer ${this.uiToken}` } : {}),
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: AbortSignal.timeout(15_000),
@@ -94,9 +130,6 @@ export class DaemonClient {
   }
   cycle(): Promise<unknown> {
     return this.http("POST", "/cycle", {});
-  }
-  approveStrategy(changeId: string, approval: string): Promise<unknown> {
-    return this.http("POST", "/strategy/approve", { changeId, approval });
   }
 
   // ---- MCP over Streamable HTTP (minimal client: initialize, tools/call) ----
@@ -170,18 +203,4 @@ export class DaemonClient {
     if (this.reconnect) clearTimeout(this.reconnect);
     this.ws?.close();
   }
-}
-
-/**
- * Invoke the ate-approve helper (SPEC §10.1). It takes only the raw payload, derives the Touch ID prompt
- * itself, and prints the base64 P-256 signature on stdout. Contract owned by Lane E; path overridable.
- */
-export function signWithAteApprove(payload: Record<string, unknown>): Promise<string> {
-  const bin = process.env.ATE_APPROVE_BIN ?? "/usr/local/libexec/ate/ate-approve";
-  return new Promise((resolve, reject) => {
-    execFile(bin, ["--payload", JSON.stringify(payload)], { timeout: 70_000 }, (err, stdout) => {
-      if (err) reject(new Error(`ate-approve unavailable (${(err as NodeJS.ErrnoException).code ?? err.message}); set ATE_UI_TOKEN or ATE_APPROVE_BIN`));
-      else resolve(stdout.trim());
-    });
-  });
 }

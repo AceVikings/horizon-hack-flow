@@ -136,7 +136,7 @@ function LimitsSummary() {
       const l = r.data[0]?.vault.limits;
       if (!l) return;
       const e8 = (s: string) => "$" + (BigInt(s) / 100_000_000n).toString();
-      setTxt(`${e8(l.maxTradeUsdE8)}/trade · ${e8(l.maxEpochUsdE8)}/${l.epochDuration / 3600}h · ${e8(l.maxExposureUsdE8)} exposure · slippage ${l.maxSlippageBps} bps · oracle dev ${l.maxOracleDeviationBps} bps`);
+      setTxt(`${e8(l.maxTradeUsdE8)}/trade · ${e8(l.maxEpochUsdE8)}/${l.epochDuration === 86400 ? "UTC day" : `${l.epochDuration / 3600}h`} · ${e8(l.maxExposureUsdE8)} exposure · slippage ${l.maxSlippageBps} bps · oracle dev ${l.maxOracleDeviationBps} bps`);
     });
   }, [ate, tick]);
   return <span className="num">{txt}</span>;
