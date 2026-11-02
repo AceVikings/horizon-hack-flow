@@ -12,6 +12,7 @@ import { PageHead, useNav } from "../src/shell";
 import { Btn, Pill, TxLink } from "../src/ui";
 import { ToolResultBlock } from "../src/charts";
 import { CodeApprove, approveRiskier } from "./approveCode";
+import { ChatModelPicker, McpToolsSheet } from "./AskTools";
 import type { ViewProps } from "./registry";
 
 const PROMPTS = ["How am I doing?", "Show me BTC price today", "Stop trading", "Go to cash"];
@@ -195,7 +196,11 @@ export default function Ask(_: ViewProps) {
         <div ref={end} />
       </div>
 
-      <div className="qps" style={{ marginTop: 18 }}>
+      <div className="row g16" style={{ marginTop: 18, alignItems: "center", flexWrap: "wrap" }}>
+        <ChatModelPicker />
+        <McpToolsSheet />
+      </div>
+      <div className="qps" style={{ marginTop: 10 }}>
         {PROMPTS.map((q) => (
           <Pill key={q} onClick={() => void send(q)}>
             {q}
