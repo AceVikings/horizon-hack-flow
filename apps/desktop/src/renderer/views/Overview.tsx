@@ -59,9 +59,11 @@ function SimpleHome() {
     refresh();
   };
   const last = (j.last?.entries ?? []).filter((e) => e.kind !== "attestation" && e.kind !== "oracle_refresh").slice(0, 3);
+  // Money in the vaults (cash + tokens at the oracle price), as a small way into Wallet.
+  const held = mkOk.reduce((a, m) => a + Number(m.vault.balanceQuote) / 1e6 + (Number(m.vault.balancePrice) / 10 ** MARKETS[m.market].baseDecimals) * (Number(m.oracle.price) / 1e8), 0);
   return (
     <div className="page1">
-      <PageHead title="Home" />
+      <PageHead title="Home" acts={<button className="linkbtn sm" onClick={() => go("wallet")}>Wallet · {money(held)}</button>} />
       <p className="sentence" role="status">{sentence}</p>
       <div className="row g18" style={{ marginTop: 26 }}>
         {paused ? (
