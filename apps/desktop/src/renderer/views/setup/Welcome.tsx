@@ -56,6 +56,7 @@ export default function Welcome() {
             I already have vaults
           </Btn>
         </div>
+        <div style={{ marginBottom: "auto" }} />
       </div>
       <div className="wr">
         <div className="stepno" style={{ color: "var(--sage)", marginBottom: 14 }}>With the default limits</div>
