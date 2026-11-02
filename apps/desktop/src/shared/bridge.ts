@@ -249,6 +249,8 @@ export interface AteBridge {
   proof?: { get(): Promise<Res<ProofState>>; run(o?: { market?: MarketId; waitPauseSec?: number }): Promise<Res<ProofRun>>; stop(): Promise<Res<{ run: ProofRun | null }>> };
   /** Additive (lane D1): live candidates for Markets (ate_candidates_get) and an out-of-schedule cycle (POST /cycle). */
   candidates?: { get(market?: MarketId): Promise<Res<CandidatesGetOutput>> };
+  /** Additive (lane D4): read-only charts and tables (ate_chart / ate_data). */
+  charts?: { chart(input: import("@ate/core").ChartInput): Promise<Res<import("@ate/core").ChartSpec>>; data(input: import("@ate/core").DataInput): Promise<Res<import("@ate/core").DataTable>> };
   cycle?: { request(): Promise<Res<{ started: boolean; reason?: string; cycle: number }>> };
   /** Additive (lane D3): the in-app agent engine (Anthropic SDK). setKey sends the key once to the daemon keychain. */
   ai?: { health(): Promise<Res<AiHealth>>; check(): Promise<Res<AiHealth>>; setKey(apiKey: string): Promise<Res<AiHealth>>; clearKey(): Promise<Res<AiHealth>>; config(p: AiConfigPatch): Promise<Res<AiHealth>> };
@@ -307,6 +309,9 @@ export const IPC_METHODS = [
   "engine.select",
   // lane D1 (additive)
   "candidates.get",
+  // lane D4 (additive)
+  "charts.chart",
+  "charts.data",
   "cycle.request",
 ] as const;
 export type IpcMethod = (typeof IPC_METHODS)[number];

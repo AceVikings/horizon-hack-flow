@@ -194,6 +194,10 @@ async function invoke(method: IpcMethod, arg: any, arg2?: any): Promise<unknown>
       const pick = (k: string) => (typeof a[k] === "string" ? { [k]: a[k] } : {});
       return daemon.call("POST", "/ai/config", { ...pick("model"), ...pick("engine"), ...pick("traderEffort"), ...pick("chatEffort") });
     }
+    case "charts.chart":
+      return arg && typeof arg === "object" ? daemon.tool("ate_chart", arg as never) : bad("expected a chart input");
+    case "charts.data":
+      return arg && typeof arg === "object" ? daemon.tool("ate_data", arg as never) : bad("expected a data input");
     case "candidates.get":
       return daemon.tool("ate_candidates_get", (MARKET_IDS as readonly string[]).includes(arg) ? { market: arg as MarketId } : {});
     case "cycle.request":

@@ -14,10 +14,11 @@
     "screens": "electron-vite build && ATE_FIXTURES=1 ATE_SCREENSHOT_DIR=../../.context/screens electron ."
   },
   "dependencies": {
-    "@ate/core": "workspace:*",
-    "ws": "^8.18.0",
     "@ate/approve": "workspace:*",
-    "@ate/ui": "workspace:*"
+    "@ate/core": "workspace:*",
+    "@ate/ui": "workspace:*",
+    "lightweight-charts": "^5.2.1",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",

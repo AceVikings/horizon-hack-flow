@@ -45,6 +45,7 @@ const ate = Object.freeze({
   engine: Object.freeze({ providers: () => call("engine.providers"), test: (id: string) => call("engine.test", id), credential: (id: string, b: unknown) => call("engine.credential", id, b), confirm: (id: string, nonce: string, code: string) => call("engine.confirm", id, { nonce, code }), select: (p: string, m?: string) => call("engine.select", p, m) }),
   proof: Object.freeze({ get: () => call("proof.get"), run: (o?: unknown) => call("proof.run", o), stop: () => call("proof.stop") }),
   candidates: Object.freeze({ get: (m?: string) => call("candidates.get", m) }),
+  charts: Object.freeze({ chart: (i: unknown) => call("charts.chart", i), data: (i: unknown) => call("charts.data", i) }),
   cycle: Object.freeze({ request: () => call("cycle.request") }),
   events: Object.freeze({
     subscribe: (handler: (e: DaemonEvent) => void) => {

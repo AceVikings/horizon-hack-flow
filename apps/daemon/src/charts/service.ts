@@ -307,13 +307,11 @@ export class ChartService {
 
   private async priceChart(base: Base, m: MarketId, iv: ChartInterval, bars: number, input: ChartInput): Promise<ChartSpec> {
     const p = await this.poolCandles(m, iv, bars, input.network);
-    const last = p.candles.at(-1)?.c;
     return {
       ...base,
       title: `${LABEL[m]} price`,
       caption: `${LABEL[m]} price on the HSKSwap pool, ${iv} bars.`,
       series: [{ id: "pool", label: `${LABEL[m]} pool price`, type: "candles", unit: "usd", pane: 0, role: "primary", candles: p.candles }],
-      lines: last ? [{ v: last, label: "Last", role: "muted" }] : [],
       sources: [p.source],
       notes: p.notes,
     };

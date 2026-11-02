@@ -19,6 +19,7 @@ import {
 import { FIXTURE_CANDIDATES, FIXTURE_NOW, FIXTURE_PRICES, FIXTURE_STRATEGY, FIXTURE_VAULT_STATES as CORE_VAULT_STATES, FIXTURE_AGENT } from "@ate/core/fixtures";
 import type { AteBridge, ChatMessage, JournalFilter, PaymentsList, Res, Settings } from "@shared/bridge";
 import { fmtUnits } from "./format";
+import { chartFixtures } from "./charts/fixtures";
 
 /**
  * Screenshot scenario (fixtures only): `?fixtures&state=<s>` or localStorage "flow.fixture".
@@ -325,6 +326,7 @@ export function createFixtureBridge(): AteBridge {
       get: () => delay(ok({ candidates: SCENARIO === "empty" ? [] : FIXTURE_CANDIDATES, suppressed: SCENARIO === "empty" ? [] : [{ market: MARKET_WBTC, side: "buy" as const, cause: "entry_interval" as const, bps: 0 }], candidateTtlSec: 180, cycle: 1482, generatedAt: NOW })),
     },
     cycle: { request: () => delay(ok({ started: true, cycle: 1483 })) },
+    charts: chartFixtures, // lane D4
     strategy: {
       get: () => delay(ok(strategy)),
       set: (patch) => delay(ok({ status: "applied" as const, decisionId: "strat_fixture", changes: [], clamped: false, strategy: { ...strategy.strategy, ...(patch.enabled !== undefined ? { enabled: patch.enabled } : {}) } })),

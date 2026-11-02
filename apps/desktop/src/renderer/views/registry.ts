@@ -62,4 +62,6 @@ export const VIEWS: ViewDef[] = [
   { id: "payments", component: lazy(() => import("./Payments")) },
   { id: "settings", component: lazy(() => import("./setup/Settings")) },
   { id: "accounts", component: lazy(() => import("./setup/Accounts")) },
+  { id: "charts", component: lazy(() => import("./Charts")) }, // D4
+  { id: "tools", component: lazy(() => import("./Tools")) }, // D4
 ];
