@@ -160,14 +160,14 @@ export async function doctorCmd(ctx: Ctx): Promise<number> {
   const warn = (s: string) => out(`  warn ${s}`);
   out(`ate doctor — chain ${cfg.chain.id}`);
   const probes = await probeRpcs(cfg.chain.rpcUrls);
-  for (const p of probes) mark(p.chainId === 177, `rpc ${p.url}: chainId=${p.chainId ?? "-"} head=${p.head ?? "-"} ${p.ms}ms${p.error ? ` (${p.error})` : ""}`);
+  for (const p of probes) mark(p.chainId === cfg.chain.id, `rpc ${p.url}: chainId=${p.chainId ?? "-"} head=${p.head ?? "-"} ${p.ms}ms${p.error ? ` (${p.error})` : ""}`);
   const heads = probes.filter((p) => p.head !== null).map((p) => p.head!);
   if (heads.length >= 2) {
     const spread = Number(heads.reduce((a, b) => (a > b ? a : b)) - heads.reduce((a, b) => (a < b ? a : b)));
     mark(spread <= 10, `≥ 2 RPC heads agree (spread ${spread} blocks)`);
   } else warn("fewer than 2 healthy RPCs (§16 requires a fallback)");
 
-  const chain = createChainClient({ urls: cfg.chain.rpcUrls });
+  const chain = createChainClient({ urls: cfg.chain.rpcUrls, chainId: cfg.chain.id });
   const c = chain.client;
   const vaults = Object.fromEntries(cfg.vaults.map((v) => [v.market, v.address])) as Partial<Record<MarketId, `0x${string}`>>;
   const markets = MARKET_IDS.filter((m) => cfg.venues.hskdex.markets.some((x) => x.id === m));
@@ -177,11 +177,11 @@ export async function doctorCmd(ctx: Ctx): Promise<number> {
     if (v) oracles[m] = (await c.readContract({ address: v, abi: policyVaultAbi, functionName: "oracle" }).catch(() => undefined)) as `0x${string}` | undefined;
   }
   const apro = await readAproCrossCheck(c, markets);
-  const reader = new MarketReader({ client: c, markets, vaults, oracles, maxOracleAgeSec: cfg.oracle.apro.maxAgeSec, apro: () => apro, cex: new CexReader({ baseUrl: cfg.oracle.cex.baseUrl }), supra: { pairs: { ...SUPRA_PAIRS, ...(cfg.supra.pairs ?? {}) }, maxAgeSec: cfg.supra.maxAgeSec, maxDisagreeBps: cfg.supra.maxDisagreeBps } });
+  const reader = new MarketReader({ client: c, markets, vaults, oracles, maxOracleAgeSec: cfg.oracle.apro.maxAgeSec, apro: () => apro, cex: new CexReader({ baseUrl: cfg.oracle.cex.baseUrl }), supra: { storage: cfg.supra.storage as `0x${string}`, pairs: { ...SUPRA_PAIRS, ...(cfg.supra.pairs ?? {}) }, maxAgeSec: cfg.supra.maxAgeSec, maxDisagreeBps: cfg.supra.maxDisagreeBps } });
   const read = await reader.read();
   const fac = (await c.readContract({ address: cfg.venues.hskdex.router as `0x${string}`, abi: [{ type: "function", name: "factory", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] }] as const, functionName: "factory" }).catch(() => null)) as string | null;
   mark(fac?.toLowerCase() === cfg.venues.hskdex.factory.toLowerCase(), `router factory() = ${fac}`);
-  const ven = new HskDexAdapter({ client: c, vaults, agent: () => null });
+  const ven = new HskDexAdapter({ client: c, vaults, agent: () => null, quoter: cfg.venues.hskdex.quoter as `0x${string}` });
   for (const m of markets) {
     const s = MARKETS[m];
     const r = read.markets[m];
@@ -272,7 +272,13 @@ export async function smokeCmd(ctx: Ctx): Promise<number> {
       return 1;
     }
     out(`executed tx ${e.data.txHash} block ${e.data.blockNumber} amountOut ${e.data.amountOut} notional $${e8ToUsd(BigInt(String(e.data.notionalUsdE8)))} attestation ${JSON.stringify(e.data.attestation)}`);
-    out(`https://hsk.blockscout.com/tx/${e.data.txHash}`);
+    let explorer = "https://hsk.blockscout.com";
+    try {
+      explorer = loadConfigFile(flag(ctx.argv, "config") ?? join(ateHome(ctx.env), "config.json")).chain.explorer.replace(/\/$/, "");
+    } catch {
+      /* default */
+    }
+    out(`${explorer}/tx/${e.data.txHash}`);
     return 0;
   } finally {
     await client.close();

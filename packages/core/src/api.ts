@@ -81,7 +81,7 @@ export interface StrategyApproveResponse {
 // ---- GET /status ----
 export interface StatusResponse extends DaemonCounters {
   version: string;
-  chainId: 177;
+  chainId: 177 | 133; // 133 = testnet (additive)
   blockNumber: string;
   locked: boolean;
   trader: { running: boolean; mode: "autonomous" | "confirm"; engine: "llm" | "rules"; lastCycleAt: UnixSec | null };

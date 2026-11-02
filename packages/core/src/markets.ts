@@ -125,3 +125,65 @@ export const SUPRA_PAIRS: Readonly<Record<MarketId, number>> = {
   "hsk-dex:WHSK/USDT:3000": 517,
   "hsk-dex:WBTC/USDT:3000": 0,
 };
+
+// ---- Additive (testnet): HashKey Chain TESTNET 133. Mainnet (177) values above stay the defaults; a 133 config
+// rewrites TOKENS / MARKETS / HSKDEX in place at startup via `configureNetwork` (see `applyConfigNetwork`).
+export const SUPPORTED_CHAIN_IDS = [177, 133] as const;
+export type SupportedChainId = (typeof SUPPORTED_CHAIN_IDS)[number];
+export const TESTNET_CHAIN_ID = 133 as const;
+
+/** Static testnet addresses (HSKSwap V3 testnet, Supra testnet, OP-stack predeploys). Test tokens/pools/vaults
+ * are per-deployment: deployments/133.json. */
+export const HSK_TESTNET = {
+  chainId: 133,
+  rpcUrls: ["https://testnet.hsk.xyz"],
+  explorer: "https://testnet-explorer.hskchain.net",
+  hskdex: {
+    factory: "0x2dC2c21D1049F786C535bF9d45F999dB5474f3A0",
+    router: "0xa6914E66690c6794244B5f66a09eAEbf66254237",
+    quoter: "0x73820d9eE5Bf1BfcD429580320FC7A374E8fa1cC",
+    positionManager: "0x73dEc6bfa6751509b08480bd97f54b874E3b20e8",
+    multicall3: "0xcA11bde05977b3631167028862bE2a173976CA11",
+  },
+  supra: {
+    storage: "0x6Cd59830AAD978446e6cc7f6cc173aF7656Fb917",
+    pull: "0x443A0f4Da5d2fdC47de3eeD45Af41d399F0E5702",
+    proofUrl: "https://rpc-testnet-dora-2.supra.com/get_proof",
+  },
+  eas: EAS,
+} as const;
+
+export interface NetworkOverrides {
+  chainId: SupportedChainId;
+  hskdex?: { factory?: string; router?: string; quoter?: string; multicall3?: string };
+  markets?: Partial<Record<MarketId, { pool?: string; oracle?: string; baseToken?: string; quoteToken?: string }>>;
+}
+
+let activeChain: SupportedChainId = CHAIN_ID;
+/** Chain the process is configured for (177 unless `configureNetwork` ran). */
+export function activeChainId(): SupportedChainId {
+  return activeChain;
+}
+
+/** Points the shared market/token/venue constants at another network (testnet 133). Process-wide; call once at
+ * startup, before any reads. A no-op for 177 without overrides. */
+export function configureNetwork(o: NetworkOverrides): void {
+  activeChain = o.chainId;
+  const hx = HSKDEX as unknown as Record<string, string>;
+  for (const [k, v] of Object.entries(o.hskdex ?? {})) if (v) hx[k] = v;
+  const tok = TOKENS as unknown as Record<string, { address: string }>;
+  for (const [id, ov] of Object.entries(o.markets ?? {})) {
+    const m = MARKETS[id as MarketId] as unknown as Record<string, string>;
+    if (!m || !ov) continue;
+    if (ov.pool) m.pool = ov.pool;
+    if (ov.oracle) m.oracle = ov.oracle;
+    if (ov.baseToken) {
+      m.baseToken = ov.baseToken;
+      tok[m.base!]!.address = ov.baseToken;
+    }
+    if (ov.quoteToken) {
+      m.quoteToken = ov.quoteToken;
+      tok.USDT!.address = ov.quoteToken;
+    }
+  }
+}

@@ -259,7 +259,7 @@ export class AteService {
 
   private ensureRows() {
     const db = this.o.db;
-    db.prepare("INSERT OR IGNORE INTO agents (id, label, address, chain_id, created_at) VALUES (?, 'agent', ?, 177, ?)").run(this.cfg.agentKeyId, this.o.signer.address ?? ZERO_ADDR, this.now());
+    db.prepare("INSERT OR IGNORE INTO agents (id, label, address, chain_id, created_at) VALUES (?, 'agent', ?, ?, ?)").run(this.cfg.agentKeyId, this.o.signer.address ?? ZERO_ADDR, this.cfg.chain.id, this.now());
     for (const m of this.markets) {
       const v = this.vaults[m];
       if (!v) continue;
@@ -1776,7 +1776,7 @@ export class AteService {
     return {
       ...this.countersOut(),
       version: this.o.version,
-      chainId: 177,
+      chainId: this.cfg.chain.id,
       blockNumber: (this.cycle?.blockNumber ?? 0n).toString(),
       locked: this.locked,
       trader: { running: this.counters.lastCycleAt !== null && this.now() - this.counters.lastCycleAt < 600, mode: this.strategy.mode, engine: this.strategy.engine, lastCycleAt: this.counters.lastCycleAt },

@@ -6,7 +6,7 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
-import { AteError, MIN_CANDIDATE_TTL_SEC, WHSK_DEMO_PROFILE_OVERRIDES, type TokenScope, isMarketId, parseConfig, type AteConfig, type MarketId, type Profile, type RuntimeJson } from "@ate/core";
+import { AteError, MIN_CANDIDATE_TTL_SEC, WHSK_DEMO_PROFILE_OVERRIDES, type TokenScope, isMarketId, parseConfig, applyConfigNetwork, type AteConfig, type MarketId, type Profile, type RuntimeJson } from "@ate/core";
 import { createChainClient } from "@ate/chain";
 import { Journal, migrate } from "@ate/journal";
 import { AgentSigner, FileKeyStore, defaultKeyStore, encryptKey, generatePrivateKey, loadEncryptedKey, type KeyStore } from "@ate/wallet";
@@ -29,15 +29,18 @@ export function loadConfigFile(path: string): AteConfig {
   } catch (e) {
     throw new AteError("ConfigError", "ATE_CONFIG_INVALID", `config is not valid JSON: ${(e as Error).message}`);
   }
-  return parseConfig(raw);
+  const cfg = parseConfig(raw);
+  applyConfigNetwork(cfg); // additive: testnet 133 rewrites the market/token constants; no-op on 177
+  return cfg;
 }
 
-/** Finds deployments/177.json: ATE_DEPLOYMENTS, cwd, then up from this module (repo checkout). */
-export function findDeployments(env: NodeJS.ProcessEnv = process.env): string | null {
-  const cands = [env.ATE_DEPLOYMENTS, join(process.cwd(), "deployments/177.json")];
+/** Finds deployments/<chainId>.json (177 default): ATE_DEPLOYMENTS, cwd, then up from this module (repo checkout). */
+export function findDeployments(env: NodeJS.ProcessEnv = process.env, chainId: number = 177): string | null {
+  const f = `deployments/${chainId}.json`;
+  const cands = [env.ATE_DEPLOYMENTS, join(process.cwd(), f)];
   let d = dirname(fileURLToPath(import.meta.url));
   for (let i = 0; i < 6; i++) {
-    cands.push(join(d, "deployments/177.json"));
+    cands.push(join(d, f));
     d = dirname(d);
   }
   return cands.find((p): p is string => !!p && existsSync(p)) ?? null;
@@ -46,7 +49,7 @@ export function findDeployments(env: NodeJS.ProcessEnv = process.env): string | 
 export function resolveCandidateTtl(cfg: AteConfig, env: NodeJS.ProcessEnv = process.env): { ttl: number; source: string } {
   const v = cfg.strategy.portfolio.candidateTtlSec;
   if (typeof v === "number") return { ttl: Math.max(MIN_CANDIDATE_TTL_SEC, v), source: "config" };
-  const p = findDeployments(env);
+  const p = findDeployments(env, cfg.chain.id);
   if (p) {
     try {
       const j = JSON.parse(readFileSync(p, "utf8")) as { candidateTtlSec?: number; strategy?: { candidateTtlSec?: number } };
@@ -117,7 +120,7 @@ export async function startDaemon(o: StartOptions = {}): Promise<RunningDaemon> 
   const v = journal.verify();
   if (!v.ok) throw new AteError("InternalError", "ATE_INTERNAL", `journal chain broken at seq ${v.seq}: ${v.reason}`);
 
-  const chain = createChainClient({ urls: cfg.chain.rpcUrls, log });
+  const chain = createChainClient({ urls: cfg.chain.rpcUrls, chainId: cfg.chain.id, log });
   const signer = new AgentSigner(cfg.agentKeyId);
   const txq = new TxQueue({ chain: viemTxChain(chain.client as never), account: () => signer.get(), chainId: cfg.chain.id, log });
 

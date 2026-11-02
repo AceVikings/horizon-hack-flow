@@ -16,6 +16,21 @@ export const hashkeyChain: Chain = defineChain({
   contracts: { multicall3: { address: HSKDEX.multicall3, blockCreated: 0 } },
 });
 
+/** Additive (testnet 133): the HashKey Chain testnet definition. */
+export const hashkeyTestnet: Chain = defineChain({
+  id: 133,
+  name: "HashKey Chain Testnet",
+  nativeCurrency: { name: "HSK", symbol: "HSK", decimals: 18 },
+  rpcUrls: { default: { http: ["https://testnet.hsk.xyz"] } },
+  blockExplorers: { default: { name: "Blockscout", url: "https://testnet-explorer.hskchain.net" } },
+  contracts: { multicall3: { address: HSKDEX.multicall3, blockCreated: 0 } },
+  testnet: true,
+});
+
+export function chainFor(id: number = CHAIN_ID): Chain {
+  return id === 133 ? hashkeyTestnet : hashkeyChain;
+}
+
 export interface RpcPoolOptions {
   urls: string[];
   /** Retries per URL (default 3). */
@@ -181,14 +196,15 @@ export interface ChainClient {
   chain: Chain;
 }
 
-export function createChainClient(opts: RpcPoolOptions): ChainClient {
+export function createChainClient(opts: RpcPoolOptions & { chainId?: number }): ChainClient {
   const rpc = new RpcPool(opts);
+  const chain = chainFor(opts.chainId);
   const client = createPublicClient({
-    chain: hashkeyChain,
+    chain,
     transport: custom({ request: rpc.eip1193 }, { retryCount: 0 }),
     batch: { multicall: false },
   }) as PublicClient;
-  return { rpc, client, chain: hashkeyChain };
+  return { rpc, client, chain };
 }
 
 /** Per-URL head + chain-id probe for `ate doctor` (§16: second RPC must pass before use). */

@@ -3,7 +3,7 @@
 
 import { z } from "zod";
 import { AteError } from "./errors.js";
-import { MARKET_IDS, MARKETS, TARGET_ASSETS, type MarketId } from "./markets.js";
+import { MARKET_IDS, MARKETS, TARGET_ASSETS, configureNetwork, type MarketId } from "./markets.js";
 
 const address = z.string().regex(/^0x[0-9a-fA-F]{40}$/, "expected a 20-byte 0x address");
 const bytes32 = z.string().regex(/^0x[0-9a-fA-F]{64}$/, "expected a 32-byte 0x hex value");
@@ -59,6 +59,9 @@ const venueMarketSchema = z
     pool: address,
     oracle: address,
     cexSymbol: z.enum(["HSKUSDT", "BTCUSDT"]),
+    /** Additive (testnet 133): token addresses when they differ from the 177 constants (test tokens). */
+    baseToken: address.optional(),
+    quoteToken: address.optional(),
   })
   .strict();
 
@@ -67,7 +70,7 @@ export const configSchema = z
     version: z.literal(1),
     chain: z
       .object({
-        id: z.literal(177),
+        id: z.union([z.literal(177), z.literal(133)]), // 133 = HashKey Chain testnet (additive)
         rpcUrls: z.array(z.string().url()).min(1),
         explorer: z.string().url(),
       })
@@ -211,6 +214,23 @@ export function parseConfig(input: unknown): AteConfig {
     });
   }
   return r.data;
+}
+
+/**
+ * Additive (testnet): on a non-177 config, point TOKENS / MARKETS / HSKDEX at the config's venue addresses
+ * (factory, router, quoter, per-market pool + token addresses). APRO does not exist on 133, so each market's
+ * APRO cross-check address becomes the zero address (read fails → gate inactive). No-op on 177.
+ */
+export function applyConfigNetwork(cfg: AteConfig): void {
+  if (cfg.chain.id === 177) return;
+  const h = cfg.venues.hskdex;
+  configureNetwork({
+    chainId: cfg.chain.id,
+    hskdex: { factory: h.factory, router: h.router, quoter: h.quoter },
+    markets: Object.fromEntries(
+      h.markets.map((m) => [m.id, { pool: m.pool, oracle: "0x0000000000000000000000000000000000000000", baseToken: m.baseToken, quoteToken: m.quoteToken }]),
+    ),
+  });
 }
 
 /** §16 defaults for the strategy block (both markets, default profile). */
