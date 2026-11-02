@@ -500,7 +500,6 @@ input.inp, select.inp { font: 500 13px/1 var(--body); color: var(--c); width: 10
 .hold > .ht { position: relative; }
 
 /* fixtures banner */
-.fixbanner { position: fixed; z-index: 50; top: 8px; left: 50%; transform: translateX(-50%); background: var(--c); color: var(--y); border: 1px solid var(--y); border-radius: 99px; padding: 3px 12px; font: 700 10px/1.4 var(--body); letter-spacing: .12em; text-transform: uppercase; pointer-events: none; }
 /* window drag region (frameless title bar area) */
 .drag { -webkit-app-region: drag; } .nodrag, .drag button, .drag a { -webkit-app-region: no-drag; }
 
