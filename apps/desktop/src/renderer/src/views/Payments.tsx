@@ -38,7 +38,7 @@ export default function Payments() {
 
       {gate === "no-go" && <div className="notice warn" role="status"><Badge tone="warn">G-HSP no-go</Badge> Payments are not live. The state machine below is the built flow; rows below are recorded responses.</div>}
 
-      <Card title="Settlement state machine">
+      <Card title="Settlement state machine" className="ate-dark">
         <ol className="flow">
           {FLOW.map((s) => <li key={s}><span className="st">{s}</span></li>)}
         </ol>

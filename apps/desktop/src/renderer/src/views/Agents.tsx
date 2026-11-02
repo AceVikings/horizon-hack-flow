@@ -57,7 +57,7 @@ export default function Agents() {
       </ContextPanel>
 
       <div className="grid2">
-        <Card title="AI scoreboard" right={<span className="muted small">today</span>}>
+        <Card title="AI scoreboard" className="ate-dark" right={<span className="muted small">today</span>}>
           <p className="score">
             LLM decisions today: <b className="num">{sb.acts}</b> acts / <b className="num">{sb.vetoes}</b> vetoes + <b className="num">{sb.sizeDowns}</b> size-downs
             {" "}(<b className="num">{bps(sb.savedBps)}</b> saved, {usd(sb.savedUsd)}) / <b className="num">{sb.discretionary}</b> of 3 discretionary

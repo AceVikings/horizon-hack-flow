@@ -209,11 +209,11 @@ function toUnits(v: string, dp: number): string | null {
 
 function MarketHeader({ mv, market }: { mv: MarketView | null; market: MarketId }) {
   const m = MARKETS[market];
-  if (!mv) return <div className="mhead"><span className="muted">Loading {m.base}/USDT…</span></div>;
+  if (!mv) return <div className="mhead ate-dark"><span className="muted">Loading {m.base}/USDT…</span></div>;
   const cexGap = mv.cex ? Math.round(((Number(mv.cex.mid) - Number(mv.pool.price)) / Number(mv.cex.mid)) * 10000) : null;
   const o = mv.oracle;
   return (
-    <div className="mhead">
+    <div className="mhead ate-dark">
       <div className="mtitle"><h2>{m.base}/USDT</h2><span className="muted">{m.cexSymbol}</span></div>
       <div className="mstats">
         <div><span className="k">Supra oracle (pair {SUPRA_PAIRS[market]})</span><span className="big num">${px8(o.price)}</span><Badge tone={o.health === "fresh" ? "ok" : o.health === "aging" ? "warn" : "bad"}>{o.health} · {o.ageSec} s old</Badge></div>

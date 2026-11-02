@@ -24,7 +24,7 @@ export default function Positions() {
 
       {flat && <Empty title="No positions">The vaults hold only USDT. Entries appear after the first fill.</Empty>}
 
-      <Card title="Portfolio summary">
+      <Card title="Portfolio summary" className="ate-dark">
         <div className="grid4">
           <Stat k="Realised" v={<PnL usd={pf.realisedUsd} />} />
           <Stat k="Unrealised, exit-executable" v={<PnL usd={pf.unrealisedExitUsd} />} />
