@@ -32,7 +32,18 @@ export class DaemonClient {
   private ws: WebSocket | null = null;
   private reconnect: NodeJS.Timeout | null = null;
   private info: ConnectionInfo = { mode: "offline", detail: "not connected" };
+  /**
+   * Lane D2 (app-owned daemon): supplies the /ui/attach approval (ate-approve Touch ID, or the daemon's one-time code
+   * confirmed in-app). Null = ate-approve only.
+   */
+  attacher: ((a: { nonce: string; expiresAt: number; pid: number; port: number }) => Promise<string>) | null = null;
   constructor(private onEvent: (e: DaemonEvent) => void) {}
+
+  /** Forget the ui token (the daemon restarted: tokens are per process). */
+  resetToken(): void {
+    this.uiToken = process.env.ATE_UI_TOKEN ?? null;
+    this.mcpSession = null;
+  }
 
   connection(): ConnectionInfo {
     return this.info;
@@ -70,9 +81,15 @@ export class DaemonClient {
    */
   private async attach(): Promise<string> {
     const r1 = await this.http<UiAttachStep1Response>("POST", "/ui/attach", {}, false);
-    const s = await signApproval(uiAttachPayload({ nonce: r1.nonce, expiresAt: r1.expiresAt, pid: this.rt!.pid, port: this.rt!.port }));
-    if (!s.ok) throw new Error(`ate-approve ${s.code}: ${s.message}`);
-    const r2 = await this.http<UiAttachStep2Response>("POST", "/ui/attach", { nonce: r1.nonce, approval: s.signature }, false, this.rt!.agentToken);
+    const a = { nonce: r1.nonce, expiresAt: r1.expiresAt, pid: this.rt!.pid, port: this.rt!.port };
+    let approval: string;
+    if (this.attacher) approval = await this.attacher(a);
+    else {
+      const s = await signApproval(uiAttachPayload(a));
+      if (!s.ok) throw new Error(`ate-approve ${s.code}: ${s.message}`);
+      approval = s.signature;
+    }
+    const r2 = await this.http<UiAttachStep2Response>("POST", "/ui/attach", { nonce: r1.nonce, approval }, false, this.rt!.agentToken);
     return r2.uiToken;
   }
 
@@ -201,6 +218,9 @@ export class DaemonClient {
 
   close(): void {
     if (this.reconnect) clearTimeout(this.reconnect);
-    this.ws?.close();
+    const ws = this.ws;
+    this.ws = null; // the close handler must not schedule a reconnect
+    ws?.close();
+    this.info = { mode: "offline", detail: "daemon disconnected" };
   }
 }

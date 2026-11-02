@@ -196,6 +196,8 @@ export interface AteBridge {
     deny(id: string): Promise<Res<{ denied: true }>>;
   };
   settings: { get(): Promise<Res<Settings>>; set(patch: Partial<Settings>): Promise<Res<Settings>> };
+  /** Lane D2: setup wizard + daemon lifecycle (shared/setup-bridge.ts). Absent in fixtures. */
+  setup?: import("./setup-bridge").SetupBridge;
   /** Additive (lane D3): the daemon-supervised trader runner. Optional: absent in fixture bridges. */
   trader?: { status(): Promise<Res<TraderStatus>>; start(o: TraderStartInput): Promise<Res<TraderStatus>>; stop(): Promise<Res<TraderStatus>> };
   /** Additive (lane D3): pending strategy changes (approve with `strategy.approve`). */

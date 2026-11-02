@@ -5,6 +5,7 @@ import type { DaemonEvent, MarketId } from "@ate/core";
 import { MARKET_IDS } from "@ate/core";
 import { EVENT_CHANNEL, IPC_METHODS, type ChatMessage, type IpcMethod, type JournalFilter, type PaymentsList, type Res, type Settings } from "../shared/bridge";
 import { DaemonClient } from "./daemon";
+import { registerSetupIpc } from "./setup-ipc";
 import { approvePayment, approveStrategy, approveTrade, denyPayment, listPayments, rememberPending } from "./live";
 
 const FIXTURES = process.env.ATE_FIXTURES === "1";
@@ -241,8 +242,15 @@ app.whenReady().then(async () => {
   });
   session.defaultSession.setPermissionRequestHandler((_wc, _p, cb) => cb(false));
   for (const m of IPC_METHODS) ipcMain.handle(`ate:${m}`, (_e, a, b) => (FIXTURES && m !== "connection" ? bad("fixtures mode") : invoke(m, a, b)));
-  if (!FIXTURES) await daemon.connect();
+  // Lane D2: the app owns the daemon (start/attach/unlock, no CLI); the renderer waits on #/unlock until it is ready.
+  const setup = registerSetupIpc({ ipcMain, daemon, appPath: app.getAppPath(), win: () => win, fixtures: FIXTURES });
+  app.on("before-quit", () => void (process.env.FLOW_KEEP_DAEMON === "1" ? undefined : setup.shutdown()));
   createWindow();
+  if (!FIXTURES) {
+    win!.webContents.once("did-finish-load", () => void win?.webContents.executeJavaScript(`location.hash = "#/unlock"`));
+    void setup.boot();
+    if (process.env.FLOW_SETUP_SHOTS) void import("./setup-shots").then((m) => m.runSetupShots(() => win, process.env.FLOW_SETUP_SHOTS!));
+  }
   app.on("activate", () => BrowserWindow.getAllWindows().length === 0 && createWindow());
 });
 app.on("window-all-closed", () => {

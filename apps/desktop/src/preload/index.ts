@@ -2,8 +2,10 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { DaemonEvent } from "@ate/core";
 import { EVENT_CHANNEL, type IpcMethod } from "../shared/bridge";
+import type { SetupIpc } from "../shared/setup-bridge";
 
 const call = (m: IpcMethod, a?: unknown, b?: unknown) => ipcRenderer.invoke(`ate:${m}`, a, b);
+const sc = (m: SetupIpc, a?: unknown, b?: unknown, c?: unknown) => ipcRenderer.invoke(`ate:${m}`, a, b, c);
 
 const ate = Object.freeze({
   fixtures: process.argv.includes("--ate-fixtures"),
@@ -21,6 +23,21 @@ const ate = Object.freeze({
   chat: Object.freeze({ send: (s: string, t: string) => call("chat.send", s, t), history: (s: string) => call("chat.history", s) }),
   payments: Object.freeze({ list: () => call("payments.list"), approve: (id: string, d: string) => call("payments.approve", id, d), deny: (id: string) => call("payments.deny", id) }),
   settings: Object.freeze({ get: () => call("settings.get"), set: (p: unknown) => call("settings.set", p) }),
+  // Lane D2: setup wizard, Settings saves and the app-owned daemon lifecycle (allowlisted in main/setup-ipc.ts).
+  setup: Object.freeze({
+    daemon: () => sc("setup.daemon"),
+    start: () => sc("setup.start"),
+    stop: () => sc("setup.stop"),
+    submitCode: (code: string) => sc("setup.submitCode", code),
+    unlock: () => sc("setup.unlock"),
+    get: (path: string, query?: Record<string, string>) => sc("setup.get", path, query),
+    post: (path: string, body?: unknown) => sc("setup.post", path, body),
+    keygen: (privateKey?: string) => sc("setup.keygen", privateKey),
+    approveStart: (path: string, body: unknown) => sc("setup.approveStart", path, body),
+    approveFinish: (path: string, nonce: string, code: string) => sc("setup.approveFinish", path, nonce, code),
+    open: (url: string) => sc("setup.open", url),
+    saveJson: (name: string, data: unknown) => sc("setup.saveJson", name, data),
+  }),
   trader: Object.freeze({ status: () => call("trader.status"), start: (o: unknown) => call("trader.start", o), stop: () => call("trader.stop") }),
   approvals: Object.freeze({ list: () => call("approvals.list"), reject: (id: string) => call("approvals.reject", id) }),
   proof: Object.freeze({ get: () => call("proof.get"), run: (o?: unknown) => call("proof.run", o), stop: () => call("proof.stop") }),
