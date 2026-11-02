@@ -147,6 +147,20 @@ async function invoke(method: IpcMethod, arg: any, arg2?: any): Promise<unknown>
     }
     case "proof.stop":
       return daemon.call("POST", "/proof/stop", {});
+    case "ai.health":
+      return daemon.call("GET", "/ai");
+    case "ai.check":
+      return daemon.call("POST", "/ai/check", {});
+    case "ai.setKey":
+      // the key goes straight to the daemon keychain; main never logs or keeps it
+      return typeof arg === "string" && arg.length < 400 ? daemon.call("POST", "/ai/key", { apiKey: arg }) : bad("expected an API key string");
+    case "ai.clearKey":
+      return daemon.call("POST", "/ai/key/clear", {});
+    case "ai.config": {
+      const a = (arg ?? {}) as Record<string, unknown>;
+      const pick = (k: string) => (typeof a[k] === "string" ? { [k]: a[k] } : {});
+      return daemon.call("POST", "/ai/config", { ...pick("model"), ...pick("engine"), ...pick("traderEffort"), ...pick("chatEffort") });
+    }
     case "candidates.get":
       return daemon.tool("ate_candidates_get", (MARKET_IDS as readonly string[]).includes(arg) ? { market: arg as MarketId } : {});
     case "cycle.request":

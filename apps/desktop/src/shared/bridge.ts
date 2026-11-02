@@ -164,6 +164,24 @@ export interface ProofState {
   pauses: PauseEvent[];
 }
 
+export interface AiHealth {
+  engine: "sdk" | "claude-code";
+  model: string;
+  modelLabel: string;
+  models: readonly { id: string; label: string }[];
+  credential: "keychain" | "file" | "env" | "profile" | "none";
+  traderEffort: "low" | "medium" | "high";
+  chatEffort: "low" | "medium" | "high";
+  lastCheck: { at: number; reachable: boolean; error?: { kind: string; message: string } } | null;
+  lastUsage: { at: number; kind: "trader" | "chat"; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number } | null;
+}
+export interface AiConfigPatch {
+  model?: string;
+  engine?: "sdk" | "claude-code";
+  traderEffort?: "low" | "medium" | "high";
+  chatEffort?: "low" | "medium" | "high";
+}
+
 export interface AteBridge {
   readonly fixtures: boolean;
   connection(): Promise<ConnectionInfo>;
@@ -207,6 +225,8 @@ export interface AteBridge {
   /** Additive (lane D1): live candidates for Markets (ate_candidates_get) and an out-of-schedule cycle (POST /cycle). */
   candidates?: { get(market?: MarketId): Promise<Res<CandidatesGetOutput>> };
   cycle?: { request(): Promise<Res<{ started: boolean; reason?: string; cycle: number }>> };
+  /** Additive (lane D3): the in-app agent engine (Anthropic SDK). setKey sends the key once to the daemon keychain. */
+  ai?: { health(): Promise<Res<AiHealth>>; check(): Promise<Res<AiHealth>>; setKey(apiKey: string): Promise<Res<AiHealth>>; clearKey(): Promise<Res<AiHealth>>; config(p: AiConfigPatch): Promise<Res<AiHealth>> };
   events: { subscribe(handler: (e: DaemonEvent) => void): () => void };
 }
 
@@ -242,6 +262,11 @@ export const IPC_METHODS = [
   "proof.get",
   "proof.run",
   "proof.stop",
+  "ai.health",
+  "ai.check",
+  "ai.setKey",
+  "ai.clearKey",
+  "ai.config",
   // lane D1 (additive)
   "candidates.get",
   "cycle.request",
