@@ -283,7 +283,6 @@ function GapChart({ entries, market, now, cost, live }: { entries: JournalEntry[
     <svg viewBox="0 0 300 64" height="64" width="100%" preserveAspectRatio="none" role="img" aria-label={`Gap over 6 hours: now ${Math.round(last.g)} bps, cost ${cost} bps, ${pts.length} readings`}>
       <path d={`M0 ${y(cost).toFixed(1)}H300`} stroke="#b3202d" strokeDasharray="4 4" strokeWidth="1" />
       <path d={d} fill="none" stroke="#171e19" strokeWidth="2" vectorEffect="non-scaling-stroke" />
-      <circle cx={x(last.t)} cy={y(last.g)} r="3.5" fill="#ffe17c" stroke="#171e19" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
     </svg>
   );
 }
