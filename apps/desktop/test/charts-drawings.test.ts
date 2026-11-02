@@ -81,3 +81,16 @@ describe("drawings render through the series primitive", () => {
     expect(ops.some((o) => o.startsWith("fillText(61.8%"))).toBe(true);
   });
 });
+
+describe("drawing labels", () => {
+  it("never overlap: close Fibonacci levels are nudged or dropped", () => {
+    const ops: string[] = [];
+    const ctx = new Proxy({ font: "", fillStyle: "", strokeStyle: "", lineWidth: 1, measureText: (t: string) => ({ width: t.length * 6 }), setLineDash: () => {} }, { get: (t, k: string) => (k in t ? (t as Record<string, unknown>)[k] : (...a: unknown[]) => ops.push(`${k}(${a.map((x) => (typeof x === "number" ? Math.round(x) : x)).join(",")})`)), set: (t, k: string, v) => (((t as Record<string, unknown>)[k] = v), true) });
+    const p = new DrawingsPrimitive();
+    p.attached({ chart: { timeScale: () => ({ logicalToCoordinate: (l: number) => 100 + l * 10 }) }, series: { data: () => [{ time: 1000 }, { time: 1060 }], priceToCoordinate: (v: number) => 500 - v }, requestUpdate: () => {} } as never);
+    p.set([{ kind: "fib", a: { t: 1000, v: 100 }, b: { t: 1060, v: 110 } }], null, null); // levels 1–2 px apart
+    p.paneViews()[0]!.renderer()!.draw({ useMediaCoordinateSpace: (cb: (s: unknown) => void) => cb({ context: ctx, mediaSize: { width: 400, height: 300 } }) } as never);
+    const ys = ops.filter((o) => o.startsWith("fillRect(")).map((o) => Number(o.split(",")[1]));
+    for (let i = 0; i < ys.length; i++) for (let j = i + 1; j < ys.length; j++) expect(Math.abs(ys[i]! - ys[j]!)).toBeGreaterThanOrEqual(15);
+  });
+});

@@ -27,8 +27,15 @@ const COMPARE: { id: "cex" | "oracle"; name: string }[] = [
 const BARS: Record<ChartInterval, number> = { "1m": 120, "5m": 144, "1h": 72, "1d": 60 };
 
 function Menu({ label, open, onOpen, children }: { label: string; open: boolean; onOpen(o: boolean): void; children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const off = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && onOpen(false);
+    document.addEventListener("mousedown", off);
+    return () => document.removeEventListener("mousedown", off);
+  }, [open, onOpen]);
   return (
-    <div className="tmenu" onMouseLeave={() => onOpen(false)}>
+    <div className="tmenu" ref={ref}>
       <button className="tbtn" aria-expanded={open} onClick={() => onOpen(!open)}>
         {label} ▾
       </button>

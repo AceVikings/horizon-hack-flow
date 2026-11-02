@@ -59,9 +59,15 @@ class Renderer implements IPrimitivePaneRenderer {
     target.useMediaCoordinateSpace(({ context: ctx, mediaSize }) => {
       const W = mediaSize.width;
       ctx.font = "500 11px Inter, system-ui, sans-serif";
-      const label = (text: string, x: number, y: number, color: string, align: "left" | "right" = "left") => {
+      const placed: { x: number; y: number; w: number }[] = [];
+      const label = (text: string, x: number, yIn: number, color: string, align: "left" | "right" = "left") => {
         const w = ctx.measureText(text).width + 8;
         const x0 = align === "left" ? x : x - w;
+        // labels never overlap: nudge down past any label already drawn in the same spot; drop after 4 tries
+        let y = yIn;
+        for (let k = 0; k < 4 && placed.some((p) => x0 < p.x + p.w && p.x < x0 + w && Math.abs(p.y - y) < 15); k++) y += 15;
+        if (placed.some((p) => x0 < p.x + p.w && p.x < x0 + w && Math.abs(p.y - y) < 15)) return;
+        placed.push({ x: x0, y, w });
         ctx.fillStyle = "rgba(255,255,255,.88)";
         ctx.fillRect(x0, y - 15, w, 15);
         ctx.fillStyle = color;

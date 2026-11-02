@@ -10,7 +10,7 @@ export const INDICATOR_LABEL: Record<ChartIndicator, string> = {
   ema50: "Average, 50 bars (EMA)",
   sma20: "Simple average, 20 bars",
   sma50: "Simple average, 50 bars",
-  vwap: "Volume-weighted average (VWAP)",
+  vwap: "Average price by volume (VWAP)",
   bb20: "Bollinger bands",
   rsi14: "Momentum (RSI)",
   macd: "Trend (MACD)",
