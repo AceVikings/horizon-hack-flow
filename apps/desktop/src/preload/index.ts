@@ -42,6 +42,7 @@ const ate = Object.freeze({
   trader: Object.freeze({ status: () => call("trader.status"), start: (o: unknown) => call("trader.start", o), stop: () => call("trader.stop") }),
   approvals: Object.freeze({ list: () => call("approvals.list"), reject: (id: string) => call("approvals.reject", id) }),
   ai: Object.freeze({ health: () => call("ai.health"), check: () => call("ai.check"), setKey: (k: string) => call("ai.setKey", k), clearKey: () => call("ai.clearKey"), config: (p: unknown) => call("ai.config", p) }),
+  engine: Object.freeze({ providers: () => call("engine.providers"), test: (id: string) => call("engine.test", id), credential: (id: string, b: unknown) => call("engine.credential", id, b), confirm: (id: string, nonce: string, code: string) => call("engine.confirm", id, { nonce, code }), select: (p: string, m?: string) => call("engine.select", p, m) }),
   proof: Object.freeze({ get: () => call("proof.get"), run: (o?: unknown) => call("proof.run", o), stop: () => call("proof.stop") }),
   candidates: Object.freeze({ get: (m?: string) => call("candidates.get", m) }),
   cycle: Object.freeze({ request: () => call("cycle.request") }),

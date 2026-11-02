@@ -5,6 +5,8 @@ import type { DaemonEvent, MarketId } from "@ate/core";
 import { MARKET_IDS } from "@ate/core";
 import { EVENT_CHANNEL, IPC_METHODS, type ChatMessage, type IpcMethod, type JournalFilter, type PaymentsList, type Res, type Settings } from "../shared/bridge";
 import { DaemonClient } from "./daemon";
+import { signApproval } from "./approve";
+import type { ApprovalPayload } from "@ate/approve";
 import { registerSetupIpc } from "./setup-ipc";
 import { approvePayment, approveStrategy, approveTrade, denyPayment, listPayments, rememberPending } from "./live";
 
@@ -49,6 +51,24 @@ function handleEvent(e: DaemonEvent): void {
 }
 
 const bad = (message: string): Res<never> => ({ ok: false, error: { code: "ATE_INTERNAL", message } });
+
+const PROVIDER_ID = /^(anthropic|openai|gemini|openrouter|ollama|proxy)$/;
+/** Provider credential set/replace/remove: replace/remove come back as a config payload → Touch ID (ate-approve) → apply. */
+async function engineCredential(id: string, body: unknown): Promise<unknown> {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const clean = {
+    ...(b.action === "set" || b.action === "remove" ? { action: b.action } : {}),
+    ...(typeof b.apiKey === "string" && b.apiKey.length < 400 ? { apiKey: b.apiKey } : {}),
+    ...(typeof b.baseURL === "string" && b.baseURL.length < 300 ? { baseURL: b.baseURL } : {}),
+    ...(b.protocol === "openai" || b.protocol === "anthropic" ? { protocol: b.protocol } : {}),
+  };
+  const r1 = await daemon.call<{ saved?: boolean; nonce?: string; expiresAt?: number; payload?: ApprovalPayload; codeIssued?: boolean }>("POST", `/engine/providers/${id}/credential`, clean);
+  if (!r1.ok || !r1.data.nonce || !r1.data.payload) return r1;
+  const s = await signApproval(r1.data.payload);
+  if (s.ok) return daemon.call("POST", `/engine/providers/${id}/credential`, { nonce: r1.data.nonce, approval: s.signature });
+  if (r1.data.codeIssued) return { ok: true, data: { needsCode: true, nonce: r1.data.nonce, expiresAt: r1.data.expiresAt } };
+  return bad(`Touch ID unavailable (${s.code}) and no one-time code was issued`);
+}
 
 async function invoke(method: IpcMethod, arg: any, arg2?: any): Promise<unknown> {
   switch (method) {
@@ -147,6 +167,19 @@ async function invoke(method: IpcMethod, arg: any, arg2?: any): Promise<unknown>
     }
     case "proof.stop":
       return daemon.call("POST", "/proof/stop", {});
+    case "engine.providers":
+      return daemon.call("GET", "/engine/providers");
+    case "engine.test":
+      return PROVIDER_ID.test(String(arg)) ? daemon.call("POST", `/engine/providers/${arg}/test`, {}) : bad("unknown provider");
+    case "engine.credential":
+      return PROVIDER_ID.test(String(arg)) ? engineCredential(String(arg), arg2) : bad("unknown provider");
+    case "engine.confirm": {
+      const c = (arg2 ?? {}) as { nonce?: unknown; code?: unknown };
+      if (!PROVIDER_ID.test(String(arg)) || typeof c.nonce !== "string" || !/^\d{8}$/.test(String(c.code))) return bad("expected provider, nonce and the 8-digit code");
+      return daemon.call("POST", `/engine/providers/${arg}/credential`, { nonce: c.nonce, approval: String(c.code) });
+    }
+    case "engine.select":
+      return PROVIDER_ID.test(String(arg)) ? daemon.call("POST", "/engine/select", { provider: String(arg), ...(typeof arg2 === "string" ? { model: arg2 } : {}) }) : bad("unknown provider");
     case "ai.health":
       return daemon.call("GET", "/ai");
     case "ai.check":

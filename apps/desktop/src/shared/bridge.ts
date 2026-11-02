@@ -182,6 +182,27 @@ export interface AiConfigPatch {
   chatEffort?: "low" | "medium" | "high";
 }
 
+export interface EngineProvider {
+  id: "anthropic" | "openai" | "gemini" | "openrouter" | "ollama" | "proxy";
+  label: string;
+  protocol: string;
+  key: "required" | "optional" | "none";
+  warning: string | null;
+  settings: { baseURL?: string; protocol?: "openai" | "anthropic" };
+  credential: { source: string; hint: string | null; stored: boolean };
+  configured: boolean;
+  selected: boolean;
+  caps: { tools: boolean; streaming: boolean };
+  health: { at: number; ok: boolean; error?: { kind: string; message: string } } | null;
+  models: { id: string; label: string; tools: boolean | null; streaming: boolean }[];
+}
+export interface EngineProviders {
+  selected: { provider: EngineProvider["id"]; model: string; engine: "sdk" | "claude-code" };
+  providers: EngineProvider[];
+}
+/** Credential change result: applied, or waiting for the daemon's one-time code (Touch ID unavailable). */
+export type EngineCredentialResult = { saved: true; provider: EngineProvider } | { needsCode: true; nonce: string; expiresAt: number };
+
 export interface AteBridge {
   readonly fixtures: boolean;
   connection(): Promise<ConnectionInfo>;
@@ -227,6 +248,14 @@ export interface AteBridge {
   cycle?: { request(): Promise<Res<{ started: boolean; reason?: string; cycle: number }>> };
   /** Additive (lane D3): the in-app agent engine (Anthropic SDK). setKey sends the key once to the daemon keychain. */
   ai?: { health(): Promise<Res<AiHealth>>; check(): Promise<Res<AiHealth>>; setKey(apiKey: string): Promise<Res<AiHealth>>; clearKey(): Promise<Res<AiHealth>>; config(p: AiConfigPatch): Promise<Res<AiHealth>> };
+  /** Additive (lane D3): model providers for the in-app agents (Accounts). Replace/remove asks for Touch ID in main. */
+  engine?: {
+    providers(): Promise<Res<EngineProviders>>;
+    test(id: EngineProvider["id"]): Promise<Res<EngineProvider>>;
+    credential(id: EngineProvider["id"], body: { action?: "set" | "remove"; apiKey?: string; baseURL?: string; protocol?: "openai" | "anthropic" }): Promise<Res<EngineCredentialResult>>;
+    confirm(id: EngineProvider["id"], nonce: string, code: string): Promise<Res<EngineCredentialResult>>;
+    select(provider: EngineProvider["id"], model?: string): Promise<Res<EngineProviders>>;
+  };
   events: { subscribe(handler: (e: DaemonEvent) => void): () => void };
 }
 
@@ -267,6 +296,11 @@ export const IPC_METHODS = [
   "ai.setKey",
   "ai.clearKey",
   "ai.config",
+  "engine.providers",
+  "engine.test",
+  "engine.credential",
+  "engine.confirm",
+  "engine.select",
   // lane D1 (additive)
   "candidates.get",
   "cycle.request",
