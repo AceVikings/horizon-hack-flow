@@ -2,9 +2,9 @@
 // /engine/providers routes. Simple by default: one card per provider with status, Test, and the key. Replacing or
 // removing a stored key needs Touch ID (or the daemon's one-time code). The local proxy lives under "Advanced".
 import { useState } from "react";
-import { Badge, Btn } from "../../src/ui";
+import {Btn} from "../../src/ui";
 import { PageHead } from "../../src/shell";
-import { Details, ErrLine, Spinner, useApproval, useSetup, useSetupGet } from "./common";
+import { Details, ErrLine, Spinner, useApproval, useSetup, useSetupGet, StatusText } from "./common";
 
 interface Model {
   id: string;
@@ -84,10 +84,10 @@ function ProviderCard({ p, selectedModel, onChanged }: { p: Provider; selectedMo
           <h2 className="h3">{p.label}</h2>
           <p className="xs fg2" style={{ marginTop: 6 }}>{BLURB[p.id]}</p>
         </div>
-        {p.selected && <Badge y glyph="★">in use</Badge>}
+        {p.selected && <StatusText y glyph="★">in use</StatusText>}
       </div>
       <div className="row g8" style={{ marginTop: 12 }}>
-        <Badge tone={st.tone}>{st.text}</Badge>
+        <StatusText tone={st.tone}>{st.text}</StatusText>
         {p.credential.hint && <span className="mono xs fg2">{p.credential.hint}</span>}
       </div>
       {p.id === "proxy" || p.id === "ollama" ? (

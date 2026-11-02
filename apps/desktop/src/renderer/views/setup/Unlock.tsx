@@ -2,8 +2,8 @@
 // here, unlocks the agent key, then routes to the setup step to resume or to Overview.
 import { useEffect, useState } from "react";
 import type { DaemonState } from "@shared/setup-bridge";
-import { Badge, Btn } from "../../src/ui";
-import { CodeInput, CodeShow, ErrLine, Logo, Spinner, go, useSetup } from "./common";
+import {Btn} from "../../src/ui";
+import { CodeInput, CodeShow, ErrLine, Logo, Spinner, go, useSetup, StatusText } from "./common";
 
 const PHASE: Record<DaemonState["phase"], string> = {
   starting: "Starting the Flow daemon…",
@@ -57,7 +57,7 @@ export default function Unlock() {
     <div className="unlock" data-shot={st ? shot : undefined}>
       <div className="box">
         <Logo size={48} />
-        <div className="eb" style={{ color: "var(--sage)", marginTop: 34 }}>
+        <div className="stepno" style={{ color: "var(--sage)", marginTop: 34 }}>
           {st?.owned === false ? "Connected to a running Flow service" : "Flow service"}
         </div>
         <h1 className="disp" style={{ fontSize: 64, margin: "16px 0 0" }}>{locked ? "Unlock the agent key" : PHASE[st?.phase ?? "starting"]}</h1>
@@ -106,7 +106,7 @@ export default function Unlock() {
         )}
         <ErrLine error={error} />
         <div className="row g8" style={{ marginTop: 30 }}>
-          <Badge tone={st?.touchId.approve ? "ok" : "mute"}>Touch ID approvals {st?.touchId.approve ? "on" : "off · one-time codes"}</Badge>
+          <StatusText tone={st?.touchId.approve ? "ok" : "mute"}>Touch ID approvals {st?.touchId.approve ? "on" : "off · one-time codes"}</StatusText>
         </div>
       </div>
     </div>

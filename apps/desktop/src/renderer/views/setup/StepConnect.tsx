@@ -4,8 +4,8 @@
 import { useEffect, useState } from "react";
 import { MARKETS, type MarketId } from "@ate/core";
 import { short } from "../../src/format";
-import { AddrLink, Badge, Btn, QR } from "../../src/ui";
-import { Details, ErrLine, HandoffDialog, Section, Spinner, TxQR, Wizard, go, useHandoff, useSetup, useSetupGet } from "./common";
+import {AddrLink, Btn, QR} from "../../src/ui";
+import { Details, ErrLine, HandoffDialog, Section, Spinner, TxQR, Wizard, go, useHandoff, useSetup, useSetupGet, StatusText } from "./common";
 
 interface Net {
   chainId: 133 | 177;
@@ -78,7 +78,7 @@ function Network({ chainId, onBusy }: { chainId: number; onBusy(b: boolean): voi
                 <b>{id === 133 ? "Testnet" : "Mainnet"}</b>
                 <span className="xs fg2" style={{ display: "block" }}>{id === 133 ? "Free test tokens. Start here." : "Real money."}</span>
               </span>
-              {n ? <Badge tone={n.ok ? "ok" : "bad"}>{n.ok ? `${n.ms} ms` : "offline"}</Badge> : <span className="xs fg2">…</span>}
+              {n ? <StatusText tone={n.ok ? "ok" : "bad"}>{n.ok ? `${n.ms} ms` : "offline"}</StatusText> : <span className="xs fg2">…</span>}
             </button>
           );
         })}
@@ -160,7 +160,7 @@ function VaultsPart({ chainId, confirmed, onConfirmed }: { chainId: number; conf
               <div key={x.address} className="row g12 hx" style={{ padding: "12px 14px" }}>
                 <span className="h3">{pair(x.market)}</span>
                 <span className="grow" />
-                {x.error ? <Badge tone="bad">not a vault</Badge> : x.paused ? <Badge tone="warn">paused</Badge> : <Badge tone="ok">ready</Badge>}
+                {x.error ? <StatusText tone="bad">not a vault</StatusText> : x.paused ? <StatusText tone="warn">paused</StatusText> : <StatusText tone="ok">ready</StatusText>}
               </div>
             ))}
           </div>
@@ -187,10 +187,10 @@ function VaultsPart({ chainId, confirmed, onConfirmed }: { chainId: number; conf
               <div key={x.address} style={{ marginBottom: 10 }}>
                 <div className="kv sm"><span className="k">Vault-{x.market.includes("WBTC") ? "BTC" : "HSK"}</span><span className="v"><AddrLink addr={x.address} full /></span></div>
                 <div className="row g6" style={{ flexWrap: "wrap", marginTop: 6 }}>
-                  <Badge tone={x.verified ? "ok" : "warn"}>{x.verified ? "verified source" : "source not verified"}</Badge>
-                  {x.pool && <Badge tone={x.poolPinned ? "ok" : "warn"}>pool {short(x.pool, 6, 4)}</Badge>}
-                  {x.supraPair !== undefined && x.supraPair !== null && <Badge>Supra pair {x.supraPair}</Badge>}
-                  {x.limits && <Badge>{usd(x.limits.maxTradeUsdE8)} trade · {usd(x.limits.maxEpochUsdE8)}/day · {usd(x.limits.maxExposureUsdE8)} held</Badge>}
+                  <StatusText tone={x.verified ? "ok" : "warn"}>{x.verified ? "verified source" : "source not verified"}</StatusText>
+                  {x.pool && <StatusText tone={x.poolPinned ? "ok" : "warn"}>pool {short(x.pool, 6, 4)}</StatusText>}
+                  {x.supraPair !== undefined && x.supraPair !== null && <StatusText>Supra pair {x.supraPair}</StatusText>}
+                  {x.limits && <StatusText>{usd(x.limits.maxTradeUsdE8)} trade · {usd(x.limits.maxEpochUsdE8)}/day · {usd(x.limits.maxExposureUsdE8)} held</StatusText>}
                 </div>
               </div>
             ))}
@@ -246,7 +246,7 @@ function AgentPart({ enabled }: { enabled: boolean }) {
         <>
           <div className="row g12" style={{ marginTop: 12 }}>
             <span className="mono sm">{d.address}</span>
-            <Badge tone={d.unlocked ? "ok" : "warn"}>{d.unlocked ? "unlocked" : "locked"}</Badge>
+            <StatusText tone={d.unlocked ? "ok" : "warn"}>{d.unlocked ? "unlocked" : "locked"}</StatusText>
           </div>
           <div className="col" style={{ gap: 6, marginTop: 12 }}>
             {d.vaults.map((v) => (
@@ -291,7 +291,7 @@ export default function StepConnect() {
   };
   return (
     <Wizard step={1} chainId={chainId} shot={ready ? "01-connect-done" : confirmed ? "01b-connect-key" : "01-connect"} hint="Nothing leaves your owner wallet in this step." next={() => void next()} nextDisabled={!ready} busy={busy}>
-      <div className="eb">Step 1 of 3</div>
+      <div className="stepno">Step 1 of 3</div>
       <h1>
         Connect <span className="hl">Flow</span>
       </h1>

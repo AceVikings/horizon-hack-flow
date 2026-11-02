@@ -63,7 +63,7 @@ export default function StepLimits() {
       next={() => void next()}
       nextDisabled={!l || differs || !!notSame}
     >
-      <div className="eb">Step 2 of 3</div>
+      <div className="stepno">Step 2 of 3</div>
       <h1>
         Set <span className="hl">limits</span>
       </h1>

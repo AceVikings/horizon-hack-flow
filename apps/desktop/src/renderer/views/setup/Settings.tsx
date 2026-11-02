@@ -5,8 +5,8 @@ import { useEffect, useState } from "react";
 import type { DaemonState } from "@shared/setup-bridge";
 import { useApp } from "../../src/app";
 import { PageHead } from "../../src/shell";
-import { Badge, Btn, QR } from "../../src/ui";
-import { Details, ErrLine, HandoffDialog, Section, Spinner, go, netLabel, useApproval, useSetup, useSetupGet } from "./common";
+import {Btn, QR} from "../../src/ui";
+import { Details, ErrLine, HandoffDialog, Section, Spinner, go, netLabel, useApproval, useSetup, useSetupGet, StatusText } from "./common";
 
 interface Cfg {
   chainId: number;
@@ -84,7 +84,7 @@ export default function Settings() {
         c.res?.ok === false ? <ErrLine error={c.res.error} /> : <Spinner label="Loading settings…" />
       ) : (
         <>
-          <Section title="Network" sub="Each network keeps its own vaults, agent key and history." right={<span className="net"><i />{netLabel(d.chainId)}</span>}>
+          <Section title="Network" sub="Each network keeps its own vaults, agent key and history." right={<span className="stx">{netLabel(d.chainId)}</span>}>
             <Btn size="sm" style={{ marginTop: 12 }} onClick={() => void switchNet()}>Switch to {d.chainId === 133 ? "mainnet" : "testnet"}</Btn>
           </Section>
 
@@ -93,7 +93,7 @@ export default function Settings() {
               <>
                 <div className="row g10" style={{ marginTop: 10 }}>
                   <span className="mono sm">{d.agent.address}</span>
-                  <Badge tone={d.agent.unlocked ? "ok" : "warn"}>{d.agent.unlocked ? "unlocked" : "locked"}</Badge>
+                  <StatusText tone={d.agent.unlocked ? "ok" : "warn"}>{d.agent.unlocked ? "unlocked" : "locked"}</StatusText>
                 </div>
                 <div className="row g8" style={{ marginTop: 12 }}>
                   {!d.agent.unlocked && <Btn size="sm" kind="solid" onClick={() => void s.unlock().then(() => c.reload())}>Unlock</Btn>}
@@ -150,7 +150,7 @@ export default function Settings() {
                   <div key={u} className="kv sm">
                     <span className="k mono">{u.replace("https://", "")}</span>
                     <span className="v">
-                      {i === 0 ? "primary" : "fallback"} · {p ? (p.ok ? `${p.ms} ms` : "down") : <Badge y glyph="">new</Badge>}{" "}
+                      {i === 0 ? "primary" : "fallback"} · {p ? (p.ok ? `${p.ms} ms` : "down") : <StatusText y glyph="">new</StatusText>}{" "}
                       {rpcs.length > 1 && <button className="linkbtn xs" onClick={() => setRpcs(rpcs.filter((x) => x !== u))}>remove</button>}
                     </span>
                   </div>
@@ -186,7 +186,7 @@ export default function Settings() {
 
           {changes.length > 0 && (
             <div className="sw-acts" role="region" aria-label="Unsaved changes">
-              <Badge y glyph="">{changes.length} unsaved</Badge>
+              <StatusText y glyph="">{changes.length} unsaved</StatusText>
               <span className="hint">{changes.map((x) => x.text).join(" · ")}</span>
               <span className="grow" />
               <Btn kind="ghost" onClick={discard}>Discard</Btn>

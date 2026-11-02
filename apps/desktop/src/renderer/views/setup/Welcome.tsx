@@ -1,6 +1,6 @@
 // 00 Welcome (docs/design/flow 00-welcome): the promise, read from the defaults; "Set up Flow" or connect existing.
 import { worstCase } from "@ate/core";
-import { Btn } from "../../src/ui";
+import {Btn} from "../../src/ui";
 import { Logo, go, useSetup, useSetupGet } from "./common";
 
 interface Status {
@@ -34,7 +34,7 @@ export default function Welcome() {
         </div>
         <Logo size={64} />
         <div style={{ marginTop: "auto" }} />
-        <div className="eb" style={{ color: "var(--sage)" }}>Bounded autonomy for AI traders · HashKey Chain</div>
+        <div className="stepno" style={{ color: "var(--sage)" }}>Bounded autonomy for AI traders · HashKey Chain</div>
         <h1>
           Let an AI trade.
           <br />
@@ -68,7 +68,7 @@ export default function Welcome() {
         </div>
       </div>
       <div className="wr">
-        <div className="eb" style={{ color: "var(--sage)", marginBottom: 14 }}>With the default limits</div>
+        <div className="stepno" style={{ color: "var(--sage)", marginBottom: 14 }}>With the default limits</div>
         <div className="pc">
           <div className="pn">01</div>
           <div>

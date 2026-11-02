@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import type { AiHealth } from "@shared/bridge";
 import { useApp } from "../../src/app";
-import { Badge, Btn, QR } from "../../src/ui";
-import { Details, ErrLine, HandoffDialog, Section, Spinner, Wizard, go, useSetup, useSetupGet } from "./common";
+import {Btn, QR} from "../../src/ui";
+import { Details, ErrLine, HandoffDialog, Section, Spinner, Wizard, go, useSetup, useSetupGet, StatusText } from "./common";
 
 interface Fund {
   chainId: number;
@@ -85,7 +85,7 @@ function AiPart({ onState, rules, setRules }: { onState(ok: boolean): void; rule
           <span className="sm">
             {h.modelLabel} · {h.credential === "env" ? "from your environment" : h.credential === "profile" ? "from your Anthropic login" : "key in your keychain"}
           </span>
-          {h.lastCheck ? <Badge tone={h.lastCheck.reachable ? "ok" : "bad"}>{h.lastCheck.reachable ? "connected" : h.lastCheck.error?.message ?? "not reachable"}</Badge> : <Spinner label="Checking…" />}
+          {h.lastCheck ? <StatusText tone={h.lastCheck.reachable ? "ok" : "bad"}>{h.lastCheck.reachable ? "connected" : h.lastCheck.error?.message ?? "not reachable"}</StatusText> : <Spinner label="Checking…" />}
           <span className="grow" />
           <button className="linkbtn sm" disabled={busy} onClick={() => void recheck()}>Check again</button>
         </div>
@@ -116,7 +116,7 @@ function FundPart({ onState }: { onState(ok: boolean): void }) {
             <span className="big">${total.toFixed(2)}</span>
             <span className="sm fg2">in your vaults</span>
             <span className="grow" />
-            <Badge tone={gasOk ? "ok" : "warn"}>agent gas {gas.toFixed(3)} HSK</Badge>
+            <StatusText tone={gasOk ? "ok" : "warn"}>agent gas {gas.toFixed(3)} HSK</StatusText>
           </div>
           <div className="col" style={{ gap: 8, marginTop: 12 }}>
             {d.vaults.map((v) => (
@@ -264,7 +264,7 @@ export default function StepStart() {
   const ready = (ai || rules) && money && checks === true;
   return (
     <Wizard step={3} chainId={st.data?.chainId ?? 133} shot={ready ? "03-start-ready" : "03-start"} hint="The kill switch is on every screen from now on." next={() => void start()} nextLabel="Start trading" nextDisabled={!ready} busy={busy}>
-      <div className="eb">Step 3 of 3</div>
+      <div className="stepno">Step 3 of 3</div>
       <h1>
         Ready to <span className="hl">start</span>
       </h1>

@@ -5,7 +5,7 @@ import type { Res } from "@shared/bridge";
 import type { ApprovalPath, SetupBridge, SetupPath } from "@shared/setup-bridge";
 import { useApp } from "../../src/app";
 import { short } from "../../src/format";
-import { Badge, Btn, Dialog, FlowMark, QR } from "../../src/ui";
+import {Btn, Dialog, FlowMark, QR} from "../../src/ui";
 import "./setup.css";
 
 export const STEPS = ["Connect", "Set limits", "Start"] as const;
@@ -94,10 +94,7 @@ export function Wizard({ step, chainId, children, hint, next, nextLabel = "Conti
         </ol>
         <span className="row g10">
           <span className="xs fg2">Saved as you go</span>
-          <span className="net">
-            <i />
-            {netLabel(chainId)}
-          </span>
+          <span className="stx"><span aria-hidden="true" className="g">●</span>{netLabel(chainId)}</span>
         </span>
       </header>
       <main className="sw-scroll">
@@ -153,7 +150,7 @@ export function StepHead({ step, name, title, hl, right }: { step: number; name:
   return (
     <div className="row sb end">
       <div>
-        <div className="eb">
+        <div className="stepno">
           Step {step} of 3 · {name}
         </div>
         <h1>
@@ -162,6 +159,17 @@ export function StepHead({ step, name, title, hl, right }: { step: number; name:
       </div>
       {right && <div style={{ marginBottom: 4 }}>{right}</div>}
     </div>
+  );
+}
+
+/** Status as plain text with a glyph (no pills, no badges: user rule). Extra props are accepted and ignored. */
+export function StatusText({ tone = "mute", children }: { tone?: "ok" | "warn" | "bad" | "info" | "mute"; children: ReactNode; y?: boolean; glyph?: string; className?: string; lg?: boolean; title?: string }) {
+  const g = { ok: "✓", warn: "!", bad: "✕", info: "i", mute: "·" }[tone];
+  return (
+    <span className={`stx ${tone}`}>
+      <span aria-hidden="true" className="g">{g}</span>
+      {children}
+    </span>
   );
 }
 
@@ -267,7 +275,7 @@ export function TxQR({ tx, landed, detail, size = 150, dark }: { tx: HandoffTx; 
         {tx.to && <div className="mono xs" title={tx.to}>to {short(tx.to, 8, 6)}</div>}
         <div className="row g8">
           {landed ? (
-            <Badge tone="ok">landed on chain</Badge>
+            <StatusText tone="ok">landed on chain</StatusText>
           ) : (
             <span className="row g8 xs" role="status">
               <span className="gl-run" aria-hidden="true" />
