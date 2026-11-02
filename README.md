@@ -1,4 +1,8 @@
-# ATE — Agentic Trading Environment
+<p align="center"><img src="packages/ui/brand/flow-lockup.svg" alt="Flow" width="280"></p>
+
+# Flow: a seatbelt for AI traders
+
+[flowverse.cloud](https://flowverse.cloud). The code packages still use the name `ate` (for example `ate-daemon` and `ate chat`).
 
 **A seatbelt for AI traders.** Let an AI agent trade on HSKSwap by itself,
 and know before you start how much it can lose.
@@ -8,34 +12,47 @@ If the agent makes a mistake, gets a bad prompt or loses its key, the contract s
 
 Built by team Vikings for the HSK Chain Horizon Hackathon (AI Agent Trading). Apache-2.0.
 
+## See it working
+
+These links are on the HashKey Chain **testnet** (chain 133), with test tokens. Click in this order.
+
+1. [The vault](https://testnet-explorer.hskchain.net/address/0xF80A74F4D9C17Db8a2a0F32558a9FC3A63e2Bcd2?tab=contract) (Vault-HSK). Source is [verified on Sourcify](https://repo.sourcify.dev/133/0xF80A74F4D9C17Db8a2a0F32558a9FC3A63e2Bcd2).
+2. [An AI trade](https://testnet-explorer.hskchain.net/tx/0x4ff2ad5176975fed3b45e5242894cce949b68b626051e82ec3d270474fde9c0d) and [its EAS attestation](https://testnet-explorer.hskchain.net/tx/0x1f042937320537b9e3b749d327eb2648613aeb1c6319a476f48341bba0a798f8).
+3. [A rogue agent trade that reverted](https://testnet-explorer.hskchain.net/tx/0x0677fb8896195c736201374805876d0aa0122b0ea57ecdf08b5f78f40b531558) (bad price).
+4. [Pause](https://testnet-explorer.hskchain.net/tx/0xaba62b83fd096241a703c4f4ced8b7a7eb4a3e9101a127c71c60e1c11c4a221a), then [unpause](https://testnet-explorer.hskchain.net/tx/0x530bafc2456b50dd35ee58359f02b1c4b8e44c9719f154caff7e599680f9e949).
+5. [The journal export](docs/testnet-133-journal.json) (70 records, hash chain).
+
+What each link shows: [`docs/JUDGE.md`](docs/JUDGE.md).
+
 ## Where things are
 
 | Item | Status |
 |---|---|
-| Contracts | Done. 148 tests pass. An optional fork test also runs them against the real HSKSwap pools and Supra prices. |
+| Contracts | Done. 148 tests pass (5 skipped: the fork test is opt-in). An optional fork test also runs them against the real HSKSwap pools and Supra prices. |
 | Testnet (chain 133) | Live. Two vaults, test tokens and pools. Addresses are in `deployments/133.json`. |
 | AI trader on testnet | Ran on 2 Nov. Claude made trades, skipped trades and one veto. All are in the journal. |
 | Rogue test on testnet | Done. Every attack with the stolen agent key reverted on-chain. |
-| Mainnet (chain 177) | Next. The same scripts deploy it. |
+| Mainnet (chain 177) | Next. The same scripts deploy it. The owner moves to a Safe after that. |
 | AI trader | Claude (Sonnet) through Claude Code. You can plug in any MCP agent. |
-| Profit | Not promised. The pools are thin. What ATE gives you is a hard limit on loss. |
+| Result | Claude opened and closed a WBTC lot on testnet for +70 bps net. All 7 attacks with the stolen key reverted. The pause worked. |
+| Caveats | The price gap for the trades was staged by us, because nobody else trades the test pools. Profit is not promised. The pools are thin. What Flow gives you is a hard limit on loss. |
 
 ### Proof on testnet
 
 These links are on the HashKey Chain **testnet** (chain 133), with test tokens.
 
-- Vaults: [Vault-HSK](https://testnet-explorer.hskchain.net/address/0xF80A74F4D9C17Db8a2a0F32558a9FC3A63e2Bcd2?tab=contract) and [Vault-BTC](https://testnet-explorer.hskchain.net/address/0x6Da0c6EF7328d3aD6b0b8781770D941D065a6693?tab=contract).
+- Vaults: Vault-HSK ([Blockscout](https://testnet-explorer.hskchain.net/address/0xF80A74F4D9C17Db8a2a0F32558a9FC3A63e2Bcd2?tab=contract), [Sourcify](https://repo.sourcify.dev/133/0xF80A74F4D9C17Db8a2a0F32558a9FC3A63e2Bcd2)) and Vault-BTC ([Blockscout](https://testnet-explorer.hskchain.net/address/0x6Da0c6EF7328d3aD6b0b8781770D941D065a6693?tab=contract), [Sourcify](https://repo.sourcify.dev/133/0x6Da0c6EF7328d3aD6b0b8781770D941D065a6693)). Both are verified on Sourcify (exact match). Blockscout shows the vault bytecode as unverified, because the source upload hit a size limit there.
 - A trade that Claude decided: [WBTC buy](https://testnet-explorer.hskchain.net/tx/0x4ff2ad5176975fed3b45e5242894cce949b68b626051e82ec3d270474fde9c0d). The pool price gap was staged by us, because nobody else trades on the test pools.
 - The EAS attestation for that trade: [attest tx](https://testnet-explorer.hskchain.net/tx/0x1f042937320537b9e3b749d327eb2648613aeb1c6319a476f48341bba0a798f8).
 - Skipped trades and the veto: in the [journal export](docs/testnet-133-journal.json) (`no_trade` records, head hash `0x5e72…ad85`).
 - Rogue agent reverts: [trade too big](https://testnet-explorer.hskchain.net/tx/0x7213dfc80d876804e3232bc572b2ecc99faae25f75e4457da71b8616ca091e24), [bad price](https://testnet-explorer.hskchain.net/tx/0x0677fb8896195c736201374805876d0aa0122b0ea57ecdf08b5f78f40b531558), [withdraw](https://testnet-explorer.hskchain.net/tx/0x6f5d929c9591a028c811eb7f841cc77bf435619f799b344f8ff4881cfb139a8c).
-- Kill switch: [guardian pause](https://testnet-explorer.hskchain.net/tx/0xaba62b83fd096241a703c4f4ced8b7a7eb4a3e9101a127c71c60e1c11c4a221a), [trade refused while paused](https://testnet-explorer.hskchain.net/tx/0x62f96834dfa5ff64bb0ddd378c56f2a42d5b83b96d951f7a0803ca6029b31a8b), [owner unpause](https://testnet-explorer.hskchain.net/tx/0x530bafc2456b50dd35ee58359f02b1c4b8e44c9719f154caff7e599680f9e949).
+- Kill switch (on Vault-HSK): [guardian pause](https://testnet-explorer.hskchain.net/tx/0xaba62b83fd096241a703c4f4ced8b7a7eb4a3e9101a127c71c60e1c11c4a221a), [trade refused while paused](https://testnet-explorer.hskchain.net/tx/0x62f96834dfa5ff64bb0ddd378c56f2a42d5b83b96d951f7a0803ca6029b31a8b), [owner unpause](https://testnet-explorer.hskchain.net/tx/0x530bafc2456b50dd35ee58359f02b1c4b8e44c9719f154caff7e599680f9e949).
 
 All links, with what each one shows: [`docs/JUDGE.md`](docs/JUDGE.md).
 
 ## Why a vault, and not a normal wallet
 
-| What you want | Token allowance | Safe module or session key | ATE PolicyVault |
+| What you want | Token allowance | Safe module or session key | Flow PolicyVault |
 |---|---|---|---|
 | Limit on trade size and daily spend | No | Yes | Yes |
 | Refuse a trade at a bad price | No | No | Yes, from an oracle price |
@@ -56,7 +73,7 @@ More detail: [`SPEC.md`](SPEC.md) (full design) · [`docs/JUDGE.md`](docs/JUDGE.
 | **Trade: quote, policy checks and the oracle price** | **Agents: trader status, budgets and the kill switch** |
 | ![Trade view](docs/img/trade.jpg) | ![Agents view](docs/img/agents.jpg) |
 
-*Screens show the desktop app in fixtures mode (sample data).*
+*These screens show the desktop app in fixtures mode. The data is sample data, not real testnet data. Captures from the real testnet come with the next app build.*
 
 ---
 
@@ -66,19 +83,19 @@ More detail: [`SPEC.md`](SPEC.md) (full design) · [`docs/JUDGE.md`](docs/JUDGE.
 flowchart LR
     P1["An AI agent has a key<br/>and funds"] --> P2{"Bad prompt<br/>or stolen key?"}
     P2 -- "No vault" --> P3["The agent can lose<br/>all the funds"]
-    P2 -- "With ATE" --> P4["PolicyVault stops<br/>the bad trade on-chain"]
+    P2 -- "With Flow" --> P4["PolicyVault stops<br/>the bad trade on-chain"]
     P4 --> P5["Maximum loss is small<br/>and known before you start"]
 ```
 
 An AI agent with a wallet is a risk. One bad prompt or one stolen key can empty the wallet.
 
-ATE puts the funds in a `PolicyVault` contract. The agent key can only do two things:
+Flow puts the funds in a `PolicyVault` contract. The agent key can only do two things:
 make a trade inside the limits, and pause the vault.
 The agent key cannot withdraw funds. It cannot change the limits.
 
 ---
 
-## 2. What ATE does
+## 2. What Flow does
 
 ```mermaid
 flowchart TB
@@ -105,12 +122,12 @@ flowchart TB
     Prove -. "next cycle" .-> Watch
 ```
 
-| Step | What ATE does |
+| Step | What Flow does |
 |---|---|
-| Watch | ATE reads the pool price, the oracle price and the exchange price for each market. |
+| Watch | Flow reads the pool price, the oracle price and the exchange price for each market. |
 | Decide | The daemon makes candidate trades. The AI trader selects one trade, or it makes no trade. The guard checks each trade. |
 | Trade | The vault does a check of each limit. Then it swaps on HSKSwap. The output stays in the vault. |
-| Record | ATE writes each decision to the journal. The vault writes the rationale hash on-chain. |
+| Record | Flow writes each decision to the journal. The vault writes the rationale hash on-chain. |
 
 ---
 
@@ -166,7 +183,7 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-    O["Owner<br/>(hardware wallet,<br/>other computer)"]
+    O["Owner<br/>(mainnet design: hardware wallet or Safe,<br/>other computer)"]
     A["Agent key<br/>(daemon)"]
     G["Guardian<br/>(other device)"]
     V(("PolicyVault"))
@@ -177,6 +194,7 @@ flowchart LR
 ```
 
 - The owner key is never on the agent computer.
+- On testnet the owner is a separate deployer key. On mainnet it is a hardware wallet or a Safe.
 - The agent key can only trade inside the limits, and pause.
 - Any key with a role can pause. Only the owner can unpause.
 - The pool, the oracle and the router are fixed when you deploy the vault. Nobody can change them.
@@ -191,19 +209,27 @@ flowchart TB
     C1 -- yes --> X1["Revert: PAUSED"]
     C1 -- no --> C2{"Caller is<br/>the agent?"}
     C2 -- no --> X2["Revert: NOT_AGENT"]
-    C2 -- yes --> C3{"Token is in<br/>the fixed pair?"}
+    C2 -- yes --> CZ{"Amount > 0?"}
+    CZ -- no --> XZ["Revert: ZERO_AMOUNT"]
+    CZ -- yes --> CD{"Deadline<br/>not passed?"}
+    CD -- no --> XD["Revert: DEADLINE"]
+    CD -- yes --> C3{"Token is in<br/>the fixed pair?"}
     C3 -- no --> X3["Revert: PAIR_NOT_ALLOWED"]
     C3 -- yes --> C4{"Oracle valid and<br/>not older than 25 h?"}
     C4 -- no --> X4["Revert: ORACLE_INVALID / STALE"]
     C4 -- yes --> C5{"Pool price near<br/>oracle price?<br/>(spot and 5-min TWAP)"}
     C5 -- no, buy --> X5["Revert: ORACLE_DEVIATION"]
-    C5 -- "no, sell" --> EX["Exit path:<br/>floor = min(oracle, TWAP)"]
+    C5 -- "no, sell" --> CE{"TWAP within<br/>500 bps of oracle?"}
+    CE -- no --> XE["Revert: EXIT_PRICE"]
+    CE -- yes --> EX["Exit path:<br/>floor = min(oracle, TWAP)"]
     C5 -- yes --> C6{"Trade cap ·<br/>daily cap ·<br/>cooldown OK?"}
     EX --> C6
     C6 -- no --> X6["Revert: TRADE_CAP / EPOCH_CAP / COOLDOWN"]
     C6 -- yes --> C7{"minAmountOut ≥<br/>oracle floor?"}
     C7 -- no --> X7["Revert: SLIPPAGE"]
-    C7 -- yes --> C8{"Exposure after<br/>a buy ≤ cap?"}
+    C7 -- yes --> CB{"Vault holds<br/>enough of the token?"}
+    CB -- no --> XB["Revert: BALANCE"]
+    CB -- yes --> C8{"Exposure after<br/>a buy ≤ cap?"}
     C8 -- no --> X8["Revert: EXPOSURE"]
     C8 -- yes --> OK["Swap on HSKSwap<br/>Output goes to the vault<br/>Emit TradeExecuted"]
 ```
@@ -212,6 +238,7 @@ The vault calculates the minimum output from the oracle price.
 The agent cannot give its own price. Thus a lie about the market has no effect.
 
 `check()` gives the same reason code as `execute()`. Tests prove this for each code.
+The diagram lists the checks in contract order.
 
 ---
 
@@ -236,6 +263,13 @@ flowchart LR
 These limits apply when the Supra price is live and within 250 bps of the fair price.
 The market price of the held tokens can also change. The stop-loss controls this risk, not the contract.
 Refer to [`SPEC.md` §4.6](SPEC.md) for all conditions.
+
+### Risk assumptions
+
+- **The oracle can be up to 25 h old.** Supra pushes prices on a slow cadence on HSK Chain, and a trade can also pull a fresh price. A tight limit would block trades. The price must still stay within 250 bps of the pool spot and TWAP. You can lower the limit for mainnet.
+- **USDT is valued at $1.** A buy is counted at its USDT amount.
+- **An exit sell has a lower floor.** On the exit path the floor is min(oracle, TWAP). Spot is not checked there. The 500 bps exit limit and the loss math above cover this.
+- **The agent key can pause.** A stolen key can stop the vault. That stops trading and does not lose funds. It is a fail-safe. Only the owner can unpause.
 
 ---
 
@@ -291,23 +325,24 @@ You can see each revert on Blockscout with the decoded error.
 
 ## 9. Control in plain language
 
-| You say | ATE does |
+| You say | Flow does |
 |---|---|
 | "How am I doing today?" | Shows positions and P&L. |
 | "Go to cash on HSK, keep the BTC" | Sells the WHSK at once. Keeps the WBTC. |
 | "Stop out HSK at 2%" | Sets the stop-loss for the HSK market. |
 | "Why did you sell at 3 am?" | Shows the journal record and the rationale. |
-| "Stop everything" | Pauses both vaults. |
+| "Stop everything" | Pauses the vaults. The testnet proof shows the pause on Vault-HSK. |
 | "Raise the daily cap to $800" | Refuses. Only the owner can change the limits. |
 
-A change that increases the risk needs a Touch ID approval.
+A change that increases the risk needs approval: Touch ID, or a one-time code shown by the daemon.
 A change that decreases the risk applies at once.
 
 ---
 
-## 10. How to run ATE
+## 10. How to run Flow
 
 Do these steps in the repository root. Use pnpm 9: `npx -y pnpm@9.15.0`.
+These steps run on the testnet (chain 133), which is live today. Mainnet uses `deployments/177.json` after deployment.
 
 1. Install the packages.
    ```sh
@@ -325,28 +360,30 @@ Do these steps in the repository root. Use pnpm 9: `npx -y pnpm@9.15.0`.
    ```sh
    cd contracts && forge test
    ```
-5. Make an agent key.
+5. Make the testnet config. Then make an agent key. To use the vaults in `deployments/133.json`, import their agent key. To use your own vaults, deploy them first ([`docs/TESTNET.md`](docs/TESTNET.md)).
    ```sh
-   node apps/daemon/dist/bin.js keygen
+   node apps/daemon/scripts/testnet-config.mjs deployments/133.json ~/.ate-testnet/config.json --enable-strategy
+   ATE_HOME=~/.ate-testnet ATE_KEYSTORE=file node apps/daemon/dist/bin.js keygen
    ```
 6. Start the daemon.
    ```sh
-   node apps/daemon/dist/bin.js start --approval-fallback=armed
+   ATE_HOME=~/.ate-testnet ATE_KEYSTORE=file ATE_DEPLOYMENTS=deployments/133.json \
+     node apps/daemon/dist/bin.js start --approval-fallback=armed
    ```
 7. Do a health check.
    ```sh
-   npx tsx apps/cli/src/bin.ts doctor
+   ATE_HOME=~/.ate-testnet npx tsx apps/cli/src/bin.ts doctor
    ```
 8. Start the AI trader.
    ```sh
-   npx tsx apps/cli/src/bin.ts agent run --model sonnet
+   ATE_HOME=~/.ate-testnet npx tsx apps/cli/src/bin.ts agent run --model sonnet --deployments deployments/133.json
    ```
 9. Open the desktop app. Use fixtures mode if no daemon runs.
    ```sh
    cd apps/desktop && npx -y pnpm@9.15.0 dev        # or: dev:fixtures
    ```
 
-For the testnet (chain 133), refer to [`docs/TESTNET.md`](docs/TESTNET.md).
+For all testnet commands, refer to [`docs/TESTNET.md`](docs/TESTNET.md).
 For the deployment to the mainnet (chain 177), refer to [`contracts/README.md`](contracts/README.md).
 
 ---
@@ -385,22 +422,22 @@ flowchart LR
 
 | Area | Tests |
 |---|---|
-| Contracts (unit, parity, invariant, fork smoke) | 148 pass, fork tests opt-in |
+| Contracts (unit, parity, invariant, fork smoke) | 148 pass, 5 fork tests skipped (opt-in) |
 | Strategy and guard | 97 pass |
-| Daemon, MCP, journal, chain, oracle, wallet | 78 pass |
+| Daemon, MCP, journal, chain, oracle, wallet | 86 pass |
 | Approvals, payments, worker | 60 pass |
-| Core, trader, chat, CLI | 66 pass |
+| Core, trader, chat, CLI | 77 pass (1 chat test skipped) |
 
 The fork smoke test (optional, `FORK_SMOKE=true`) uses the real HSKSwap pools and the real Supra prices.
 It does a buy, a sell and an exit-path sell on each vault.
 
 ---
 
-## 13. HashKey products that ATE uses
+## 13. HashKey products that Flow uses
 
 ```mermaid
 flowchart LR
-    ATE((ATE)) --> HS["HSKSwap<br/>trades · quotes"]
+    ATE((Flow)) --> HS["HSKSwap<br/>trades · quotes"]
     ATE --> SU["Supra on HSK Chain<br/>enforced price"]
     ATE --> AP["APRO<br/>cross-check"]
     ATE --> EA["EAS predeploy<br/>attestations"]
@@ -413,7 +450,7 @@ flowchart LR
 
 ## 14. What this version does not do
 
-- The spread trade has one leg. ATE does not trade on the exchange.
+- The spread trade has one leg. Flow does not trade on the exchange.
 - The pools have low volume. The 7-day replay shows many gaps, but most counterfactual lots stay open at a loss. It does not prove profit.
   Refer to [`docs/replay-7d.md`](docs/replay-7d.md).
 - The WBTC pool price can stay below the exchange price for days.
@@ -428,7 +465,7 @@ flowchart LR
 timeline
     title Roadmap
     Now : Testnet vaults (chain 133) : AI trader running unattended
-    Next : Mainnet vaults (chain 177) : Source verified on Blockscout
+    Next : Mainnet vaults (chain 177) : Source verified on Blockscout and Sourcify
     30 days : Vault owner moves to a Safe : Published npm packages for other agent teams
     60 days : More HSKSwap markets : Kredo prediction-market adapter
     90 days : External audit : Agent teams use the vault for their own bots
