@@ -590,6 +590,25 @@ export function registerAppRoutes(o: AppRoutesOptions): { trader: TraderSupervis
     });
   }
 
+  r.register({
+    method: "POST",
+    path: "/engine/subscription/login",
+    scopes: ["ui"],
+    handler: ({ body, json }) => guard(json, () => (sc ? sc.loginUrl(String((body as { provider?: unknown })?.provider ?? "")) : Promise.reject(noSidecar()))),
+  });
+  r.register({
+    method: "POST",
+    path: "/engine/subscription/login-status",
+    scopes: ["ui"],
+    handler: ({ body, json }) =>
+      guard(json, async () => {
+        if (!sc) throw noSidecar();
+        const st = await sc.loginStatus(String((body as { state?: unknown })?.state ?? ""));
+        if ((await sc.check()).healthy) await ai.test("subscription");
+        return { login: st, models: sc.status().models, selectedModel: ai.config.provider === "subscription" ? ai.effectiveModel() : null };
+      }),
+  });
+
   const pendingCred = new Map<string, { id: ProviderId; action: "set" | "remove"; key: string | null; expiresAt: number; payload: ApprovalPayload }>();
   for (const id of PROVIDER_IDS) {
     r.register({ method: "POST", path: `/engine/providers/${id}/test`, scopes: ["ui"], handler: ({ json }) => guard(json, () => ai.test(id)) });

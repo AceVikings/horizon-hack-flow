@@ -42,6 +42,7 @@ describe("sidecar config + release", () => {
     expect(y).toContain('host: "127.0.0.1"');
     expect(y).toContain("allow-remote: false");
     expect(y).not.toMatch(/cloak/i);
+    expect(configYaml({ port: 1, apiKey: "a", mgmtKey: "b", authDir: "/x/auths" })).toContain('auth-dir: "/x/auths"');
   });
 
   it("installs only a checksum-verified release", async () => {
@@ -79,7 +80,7 @@ describe("sidecar lifecycle + subscription engine", () => {
     const keys = new ProviderKeys(home, env);
     const sc = new ProxySidecar(home, keys, env);
     homes.push(sc);
-    expect(sc.loginFlags()).toEqual(["--login", "--claude-login", "--codex-login"]);
+    expect(sc.loginFlags()).toEqual(["-login", "-claude-login", "-codex-login"]);
     const st = await sc.start();
     expect(st).toMatchObject({ running: true, healthy: true });
     expect(st.models).toContain("gpt-5");

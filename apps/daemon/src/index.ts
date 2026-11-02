@@ -8,6 +8,8 @@ export * from "./positions.js";
 export * from "./strategy-stub.js";
 export * from "./rogue.js";
 export * from "./engine.js";
+export * from "./sidecar.js";
+export { ProviderKeys, PROVIDERS, PROVIDER_IDS } from "./providers.js";
 export { daemonStart, mcpServe, unlockCmd, keygenCmd, doctorCmd, smokeCmd, type Ctx } from "./cli.js";
 import { daemonStart, mcpServe } from "./cli.js";
 

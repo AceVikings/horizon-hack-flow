@@ -4,7 +4,7 @@
 // health-checks it through /v1/models. Sign-in to the subscriptions happens in the user's terminal with the binary's
 // own login flags; Flow never sees those credentials. No request "cloaking" keys are written: the proxy's defaults apply.
 
-import { spawn, execFileSync, type ChildProcess } from "node:child_process";
+import { spawn, spawnSync, execFileSync, type ChildProcess } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { chmodSync, createWriteStream, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync, type WriteStream } from "node:fs";
 import { homedir, tmpdir } from "node:os";
@@ -32,8 +32,9 @@ export interface SidecarStatus {
   models: string[];
   lastError: string | null;
   checkedAt: number | null;
-  /** Login flags the installed binary offers (from its --help), e.g. --claude-login. */
+  /** Login flags the installed binary offers (from its --help), e.g. -claude-login (pass -config configPath too). */
   loginFlags: string[];
+  configPath: string;
 }
 
 interface State {
@@ -52,7 +53,7 @@ export function assetSuffix(platform = process.platform, arch = process.arch): s
 }
 
 /** Minimal config: loopback only, generated keys, management localhost-only. Nothing else (proxy defaults). */
-export function configYaml(o: { port: number; apiKey: string; mgmtKey: string }): string {
+export function configYaml(o: { port: number; apiKey: string; mgmtKey: string; authDir?: string }): string {
   return [
     "# Written by Flow. Loopback only; keys are generated and kept in the macOS keychain.",
     "server:",
@@ -64,6 +65,7 @@ export function configYaml(o: { port: number; apiKey: string; mgmtKey: string })
     "management:",
     `  secret-key: "${o.mgmtKey}"`,
     "  allow-remote: false",
+    ...(o.authDir ? ["oauth:", `  auth-dir: "${o.authDir}"`] : []),
     "",
   ].join("\n");
 }
@@ -99,6 +101,13 @@ export class ProxySidecar {
   get port(): number {
     return this.state().port ?? DEFAULT_PORT;
   }
+  /** Flow's own config and auth dir: terminal sign-in must pass `-config <configPath>` so logins land here. */
+  get configPath(): string {
+    return join(this.dir, "config.yaml");
+  }
+  get authDir(): string {
+    return join(this.dir, "auths");
+  }
   get baseURL(): string {
     return `http://127.0.0.1:${this.port}/v1`;
   }
@@ -132,16 +141,13 @@ export class ProxySidecar {
   }
 
   private help(bin: string): string {
-    try {
-      return execFileSync(bin, ["--help"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 5000 });
-    } catch (e) {
-      const x = e as { stdout?: string; stderr?: string };
-      return `${x.stdout ?? ""}${x.stderr ?? ""}`; // Go flag prints usage to stderr and exits 2
-    }
+    // Go's flag package prints usage to stderr (exit 0 or 2): read both streams
+    const r = spawnSync(bin, ["--help"], { encoding: "utf8", timeout: 5000 });
+    return `${r.stdout ?? ""}${r.stderr ?? ""}`;
   }
   loginFlags(bin = this.detect()?.bin): string[] {
     if (!bin) return [];
-    return [...new Set([...this.help(bin).matchAll(/(?:^|\s)(--?(?:[a-z][a-z0-9-]*-)?login)\b/gm)].map((m) => m[1]!.replace(/^-(?!-)/, "--")))];
+    return [...new Set([...this.help(bin).matchAll(/(?:^|\s)(--?(?:[a-z][a-z0-9-]*-)?login)\b/gm)].map((m) => m[1]!))];
   }
   private configFlag(bin: string): string {
     return /(^|\s)--config\b/m.test(this.help(bin)) ? "--config" : "-config";
@@ -218,7 +224,8 @@ export class ProxySidecar {
     this.save({ port, ...(found.source === "user" ? { bin: found.bin } : {}) });
     mkdirSync(this.dir, { recursive: true, mode: 0o700 });
     const cfg = join(this.dir, "config.yaml");
-    writeFileSync(cfg, configYaml({ port, apiKey: this.apiKey(), mgmtKey: this.mgmtKey() }), { mode: 0o600 });
+    mkdirSync(this.authDir, { recursive: true, mode: 0o700 });
+    writeFileSync(cfg, configYaml({ port, apiKey: this.apiKey(), mgmtKey: this.mgmtKey(), authDir: this.authDir }), { mode: 0o600 });
     this.log?.end();
     this.log = createWriteStream(join(this.dir, "proxy.log"), { flags: "a", mode: 0o600 });
     const child = spawn(found.bin, [this.configFlag(found.bin), cfg], { cwd: this.dir, stdio: ["ignore", "pipe", "pipe"], env: { ...this.env } });
@@ -273,6 +280,26 @@ export class ProxySidecar {
     return this.status();
   }
 
+  /**
+   * In-app sign-in through the proxy's management API (localhost, management key): returns the provider's login URL
+   * for the user's browser plus a `state` to poll. provider ∈ claude | codex | antigravity | kimi | kimi-ai | xai | devin | meta.
+   */
+  async loginUrl(provider: string): Promise<{ url: string; state: string | null }> {
+    if (!/^(claude|codex|antigravity|kimi|kimi-ai|xai|devin|meta)$/.test(provider)) throw Object.assign(new Error("unknown sign-in provider"), { status: 400, code: "ATE_CONFIG_INVALID" });
+    const r = await this.fetchImpl(`http://127.0.0.1:${this.port}/v8/management/oauth/auth-url?provider=${provider}`, { headers: { authorization: `Bearer ${this.mgmtKey()}` }, signal: AbortSignal.timeout(10_000) });
+    if (!r.ok) throw Object.assign(new Error(`the proxy answered HTTP ${r.status}`), { status: 502, code: "ATE_INTERNAL" });
+    const j = (await r.json()) as { url?: string; auth_url?: string; state?: string };
+    const url = j.url ?? j.auth_url;
+    if (!url || !/^https:\/\//.test(url)) throw Object.assign(new Error("the proxy returned no login link"), { status: 502, code: "ATE_INTERNAL" });
+    return { url, state: j.state ?? null };
+  }
+  async loginStatus(state: string): Promise<unknown> {
+    if (!/^[A-Za-z0-9_-]{1,200}$/.test(state)) throw Object.assign(new Error("bad state"), { status: 400, code: "ATE_CONFIG_INVALID" });
+    const r = await this.fetchImpl(`http://127.0.0.1:${this.port}/v8/management/oauth/status?state=${state}`, { headers: { authorization: `Bearer ${this.mgmtKey()}` }, signal: AbortSignal.timeout(10_000) });
+    const j = (await r.json().catch(() => ({}))) as Record<string, unknown>;
+    return { httpStatus: r.status, ...j };
+  }
+
   /** Up and signed in to at least one subscription (no process spawn: cached from the last check). */
   get ready(): boolean {
     return this.st.healthy && this.st.models.length > 0;
@@ -296,6 +323,7 @@ export class ProxySidecar {
       lastError: this.st.lastError,
       checkedAt: this.st.checkedAt,
       loginFlags: found ? this.loginFlags(found.bin) : [],
+      configPath: this.configPath,
     };
   }
 }

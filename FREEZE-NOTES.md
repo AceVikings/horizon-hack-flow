@@ -268,6 +268,13 @@ Lanes may **add** to frozen artifacts; changing anything here needs a lead-appro
    - `GET /engine/providers` lists `subscription` first; `selected` gains `auto: true` while the model is automatic.
      `POST /engine/select { provider: "subscription" }` (no model) returns to automatic.
    - Env: `ATE_SIDECAR=0` keeps the daemon from starting the proxy; `ATE_AI_PROVIDER` / `ATE_AI_MODEL` override.
+   - Sign-in: Flow's proxy uses its own config (`configPath`, `-config`) and auth dir (`<home>/cliproxy/auths`), so a
+     terminal login must run `<bin> -config <configPath> -claude-login` (flags exactly as `loginFlags` lists them:
+     -claude-login, -codex-login, -codex-device-login, -antigravity-login, …). In-app alternative (no terminal):
+     `POST /engine/subscription/login { provider: claude|codex|antigravity|kimi|kimi-ai|xai|devin|meta }` → `{ url, state }`
+     (open `url` in the browser), then poll `POST /engine/subscription/login-status { state }` → `{ login, models,
+     selectedModel }`. Both go through the proxy's `/v8/management/oauth/*` with the management key, which never leaves
+     the daemon. Verified against the real v8.0.51 release (install, checksum, start healthy, Claude login URL).
 
 ## CLOUD. Owner service, signer roles, cloud mode (lane CLOUD, additive)
 
