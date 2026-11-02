@@ -9,6 +9,7 @@ import { useApp, useNow, useRemote } from "../src/app";
 import { baseDecimals, fmtUnits } from "../src/format";
 import { PageHead, useNav } from "../src/shell";
 import { Btn, Pill, TxLink } from "../src/ui";
+import { ToolResultBlock } from "../src/charts";
 import { CodeApprove, approveRiskier } from "./approveCode";
 import type { ViewProps } from "./registry";
 
@@ -253,6 +254,14 @@ function ToolLine({ m, open, onToggle, now, decided, onConfirm, onCancel, code }
           {d === "busy" && !code(pending) && !sells && <div className="sm fg2" style={{ marginTop: 10 }}>Waiting for Touch ID…</div>}
         </div>
       </section>
+    );
+  }
+  // charts and tables (D4) are drawn inline under the reply, with Pin → Charts
+  if ((name === "ate_chart" || name === "ate_data") && res?.ok) {
+    return (
+      <div style={{ margin: "8px 0" }}>
+        <ToolResultBlock tool={name} result={res} />
+      </div>
     );
   }
   const failed = res?.ok === false;
