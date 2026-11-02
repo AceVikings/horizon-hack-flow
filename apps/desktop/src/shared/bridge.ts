@@ -57,6 +57,8 @@ export interface ChatMessage {
   turnId?: string;
   /** Additive: engine reported by the daemon's chat.delta (llm | rules). */
   engine?: string;
+  /** Additive: the AI turn failed (the text is the plain error); Ask offers Try again. */
+  error?: boolean;
   tool?: { name: string; args: unknown; result: unknown; decisionId?: string };
 }
 

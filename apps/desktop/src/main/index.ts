@@ -31,10 +31,13 @@ function handleEvent(e: DaemonEvent): void {
     if ((e.data as { role?: string }).role === "user") return;
     const log = chatLog.get(e.data.sessionId) ?? [];
     const last = log[log.length - 1];
-    if (last && last.role === "agent" && last.turnId === e.data.turnId) last.text += e.data.text;
+    if (last && last.role === "agent" && last.turnId === e.data.turnId) {
+      last.text += e.data.text;
+      if ((e.data as { error?: boolean }).error) last.error = true;
+    }
     else {
-      const engine = (e.data as { engine?: string }).engine;
-      log.push({ id: `${e.data.turnId}:a`, role: "agent", text: e.data.text, at: e.at, turnId: e.data.turnId, ...(engine ? { engine } : {}) });
+      const { engine, error } = e.data as { engine?: string; error?: boolean };
+      log.push({ id: `${e.data.turnId}:a`, role: "agent", text: e.data.text, at: e.at, turnId: e.data.turnId, ...(engine ? { engine } : {}), ...(error ? { error: true } : {}) });
     }
     chatLog.set(e.data.sessionId, log);
   } else if (e.type === "chat.tool") {

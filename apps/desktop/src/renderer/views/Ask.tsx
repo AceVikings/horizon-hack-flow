@@ -15,7 +15,7 @@ import { CodeApprove, approveRiskier } from "./approveCode";
 import { ChatModelPicker, McpToolsSheet } from "./AskTools";
 import type { ViewProps } from "./registry";
 
-const PROMPTS = ["How am I doing?", "Show me BTC price today", "Stop trading", "Go to cash"];
+const PROMPTS = ["How am I doing?", "Chart the BTC pool on HSKSwap, 1h candles for 3 days with EMA 50 and RSI 14. Draw support and resistance and tell me what you find.", "Stop trading", "Go to cash"];
 const SESSION_KEY = "flow.ask.session";
 const session = (): string => {
   let s = sessionStorage.getItem(SESSION_KEY);
@@ -56,6 +56,15 @@ const plain = (t: string) =>
 
 type ToolRes = { ok?: boolean; data?: unknown; error?: { code?: string; message?: string; details?: PendingChange } } | undefined;
 type Block = { kind: "user"; m: ChatMessage } | { kind: "agent"; parts: ChatMessage[] };
+
+/** The question the agent block at i answered (Try again resends it). */
+function lastAsk(blocks: Block[], i: number): string {
+  for (let j = i - 1; j >= 0; j--) {
+    const b = blocks[j]!;
+    if (b.kind === "user") return b.m.text;
+  }
+  return "";
+}
 
 export default function Ask(_: ViewProps) {
   const { ate, toast, tick } = useApp();
@@ -177,6 +186,13 @@ export default function Ask(_: ViewProps) {
                 p.role === "agent" ? (
                   <div key={p.id} style={{ whiteSpace: "pre-wrap", marginTop: 4 }}>
                     {plain(p.text)}
+                    {p.error && i === blocks.length - 1 && !waiting && (
+                      <div style={{ marginTop: 8 }}>
+                        <Btn size="sm" onClick={() => void send(lastAsk(blocks, i))}>
+                          Try again
+                        </Btn>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <ToolLine key={p.id} m={p} open={!!open[p.id]} onToggle={() => setOpen((o) => ({ ...o, [p.id]: !o[p.id] }))} now={now} decided={decided} onConfirm={confirm} onCancel={cancel} code={codeEntry} />
