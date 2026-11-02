@@ -16,6 +16,10 @@ The testnet pools have no other traders. Two price conditions in this run were s
 ([`RecenterTestnetPool.s.sol`](../contracts/script/RecenterTestnetPool.s.sol) with `OFFSET_BPS`), and both
 pools were put back to the Supra price afterwards:
 
+These runs used the earlier reference price, the HashKey Global mid, so the rows below quote gaps "under the CEX mid".
+Flow now measures the pool against the on-chain oracle price (Supra, the price the vault checks) by default; HashKey
+Global is optional context only, off by default. Every trade, then and now, is a swap on HSKSwap.
+
 | Staged condition | Swap | Undone by |
 |---|---|---|
 | tWBTC/tUSDT pool 150 bps below Supra (about 133 bps below the HashKey Global mid) | [0x1b57bfbb…](https://testnet-explorer.hskchain.net/tx/0x1b57bfbbb3fc185da9676d126aaefa6b3377541e822e4d954424748cb0c676f7) | [0x4130903b…](https://testnet-explorer.hskchain.net/tx/0x4130903bf64348ade2886f636fa23d4da13538e4274c15a92a4f2fa63f2b5154) |

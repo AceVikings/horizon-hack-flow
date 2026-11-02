@@ -7,7 +7,7 @@ const steps: [string, string][] = [
   ],
   [
     "Let the agent trade",
-    "Flow watches the HSKSwap pools, the Supra price and the HashKey Global order books, and lines up candidate trades. The agent picks one, sizes it down or skips. The vault checks the trade on-chain and swaps on HSKSwap. The output stays in the vault.",
+    "Flow watches the HSKSwap pools on chain (price, TWAP, recent swaps) and the on-chain oracle price, and lines up candidate trades when the pool drifts from the oracle price. The agent picks one, sizes it down or skips. The vault checks the trade on-chain and swaps on HSKSwap. The output stays in the vault.",
   ],
   [
     "Check the record",

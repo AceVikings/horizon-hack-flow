@@ -68,7 +68,7 @@ export function AppMock() {
               <span className="display rounded-[4px] bg-yellow px-2 pt-0.5">$25.00</span>
             </div>
             <p className="mt-2.5 text-[14px] text-fg-2">
-              Pool sits 132.9 bps under the exchange mid. Net edge after costs: +68.9 bps.
+              Pool sits 150 bps under the on-chain oracle price. Net edge after costs: +115 bps.
             </p>
             <ul className="mt-4 border-t border-line">
               {checks.map(([k, v]) => (
