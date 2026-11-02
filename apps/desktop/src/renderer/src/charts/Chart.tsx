@@ -10,6 +10,7 @@ import {
   HistogramSeries,
   LineSeries,
   LineStyle,
+  PriceScaleMode,
   createChart,
   createSeriesMarkers,
   type IChartApi,
@@ -19,7 +20,8 @@ import {
   type Time,
   type UTCTimestamp,
 } from "lightweight-charts";
-import type { ChartSeries, ChartSpec } from "@ate/core";
+import type { ChartDrawing, ChartSeries, ChartSpec, DrawingKind } from "@ate/core";
+import { DrawingsPrimitive, timeForLogical } from "./drawings";
 
 const C = { fg: "#171e19", mute: "rgba(23,30,25,.55)", line: "rgba(23,30,25,.08)", sage: "#5d7470", accent: "#a87f00", up: "#13744a", down: "#b3202d" };
 const ROLE: Record<NonNullable<ChartSeries["role"]>, string> = { primary: C.fg, secondary: C.sage, muted: "rgba(23,30,25,.35)", accent: C.accent, up: C.up, down: C.down };
@@ -60,6 +62,27 @@ export interface ChartViewProps {
   /** Hide journal markers. */
   noMarkers?: boolean;
   onMarker?(id: string): void;
+  /** Extra drawings (the user's, saved per market) on top of `spec.drawings`. */
+  drawings?: ChartDrawing[];
+  /** Drawing id to emphasise (e.g. the finding under the pointer). */
+  highlight?: string | null;
+  logScale?: boolean;
+  /** Crosshair readout: OHLC (candles) or a value, with time; null when the pointer leaves. */
+  onCrosshair?(r: Readout | null): void;
+  /** Active drawing tool: clicks on the chart create a drawing (two clicks for trend, zone, fib). */
+  drawTool?: DrawingKind | null;
+  /** Label for the text tool. */
+  drawText?: string;
+  onDraw?(d: ChartDrawing): void;
+}
+
+export interface Readout {
+  t: number;
+  o?: number;
+  h?: number;
+  l?: number;
+  c?: number;
+  v?: number;
 }
 
 const ts = (t: number) => t as UTCTimestamp;
@@ -70,9 +93,15 @@ function localTime(t: number, withDate: boolean): string {
   return withDate ? `${d.toLocaleDateString(undefined, { month: "short", day: "numeric" })} ${hm}` : hm;
 }
 
-export function ChartView({ spec, height = 280, look = "line", noMarkers, onMarker }: ChartViewProps) {
+export function ChartView({ spec, height = 280, look = "line", noMarkers, onMarker, drawings, highlight = null, logScale, onCrosshair, drawTool = null, drawText, onDraw }: ChartViewProps) {
   const el = useRef<HTMLDivElement>(null);
   const bus = useContext(LinkC);
+  const chartRef = useRef<IChartApi | null>(null);
+  const primRef = useRef<DrawingsPrimitive | null>(null);
+  const pending = useRef<{ t: number; v: number } | null>(null);
+  const live = useRef({ onCrosshair, drawTool, drawText, onDraw, drawings, highlight });
+  live.current = { onCrosshair, drawTool, drawText, onDraw, drawings, highlight };
+  const all = () => [...(spec.drawings ?? []), ...(live.current.drawings ?? [])];
   useEffect(() => {
     if (!el.current) return;
     const cat = spec.x.type === "category";
@@ -135,6 +164,13 @@ export function ChartView({ spec, height = 280, look = "line", noMarkers, onMark
       made.push({ s, def });
     }
     const main = made.find((m) => m.def.pane === 0)?.s ?? made[0]?.s;
+    chartRef.current = chart;
+    if (main && !cat) {
+      const prim = new DrawingsPrimitive();
+      main.attachPrimitive(prim);
+      primRef.current = prim;
+      prim.set(all(), null, live.current.highlight);
+    }
     for (const l of spec.lines) {
       const target = made.find((m) => m.def.pane === (l.pane ?? 0))?.s;
       target?.createPriceLine({ price: l.v, color: l.role === "down" ? C.down : l.role === "up" ? C.up : l.role === "accent" ? C.accent : "rgba(23,30,25,.4)", lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: l.label });
@@ -146,7 +182,35 @@ export function ChartView({ spec, height = 280, look = "line", noMarkers, onMark
     if (lower) chart.panes()[1]?.setHeight(Math.round(height * 0.3));
     chart.timeScale().fitContent();
     const me = {};
-    chart.subscribeCrosshairMove((p) => bus?.emit(p.time === undefined ? null : Number(p.time), me));
+    chart.subscribeCrosshairMove((p) => {
+      bus?.emit(p.time === undefined ? null : Number(p.time), me);
+      const cb = live.current.onCrosshair;
+      if (!cb || !main) return;
+      const d = p.time === undefined ? undefined : (p.seriesData.get(main) as { open?: number; high?: number; low?: number; close?: number; value?: number } | undefined);
+      if (!d || p.time === undefined) return cb(null);
+      cb({ t: Number(p.time), ...(d.close !== undefined ? { o: d.open, h: d.high, l: d.low, c: d.close } : { v: d.value }) });
+    });
+    chart.subscribeClick((p) => {
+      const tool = live.current.drawTool;
+      if (!tool || !main || !p.point || cat) return;
+      const v = main.coordinateToPrice(p.point.y);
+      const lg = chart.timeScale().coordinateToLogical(p.point.x);
+      const times = (main.data() as { time: Time }[]).map((x) => Number(x.time));
+      const t = lg === null ? null : timeForLogical(Number(lg), times);
+      if (v === null || t === null) return;
+      const pt = { t, v: Number(v) };
+      const emit = live.current.onDraw;
+      if (tool === "hline") emit?.({ kind: "hline", a: { v: pt.v } });
+      else if (tool === "text") emit?.({ kind: "text", a: pt, label: live.current.drawText?.trim() || "Note" });
+      else if (!pending.current) {
+        pending.current = pt;
+        primRef.current?.set(all(), pt, live.current.highlight);
+      } else {
+        const a = pending.current;
+        pending.current = null;
+        emit?.({ kind: tool, a, b: pt });
+      }
+    });
     if (onMarker) chart.subscribeClick((p) => (p.hoveredObjectId ? onMarker(String(p.hoveredObjectId)) : undefined));
     const off = bus?.on((t, from) => {
       if (from === me || !main || cat) return;
@@ -161,9 +225,20 @@ export function ChartView({ spec, height = 280, look = "line", noMarkers, onMark
     });
     return () => {
       off?.();
+      chartRef.current = null;
+      primRef.current = null;
       chart.remove();
     };
   }, [spec, height, look, noMarkers, bus, onMarker]);
+  // drawings, highlight and the pending first point update without rebuilding the chart
+  useEffect(() => {
+    if (!drawTool) pending.current = null;
+    primRef.current?.set(all(), pending.current, highlight);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drawings, highlight, drawTool, spec]);
+  useEffect(() => {
+    chartRef.current?.priceScale("right").applyOptions({ mode: logScale ? PriceScaleMode.Logarithmic : PriceScaleMode.Normal });
+  }, [logScale, spec, look]);
   const keys = spec.series.filter((s) => !(s.indicator && s.type === "histogram"));
   return (
     <>
@@ -177,7 +252,7 @@ export function ChartView({ spec, height = 280, look = "line", noMarkers, onMark
           ))}
         </div>
       )}
-      <div ref={el} className="cv" style={{ height }} />
+      <div ref={el} className={`cv${drawTool ? " drawing" : ""}`} style={{ height }} />
     </>
   );
 }

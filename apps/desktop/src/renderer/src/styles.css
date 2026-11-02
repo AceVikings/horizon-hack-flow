@@ -662,3 +662,38 @@ button.lnk.ico { text-decoration: none; font-size: 14px; color: var(--fg2); }
 .composer input:focus, .composer input:focus-visible { outline: none; box-shadow: none; border-radius: 0; }
 .chstate { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center; }
 .chsub { font-size: 12px; color: var(--mute); max-width: 520px; }
+/* D4: Trade chart toolbar, drawings, analysis, ask box */
+.tchart { padding: 14px 16px 12px; }
+.tchart .chh { align-items: center; margin-bottom: 10px; }
+.ohlc { font-size: 12px; color: var(--fg2); font-variant-numeric: tabular-nums; margin: 0; }
+.ohlc b { color: var(--c); }
+.ttools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
+.ttools .grow { flex: 1; }
+.tbtn { appearance: none; border: 1px solid var(--line2); background: #fff; border-radius: 8px; padding: 5px 10px; font: 500 12px/1.3 var(--body); color: var(--c); cursor: pointer; }
+.tbtn:hover { border-color: var(--c); }
+.tbtn.on { background: var(--c); color: #fff; border-color: var(--c); }
+.tbtn:disabled { opacity: .5; cursor: default; }
+.tmenu { position: relative; }
+.tmenu .indmenu { top: 32px; }
+.indmenu .mi { appearance: none; border: 0; background: none; text-align: left; padding: 4px 2px; font: 400 12.5px/1.4 var(--body); color: var(--c); cursor: pointer; border-radius: 4px; }
+.indmenu .mi:hover { background: var(--bg3); }
+.indmenu .mi:disabled { color: var(--mute); cursor: default; }
+.indmenu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; width: 100%; }
+.thint { display: flex; align-items: center; gap: 12px; font-size: 12.5px; color: var(--fg2); background: var(--bg3); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; margin-bottom: 8px; }
+.thint input { border: 1px solid var(--line2); border-radius: 6px; padding: 4px 8px; font: 400 12.5px var(--body); }
+.cv.drawing { cursor: crosshair; }
+.chbare { min-width: 0; }
+.tanalysis { border: 1px solid var(--line2); border-radius: 12px; padding: 12px 14px; margin-top: 10px; background: #fff; }
+.tsum { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+.tanalysis ul { margin: 0 0 8px; padding-left: 18px; display: grid; gap: 3px; font-size: 13px; }
+.tanalysis li { cursor: default; }
+.tanalysis li.up::marker { color: var(--ok); }
+.tanalysis li.down::marker { color: var(--bad); }
+.tdisc { font-size: 12px; color: var(--fg2); margin-bottom: 6px; }
+.taskbox { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 12px; }
+.taskf { display: flex; gap: 8px; }
+.taskf input { flex: 1; min-width: 0; border: 1px solid var(--line2); border-radius: 8px; padding: 8px 10px; font: 400 13px var(--body); }
+.taskf input:focus { outline: 0; border-color: var(--c); box-shadow: 0 0 0 2px rgba(255,225,124,.7); }
+.tsugg { font-size: 12px; color: var(--fg2); margin-top: 8px; display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.treply { font-size: 13px; margin-top: 10px; white-space: pre-wrap; line-height: 1.55; }
+.chstate .chempty { margin: 0; }

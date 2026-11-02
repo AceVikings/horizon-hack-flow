@@ -15,6 +15,7 @@ export const INDICATOR_LABEL: Record<ChartIndicator, string> = {
   rsi14: "Momentum (RSI)",
   macd: "Trend (MACD)",
   atr14: "Volatility (ATR)",
+  volume: "Volume",
 };
 const INTERVALS: ChartInterval[] = ["1m", "5m", "1h", "1d"];
 const TIMEFRAMED = new Set(["price", "cex", "oracle", "spread", "volume", "pnl", "exposure", "budget"]);
@@ -126,9 +127,9 @@ const fmtCell = (v: string | number | null, unit?: string): string => {
   return String(v);
 };
 
-export function DataTableCard({ table, actions }: { table: DataTable; actions?: ReactNode }) {
+export function DataTableCard({ table, actions, bare }: { table: DataTable; actions?: ReactNode; bare?: boolean }) {
   return (
-    <section className="chcard" aria-label={table.title}>
+    <section className={bare ? "chbare" : "chcard"} aria-label={table.title}>
       <header className="chh">
         <div>
           <h3>{table.title}</h3>
