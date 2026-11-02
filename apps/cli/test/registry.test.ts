@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Writable } from "node:stream";
 import { describe, expect, it } from "vitest";
-import { loadCommands, runCli } from "../src/commands/index.js";
+import { LANE_COMMANDS, loadCommands, runCli } from "../src/commands/index.js";
 
 function sink() {
   let buf = "";
@@ -23,10 +23,14 @@ function fixture(files: Record<string, string>): string {
 const cmd = (name: string, out = name) => `export default { name: "${name}", summary: "${name} summary", run(ctx) { ctx.stdout.write("${out}:" + ctx.argv.join(",")); return 0; } };\n`;
 
 describe("command registry", () => {
-  it("loads the real (empty) lane directories", async () => {
+  it("loads the real lane directories; every reserved name is served by its own lane", async () => {
+    // Was "(empty)" at the freeze; lanes now add one file per command (Lane C edit: ownership check instead).
     const cmds = await loadCommands();
-    expect([...cmds.keys()]).toEqual([]);
-  });
+    for (const c of cmds.values()) {
+      const owner = (Object.entries(LANE_COMMANDS) as [string, readonly string[]][]).find(([, names]) => names.includes(c.name))?.[0];
+      if (owner) expect(c.lane).toBe(owner);
+    }
+  }, 30_000);
 
   it("loads per-lane files, skips _private and tests, dispatches argv", async () => {
     const dir = fixture({

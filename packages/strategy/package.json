@@ -1,0 +1,23 @@
+{
+  "name": "@ate/strategy",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "description": "ATE strategy (Lane C): candidate generators, strategy + portfolio guard (§11.4 rules 1–9), reservations, invalidation, lots/P&L, breaker, patcher, replay",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+    "./replay": { "types": "./dist/replay/index.d.ts", "import": "./dist/replay/index.js" }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ate/core": "workspace:*"
+  }
+}

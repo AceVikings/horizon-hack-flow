@@ -3,3 +3,5 @@ export { TOOL_DEFINITIONS, TOOL_LIST, type ToolDefinition, type ToolAnnotations 
 export { validateToolInput, type ValidationResult } from "./validate.js";
 export { createStubHandler, InvalidParamsError, UnknownToolError, type StubHandler, type StubOptions } from "./stub/handler.js";
 export { createStubServer, stubOptionsFromEnv, STUB_SERVER_NAME, STUB_SERVER_VERSION } from "./stub/server.js";
+export { createAteMcpServer, SERVER_NAME, type ToolBackend } from "./server/index.js";
+export { runStdioProxy, connectDaemonClient, type ProxyOptions } from "./server/proxy.js";

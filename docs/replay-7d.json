@@ -1,0 +1,278 @@
+[
+  {
+    "market": "hsk-dex:WHSK/USDT:3000",
+    "from": 1792990708,
+    "to": 1793595508,
+    "params": {
+      "cycleSeconds": 120,
+      "entrySpreadBps": 60,
+      "minNetEdgeBps": 15,
+      "tradeSizeUsd": 25,
+      "feeBps": 30,
+      "halfSpreadBps": 22.83,
+      "minEntryIntervalSec": 0,
+      "dailyTurnoverUsd": 100,
+      "maxPositionUsd": 150
+    },
+    "swaps": 327,
+    "volumeUsd": 5490.06,
+    "uniqueSenders": 4,
+    "topSender": {
+      "address": "0x56d15cf00b5d853d6ee4cbb1463e6dad2899fbf5",
+      "share": 0.91
+    },
+    "cycles": 5040,
+    "cyclesWithData": 5040,
+    "cexNoTradeMinutesShare": 0.61,
+    "fired": {
+      "buy": 543,
+      "sell": 121
+    },
+    "rejectedNetEdge": 384,
+    "belowEntrySpread": 3992,
+    "netEdgeDist": {
+      "p10": -47.35,
+      "p50": -14.27,
+      "p90": 21.11,
+      "max": 728.35
+    },
+    "gapDist": {
+      "min": -782.3,
+      "p10": -70.6,
+      "p50": -32.73,
+      "p90": 32.96,
+      "max": 202.36
+    },
+    "shareAboveCost": 0.29,
+    "episodes": {
+      "count": 323,
+      "closed": 323,
+      "medianTimeToCloseSec": 240,
+      "longestSec": 16920,
+      "open": 0
+    },
+    "verdict": "transient (median time-to-close 4 min)",
+    "counterfactual": {
+      "firedMeanNetBps": 35.46,
+      "firedMeanNetUsd": 0.0887,
+      "firedSumNetUsd": 58.87,
+      "taken": 10,
+      "takenSumNetUsd": 2.31,
+      "closedLots": 4,
+      "realisedUsd": 0.16,
+      "openLots": 6,
+      "openExitUsd": -3.06,
+      "openCexUsd": -2.54
+    },
+    "topDecile": [
+      {
+        "at": 1793158680,
+        "gapBps": -782.3,
+        "costBps": 53.95,
+        "netBps": 728.35,
+        "decision": "spread-revert buy (net 728.35 ≥ 15)"
+      },
+      {
+        "at": 1793533320,
+        "gapBps": -309.76,
+        "costBps": 53.4,
+        "netBps": 256.36,
+        "decision": "spread-revert buy (net 256.36 ≥ 15)"
+      },
+      {
+        "at": 1793108400,
+        "gapBps": -206.54,
+        "costBps": 53.95,
+        "netBps": 152.59,
+        "decision": "spread-revert buy (net 152.59 ≥ 15)"
+      },
+      {
+        "at": 1792992120,
+        "gapBps": 202.36,
+        "costBps": 53.95,
+        "netBps": 148.41,
+        "decision": "spread-revert sell (net 148.41 ≥ 15)"
+      },
+      {
+        "at": 1793243760,
+        "gapBps": 195.35,
+        "costBps": 53.95,
+        "netBps": 141.4,
+        "decision": "spread-revert sell (net 141.4 ≥ 15)"
+      },
+      {
+        "at": 1793307840,
+        "gapBps": 164.45,
+        "costBps": 53.96,
+        "netBps": 110.49,
+        "decision": "spread-revert sell (net 110.49 ≥ 15)"
+      },
+      {
+        "at": 1793167800,
+        "gapBps": -159.62,
+        "costBps": 53.95,
+        "netBps": 105.67,
+        "decision": "spread-revert buy (net 105.67 ≥ 15)"
+      },
+      {
+        "at": 1793325720,
+        "gapBps": 147.33,
+        "costBps": 53.96,
+        "netBps": 93.37,
+        "decision": "spread-revert sell (net 93.37 ≥ 15)"
+      },
+      {
+        "at": 1793329200,
+        "gapBps": 147.33,
+        "costBps": 53.96,
+        "netBps": 93.37,
+        "decision": "spread-revert sell (net 93.37 ≥ 15)"
+      },
+      {
+        "at": 1793530680,
+        "gapBps": -146.24,
+        "costBps": 53.4,
+        "netBps": 92.84,
+        "decision": "spread-revert buy (net 92.84 ≥ 15)"
+      }
+    ]
+  },
+  {
+    "market": "hsk-dex:WBTC/USDT:3000",
+    "from": 1792990708,
+    "to": 1793595508,
+    "params": {
+      "cycleSeconds": 120,
+      "entrySpreadBps": 60,
+      "minNetEdgeBps": 15,
+      "tradeSizeUsd": 25,
+      "feeBps": 30,
+      "halfSpreadBps": 0.01,
+      "minEntryIntervalSec": 1800,
+      "dailyTurnoverUsd": 100,
+      "maxPositionUsd": 150
+    },
+    "swaps": 36,
+    "volumeUsd": 1492.13,
+    "uniqueSenders": 3,
+    "topSender": {
+      "address": "0x2c16f75b95cf1390c328ab70e2cee7f4b80bd8f3",
+      "share": 0.64
+    },
+    "cycles": 5040,
+    "cyclesWithData": 5040,
+    "cexNoTradeMinutesShare": 0.59,
+    "fired": {
+      "buy": 1491,
+      "sell": 1723
+    },
+    "rejectedNetEdge": 0,
+    "belowEntrySpread": 1826,
+    "netEdgeDist": {
+      "p10": -19.76,
+      "p50": 44.36,
+      "p90": 106.15,
+      "max": 232.12
+    },
+    "gapDist": {
+      "min": -185.51,
+      "p10": -123.08,
+      "p50": 4.6,
+      "p90": 129.22,
+      "max": 267.01
+    },
+    "shareAboveCost": 0.79,
+    "episodes": {
+      "count": 71,
+      "closed": 70,
+      "medianTimeToCloseSec": 480,
+      "longestSec": 167668,
+      "open": 1
+    },
+    "verdict": "persistent (> 1 days)",
+    "counterfactual": {
+      "firedMeanNetBps": 76.16,
+      "firedMeanNetUsd": 0.1904,
+      "firedSumNetUsd": 611.91,
+      "taken": 6,
+      "takenSumNetUsd": 0.6,
+      "closedLots": 0,
+      "realisedUsd": 0,
+      "openLots": 6,
+      "openExitUsd": -7.08,
+      "openCexUsd": -4.68
+    },
+    "topDecile": [
+      {
+        "at": 1793325960,
+        "gapBps": 267.01,
+        "costBps": 34.89,
+        "netBps": 232.12,
+        "decision": "spread-revert sell (net 232.12 ≥ 15)"
+      },
+      {
+        "at": 1793368320,
+        "gapBps": 264.98,
+        "costBps": 34.89,
+        "netBps": 230.09,
+        "decision": "spread-revert sell (net 230.09 ≥ 15)"
+      },
+      {
+        "at": 1793369760,
+        "gapBps": 249.46,
+        "costBps": 34.89,
+        "netBps": 214.57,
+        "decision": "spread-revert sell (net 214.57 ≥ 15)"
+      },
+      {
+        "at": 1793325120,
+        "gapBps": 249.18,
+        "costBps": 34.89,
+        "netBps": 214.29,
+        "decision": "spread-revert sell (net 214.29 ≥ 15)"
+      },
+      {
+        "at": 1793320440,
+        "gapBps": 225.24,
+        "costBps": 34.89,
+        "netBps": 190.35,
+        "decision": "spread-revert sell (net 190.35 ≥ 15)"
+      },
+      {
+        "at": 1793306520,
+        "gapBps": 192.55,
+        "costBps": 34.82,
+        "netBps": 157.73,
+        "decision": "spread-revert sell (net 157.73 ≥ 15)"
+      },
+      {
+        "at": 1793582520,
+        "gapBps": -185.51,
+        "costBps": 34.93,
+        "netBps": 150.58,
+        "decision": "spread-revert buy (net 150.58 ≥ 15)"
+      },
+      {
+        "at": 1793317920,
+        "gapBps": 184.44,
+        "costBps": 34.87,
+        "netBps": 149.57,
+        "decision": "spread-revert sell (net 149.57 ≥ 15)"
+      },
+      {
+        "at": 1793364240,
+        "gapBps": 180.11,
+        "costBps": 34.89,
+        "netBps": 145.22,
+        "decision": "spread-revert sell (net 145.22 ≥ 15)"
+      },
+      {
+        "at": 1793330160,
+        "gapBps": 176.47,
+        "costBps": 34.89,
+        "netBps": 141.58,
+        "decision": "spread-revert sell (net 141.58 ≥ 15)"
+      }
+    ]
+  }
+]

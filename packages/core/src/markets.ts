@@ -116,3 +116,12 @@ export function tokenInFor(market: MarketId, side: Side): { token: Address; deci
     ? { token: m.quoteToken, decimals: m.quoteDecimals, symbol: m.quote }
     : { token: m.baseToken, decimals: m.baseDecimals, symbol: m.base };
 }
+
+// ---- Additive (Lane B, after contracts 974cbf0): vault `oracle` = SupraAggregatorAdapter; APRO = cross-check only.
+export const SUPRA_PULL: Address = "0x16f70cAD28dd621b0072B5A8a8c392970E87C3dD";
+export const SUPRA_PROOF_URL = "https://rpc-mainnet-dora-2.supra.com/get_proof";
+/** Supra S-Value pair index per market (HSK/USD 517, BTC/USD 0; contracts/ABI-NOTES.md). */
+export const SUPRA_PAIRS: Readonly<Record<MarketId, number>> = {
+  "hsk-dex:WHSK/USDT:3000": 517,
+  "hsk-dex:WBTC/USDT:3000": 0,
+};

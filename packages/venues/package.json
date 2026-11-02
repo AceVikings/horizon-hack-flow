@@ -1,0 +1,29 @@
+{
+  "name": "@ate/venues",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "license": "Apache-2.0",
+  "description": "ATE venue adapters: hsk-dex (HSKSwap QuoterV2 + PolicyVault execute)",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@ate/core": "workspace:*",
+    "@ate/chain": "workspace:*",
+    "viem": "^2.21.0"
+  }
+}

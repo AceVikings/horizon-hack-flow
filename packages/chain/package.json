@@ -1,0 +1,14 @@
+{
+  "name": "@ate/chain",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "description": "ATE chain client: viem, RPC failover (429 / Cloudflare 1015), Multicall3",
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": { "build": "tsup", "typecheck": "tsc --noEmit", "test": "vitest run --passWithNoTests" },
+  "dependencies": { "@ate/core": "workspace:*", "viem": "^2.21.0" }
+}

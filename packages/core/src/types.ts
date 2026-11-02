@@ -75,6 +75,11 @@ export interface PriceSnapshot {
   pool: PoolSnapshot;
   cex: CexSnapshot | null;
   supra: SupraSnapshot | null;
+  /**
+   * Additive (Lane B): APRO cross-check read by EOA eth_call (APRO rejects contract readers on 177, so the
+   * vault's `oracle` is a SupraAggregatorAdapter and `oracle` above is that adapter). null when not read.
+   */
+  apro?: { price: DecString; updatedAt: UnixSec; ageSec: number; disagreeBps: number } | null;
   /** Market in read-only mode (APRO unavailable/invalid, §5.3). */
   readOnly: boolean;
   blockNumber: DecString;
@@ -450,6 +455,8 @@ export const DECISION_KINDS = [
   "outcome",
   "payment",
   "payment_update",
+  // Additive (Lane B, FREEZE-NOTES §B): Supra pull refresh tx (verifyOracleProof) sent by the daemon.
+  "oracle_refresh",
 ] as const;
 export type DecisionKind = (typeof DECISION_KINDS)[number];
 
@@ -464,6 +471,7 @@ export const DECISION_ID_PREFIX: Readonly<Record<DecisionKind, string>> = {
   outcome: "out_",
   payment: "pay_",
   payment_update: "payu_",
+  oracle_refresh: "orf_",
 };
 
 export const GENESIS_PREV_HASH: Hex = `0x${"00".repeat(32)}`;

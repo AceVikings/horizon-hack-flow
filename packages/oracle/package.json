@@ -1,0 +1,14 @@
+{
+  "name": "@ate/oracle",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "description": "ATE market data: APRO, pool slot0/TWAP, HashKey Global, Supra cross-check",
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": { "build": "tsup", "typecheck": "tsc --noEmit", "test": "vitest run --passWithNoTests" },
+  "dependencies": { "@ate/core": "workspace:*", "@ate/chain": "workspace:*", "viem": "^2.21.0" }
+}

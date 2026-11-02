@@ -164,6 +164,18 @@ export const configSchema = z
         use: z.literal("entry-gate+crosscheck"),
         maxDisagreeBps: bps(1, 10_000),
         maxAgeSec: z.number().int().positive(),
+        /** Additive (Lane B): Supra pair index per market (HSK = 517, BTC = 0). */
+        pairs: z.record(marketId, z.number().int().min(0).nullable()).optional(),
+        /** Additive (Lane B): Supra pull refresh (verifyOracleProof) through the TxQueue. */
+        pull: z
+          .object({
+            enabled: z.boolean(),
+            contract: address,
+            proofUrl: z.string().url(),
+            refreshAgeSec: z.number().int().min(60),
+          })
+          .strict()
+          .optional(),
       })
       .strict(),
     ui: z.object({ theme: z.enum(["dark", "light"]), reducedMotion: z.boolean() }).strict(),

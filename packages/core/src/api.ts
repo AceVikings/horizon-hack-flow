@@ -116,7 +116,10 @@ export type DaemonEvent =
       type: "chat.tool";
       at: UnixSec;
       data: { sessionId: string; turnId: string; tool: string; args: unknown; result: unknown; decisionId?: string };
-    };
+    }
+  // Additive (Lane B): out-of-schedule trader cycle request (POST /cycle, scan gap, human strategy change).
+  // The runner subscribes to /events and starts a cycle (no-overlap rule applies, §11.1).
+  | { type: "cycle.requested"; at: UnixSec; data: { reason: "manual" | "gap" | "strategy_change"; cycle: number } };
 
 export type DaemonEventType = DaemonEvent["type"];
 export const DAEMON_EVENT_TYPES: readonly DaemonEventType[] = [
@@ -130,4 +133,5 @@ export const DAEMON_EVENT_TYPES: readonly DaemonEventType[] = [
   "gas.low",
   "chat.delta",
   "chat.tool",
+  "cycle.requested",
 ];

@@ -1,0 +1,47 @@
+{
+  "name": "@ate/daemon",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "description": "ate-daemon: agent signer, chain, venue, oracle, candidates, TxQueue, journal, MCP (Streamable HTTP) and local API",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "ate-daemon": "./dist/bin.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "dev": "tsx src/bin.ts"
+  },
+  "dependencies": {
+    "@ate/chain": "workspace:*",
+    "@ate/core": "workspace:*",
+    "@ate/journal": "workspace:*",
+    "@ate/mcp": "workspace:*",
+    "@ate/oracle": "workspace:*",
+    "@ate/venues": "workspace:*",
+    "@ate/wallet": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.20.0",
+    "better-sqlite3": "^11.7.0",
+    "viem": "^2.21.0",
+    "ws": "^8.18.0",
+    "@ate/approve": "workspace:*",
+    "@ate/strategy": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/ws": "^8.5.12"
+  }
+}

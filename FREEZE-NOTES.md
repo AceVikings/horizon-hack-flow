@@ -105,3 +105,67 @@ Lanes may **add** to frozen artifacts; changing anything here needs a lead-appro
 5. **ate-pay HTTP API** (worker, via SSM forward, `Bearer <worker token>`): `GET /offers`, `POST /buy { offerId, context? }`,
    `GET /payments[/:id]` (includes `approvalRequest { stage, payload (base64url), prompt, expiresAt }` for `ate-approve sign`),
    `POST /payments/:id/approve { stage, approval }`, `POST /payments/:id/deny { stage }`, `GET /payments/:id/signal`.
+
+## Lane C — strategy, trader, replay (additive)
+
+1. **New packages:** `@ate/strategy` (`packages/strategy/`, subpath `@ate/strategy/replay`) and `@ate/trader` (`agents/trader/`,
+   ships `PROMPT.md`). `apps/cli/package.json` gains `@ate/strategy`, `@ate/trader`, `@ate/daemon` (the `daemon`/`mcp` commands
+   import `@ate/daemon` lazily so other commands never load it). Nothing frozen was changed.
+2. **Seam factories** (match Lane B's `loadStrategy`): `createCandidateEngine(opts?)`, `createStrategyGuard(opts?)`,
+   `createReservations()`, `createInvalidation(openProposals, reservations)`, plus `createStrategyPatcher()`.
+   `createStrategyGuard()` without options consults the most recently created Invalidation (`currentInvalidation()`), so the
+   daemon gets execute-time `ATE_STRATEGY_BLOCKED` (rule `invalidated`) without extra wiring. **Lane B:** add
+   `"@ate/strategy": "workspace:*"` to `apps/daemon/package.json`, otherwise the dynamic `import("@ate/strategy")` falls back to the stub.
+   Extra (non-frozen) helpers: `runEngine()` (adds per-market `notes` for silent entry blocks), `entryGate`, `evaluateStop`,
+   `stepBreaker` (rule 6 state machine: actions `invalidate_buys|flatten|pause_all|notify|journal_unflattened`), `scoreVeto` (E13),
+   ledger (`applyFill`/`pnl`, avg cost + FIFO lots), `decideRules`, `newlyOpenedEntryMarkets` (§11.1 scan trigger), `renderDiff`.
+3. **Guard decisions where the spec is silent:**
+   - Rule 7 "one entry per cycleSeconds" allows 10 s slack (`CYCLE_SLACK_SEC`) and treats another open entry proposal on the same
+     market as a frequency block; both cycle and `minEntryIntervalSec` suppressions use `cause=entry_interval`, `bps` = net edge.
+   - Rule 3b for sells: exposure after = exposure − notional (a sell can only help); guard exits exempt (turnover, exit reserve, edge gate).
+   - Turnover-exempt (rule 3): guard exits, `discretionary_exit`, spread-revert `leg=close`, rebalance sells with target 0 / de-selected.
+     Every other trade (incl. discretionary of either side and `smoke`) is an entry. The per-market allocation is recomputed from
+     strategy + vault limits (`turnoverAllocationE8`); `MarketBook.turnover.allocationUsd` is informational.
+   - Rule 1 expiry is checked at propose only (proposals carry their own 120 s TTL to execute); single-use = `consumedBy` null or self.
+   - Entry gating also withholds entries (silently, in `notes`) while a guard exit is live on that market, the breaker is not armed,
+     or the market is read-only. Dust: positions < $0.50 get no exit candidates; entries < $1 are not emitted.
+   - Supra gate threshold defaults to 250 bps (`EngineOptions.supraMaxDisagreeBps` to pass `supra.maxDisagreeBps`).
+4. **Patcher:** agent scope patching a non-tunable field throws `AteError(ATE_TOOL_NOT_ALLOWED)`; `maxDailyTurnoverUsd` is clamped to
+   Σ vault (maxEpochUsd − maxExposureUsd), `maxPortfolioExposureUsd` to Σ maxExposureUsd, `maxPositionUsd`/`tradeSizeUsd` to the
+   vault's caps; market fields without `patch.market` apply to every enabled target market; `needsMarketScope(patch)` flags
+   stop-loss/TP changes without a market (chat must ask "HSK, BTC or both?").
+5. **Runner ↔ daemon:** the runner talks to the daemon only through `ate mcp serve` (agent scope). Timeout records are
+   `ate_decide { reason: "timeout" }` and rules-engine decisions carry a `[engine=rules]` rationale prefix — **Lane B:** please label
+   decisions from the agent token with that prefix `engine=rules` (the MCP schema has no engine field). The runner's measured
+   `candidateTtlSec` is written (only with `ate agent run --dry-run --record-ttl`) as top-level `candidateTtlSec` and
+   `trader.{candidateTtlSec,p95LatencyMs,measuredCycles,measuredAt}` in `deployments/177.json`.
+
+## B. Lane B — daemon, chain, oracle, venues, wallet, journal writer, MCP server (additive)
+
+1. **Oracle source change (contracts 974cbf0).** Additive to `@ate/core`: `PriceSnapshot.apro?` (APRO cross-check read by EOA
+   eth_call — APRO rejects contract readers, so it cannot ride in Multicall3), `SUPRA_PULL`, `SUPRA_PROOF_URL`, `SUPRA_PAIRS`
+   (HSK 517, BTC 0). `PriceSnapshot.oracle` is now the **enforcement** oracle = the vault's immutable `oracle()` (a
+   SupraAggregatorAdapter), read once at daemon start; `PriceSnapshot.supra` describes that same source with
+   `disagreeBps` = Supra vs APRO and `active` = APRO readable and younger than `maxOracleAge` (so Lane C's entry gate keeps its
+   meaning: two oracles disagree → no entries).
+2. **Config (additive, optional):** `supra.pairs` (market → pair index) and `supra.pull { enabled, contract, proofUrl,
+   refreshAgeSec }`. With `pull.enabled`, the scan enqueues `verifyOracleProof` (TxQueue priority `refresh`, between execute and
+   attest) when the enforcement oracle is older than `refreshAgeSec` (≤ 1 per 10 min), and `ate_execute` refreshes synchronously
+   then re-quotes when `check()` says ORACLE_STALE (or DEVIATION while older than `refreshAgeSec`).
+3. **Journal kind (additive):** `oracle_refresh` (id prefix `orf_`) for Supra pull txs.
+4. **Event (additive):** `DaemonEvent` `cycle.requested { reason: manual|gap|strategy_change, cycle }` — emitted by `POST /cycle`,
+   the scan's gap trigger and applied human strategy changes (≤ 1 per 30 s). The runner subscribes to `/events`.
+5. **CLI:** `daemon` and `mcp` are reserved for lane c, so `@ate/daemon` exports `daemonCommand` / `mcpCommand`
+   (CommandModule-shaped) for lane c's files, plus the `ate-daemon` bin (`start | mcp serve | unlock | keygen | doctor | smoke`).
+   Lane b files: `doctor`, `unlock`, `smoke`. `apps/cli/package.json` gains `@ate/daemon`.
+6. **Daemon HTTP (additive routes):** `POST /unlock {passphrase}`, `POST /lock`, `POST /smoke {market, usd}` (agent; adds the
+   one-shot `smoke` candidate), `POST /rogue/tx {to, data, gas?, rationale?}` (rogue scope only), `POST /journal/verify`,
+   `GET /api/view/<tool>` (read-only tools for `/view`; `view` token also accepted as `?token=`), WebSocket `/events?token=`.
+   Lane E's approval routes are mounted from `apps/daemon/src/approval` (`createDaemonApproval`).
+7. **Engine labels:** decisions take `engine` from the token scope (agent → `strategy.engine`, internal → `guard`, human scopes →
+   `human`); an agent rationale starting `[engine=rules]` (Lane C runner) or a `smoke` candidate → `rules`.
+8. **Smoke:** a `smoke`-generator proposal is guarded with `strategy.enabled = true` (operator action; the trader stays disabled).
+9. **EAS:** the daemon lets the TxQueue estimate attest gas — Lane E's `gasHint` 400k ran out of gas on the fork (≈ 368k used inside
+   EAS plus overhead).
+10. **Dev/fork only:** `ATE_AGENT_PRIVATE_KEY` + `ATE_ALLOW_RAW_KEY=1` unlock without the keystore; `ATE_AGENT_PASSPHRASE` auto-unlocks
+    headless; `ATE_KEYSTORE=file|keychain`; `ATE_HOME`, `ATE_DB`, `ATE_DEPLOYMENTS`, `ATE_STRATEGY_STUB=1`.

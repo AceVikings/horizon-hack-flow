@@ -4,9 +4,13 @@
   "private": true,
   "type": "module",
   "license": "Apache-2.0",
-  "description": "`ate` command: frozen registry that loads per-lane command directories (§3.3)",
-  "bin": { "ate": "./dist/bin.js" },
-  "files": ["dist"],
+  "description": "`ate` command: frozen registry that loads per-lane command directories (\u00a73.3)",
+  "bin": {
+    "ate": "./dist/bin.js"
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",
@@ -14,6 +18,10 @@
     "dev": "tsx src/bin.ts"
   },
   "dependencies": {
-    "@ate/core": "workspace:*"
+    "@ate/core": "workspace:*",
+    "@ate/strategy": "workspace:*",
+    "@ate/daemon": "workspace:*",
+    "@ate/trader": "workspace:*",
+    "@ate/chat": "workspace:*"
   }
 }
