@@ -26,21 +26,22 @@
     "dev": "tsx src/bin.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.3.0",
+    "@ate/approve": "workspace:*",
     "@ate/chain": "workspace:*",
+    "@ate/chat": "workspace:*",
     "@ate/core": "workspace:*",
     "@ate/journal": "workspace:*",
     "@ate/mcp": "workspace:*",
     "@ate/oracle": "workspace:*",
+    "@ate/strategy": "workspace:*",
+    "@ate/trader": "workspace:*",
     "@ate/venues": "workspace:*",
     "@ate/wallet": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.20.0",
     "better-sqlite3": "^11.7.0",
     "viem": "^2.21.0",
-    "ws": "^8.18.0",
-    "@ate/approve": "workspace:*",
-    "@ate/chat": "workspace:*",
-    "@ate/trader": "workspace:*",
-    "@ate/strategy": "workspace:*"
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.12",
