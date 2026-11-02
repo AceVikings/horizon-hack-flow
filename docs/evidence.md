@@ -21,7 +21,7 @@ say "staged".
 | E6 | Chat tightened the HSK stop to 2% (`strat_f5afedf52d2a981a`). A guard take-profit exit fired after the staged HSK move [0x8301a6d9…](https://testnet-explorer.hskchain.net/tx/0x8301a6d9439b42df5888306646eaaac3978f3d04370a45e0b747df5192b07122). No stop-loss exit recorded | Partly |
 | E7 | `ate chat` (LLM): "Go to cash on HSK, keep the BTC" → `strat_a34e1d080f3163c4` → guard `target_assets` sell [0x0e68e7df…](https://testnet-explorer.hskchain.net/tx/0x0e68e7dfac501a1a80517bf61c2d81a74eeb19a944935824c2046669567005fa); "Trade HSK again" (loosening, one-time TTY code) → `strat_5380ce8a1e897693` | Done (testnet) |
 | E8 | HSP not run on testnet | Not done |
-| E10 | `POST /journal/verify` → ok, 70 records, head `0x5e72385d2128743e19c6cbb2ff2bc9ffdfd3a02e6d02914192a9af9ef5b5ad85` | Done (testnet) |
+| E10 | `POST /journal/verify` → ok, 70 records, head `0x5e72385d2128743e19c6cbb2ff2bc9ffdfd3a02e6d02914192a9af9ef5b5ad85`. Offline: `node scripts/verify-journal.mjs` recomputes all 70 hashes from the export (no deps) | Done (testnet) |
 | E13 | One `llm_veto` (`dec_1118327a147287cd`, HSK demo rebalance buy). Its premise was a `target_assets` guard-exit candidate still listed (within its 180 s TTL) after HSK had been re-enabled. No discretionary trade was originated | Partly |
 | E14 | Spread capture shown only on a staged testnet gap (WBTC pool 133 bps under the HashKey Global mid). Not a market result | Staged only |
 

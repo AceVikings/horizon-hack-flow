@@ -3,8 +3,10 @@
 ## TESTNET run (HashKey Chain testnet, chain ID 133), 2 Nov 2026
 
 Everything in this section is on **testnet** with test tokens (tUSDT, tWHSK, tWBTC). Explorer:
-https://testnet-explorer.hskchain.net. Addresses: [`deployments/133.json`](../deployments/133.json). Journal export (70 records, hash chain
-verified): [`docs/testnet-133-journal.json`](testnet-133-journal.json). Mainnet (chain 177) is next; its
+https://testnet-explorer.hskchain.net. Addresses: [`deployments/133.json`](../deployments/133.json). Journal export (70 full records, including
+the hashed `context`): [`docs/testnet-133-journal.json`](testnet-133-journal.json). Recompute every record hash, id,
+`rationaleHash` and the chain head offline, with no install: `node scripts/verify-journal.mjs` (prints
+`ok: 70 records … head 0x5e72…ad85`; edit any field and it names the record that no longer hashes). Mainnet (chain 177) is next; its
 placeholders are further down.
 
 The testnet pools have no other traders. Two price conditions in this run were staged with a deployer swap
