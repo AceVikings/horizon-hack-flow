@@ -1,8 +1,9 @@
 // Setup + daemon lifecycle IPC (lane D2). Owns: spawning/adopting the daemon, /ui/attach approval (ate-approve
 // Touch ID, else the daemon's one-time code shown in-app), the agent-key passphrase (random, sealed with the
-// macOS keychain via safeStorage, released by Touch ID), /setup/* passthrough, and two-step Settings approvals.
+// macOS login keychain, released by Touch ID), /setup/* passthrough, and two-step Settings approvals.
 import { randomBytes } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { dialog, safeStorage, shell, systemPreferences, type BrowserWindow, type IpcMain } from "electron";
@@ -44,9 +45,29 @@ export function registerSetupIpc(o: { ipcMain: IpcMain; daemon: DaemonClient; ap
     detail = d;
   };
   const sealedPath = () => join(ateHome(), "flow-agent.sealed");
-  const sealed = (): { keyId: string; blob: string } | null => {
+  /**
+   * The agent-key passphrase (random, never shown) lives in the macOS login keychain as a generic password created by
+   * /usr/bin/security (readable back without a prompt; Touch ID gates its release in this app). Headless / file mode:
+   * <home>/keys/flow-agent-passphrase (0600). Older builds sealed it with safeStorage, still read as a fallback.
+   */
+  const useKc = () => process.platform === "darwin" && process.env.ATE_KEYSTORE !== "file" && existsSync("/usr/bin/security");
+  const kcService = (keyId: string) => `flow-agent-passphrase/${keyId}`;
+  function storePass(keyId: string, pass: string): void {
+    if (useKc()) execFileSync("/usr/bin/security", ["add-generic-password", "-U", "-a", "ate", "-s", kcService(keyId), "-l", "Flow · agent key passphrase", "-w", pass], { stdio: "ignore" });
+    else {
+      mkdirSync(join(ateHome(), "keys"), { recursive: true, mode: 0o700 });
+      writeFileSync(join(ateHome(), "keys", "flow-agent-passphrase"), pass, { mode: 0o600 });
+    }
+    writeFileSync(sealedPath(), JSON.stringify({ keyId, store: useKc() ? "keychain" : "file" }), { mode: 0o600 });
+  }
+  function loadPass(s: { keyId: string; blob?: string; store?: string }): string {
+    if (s.blob) return safeStorage.decryptString(Buffer.from(s.blob, "base64"));
+    if (s.store === "keychain") return execFileSync("/usr/bin/security", ["find-generic-password", "-a", "ate", "-s", kcService(s.keyId), "-w"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    return readFileSync(join(ateHome(), "keys", "flow-agent-passphrase"), "utf8").trim();
+  }
+  const sealed = (): { keyId: string; blob?: string; store?: string } | null => {
     try {
-      return JSON.parse(readFileSync(sealedPath(), "utf8")) as { keyId: string; blob: string };
+      return JSON.parse(readFileSync(sealedPath(), "utf8")) as { keyId: string; blob?: string; store?: string };
     } catch {
       return null;
     }
@@ -124,7 +145,7 @@ export function registerSetupIpc(o: { ipcMain: IpcMain; daemon: DaemonClient; ap
     setPhase("unlocking");
     let pass: string;
     try {
-      pass = safeStorage.decryptString(Buffer.from(s.blob, "base64"));
+      pass = loadPass(s);
     } catch (e) {
       setPhase("ready");
       return err(`keychain refused: ${(e as Error).message}`, "ATE_DAEMON_LOCKED");
@@ -230,7 +251,6 @@ export function registerSetupIpc(o: { ipcMain: IpcMain; daemon: DaemonClient; ap
     },
     "setup.keygen": async (privateKey?: string) => {
       if (privateKey !== undefined && privateKey !== null && !PK.test(String(privateKey))) return err("a private key is 0x followed by 64 hex characters");
-      if (!safeStorage.isEncryptionAvailable()) return err("macOS keychain encryption is unavailable");
       if (canTouchId()) {
         try {
           await systemPreferences.promptTouchID(privateKey ? "import the Flow agent key" : "create the Flow agent key");
@@ -240,7 +260,7 @@ export function registerSetupIpc(o: { ipcMain: IpcMain; daemon: DaemonClient; ap
       }
       const passphrase = randomBytes(32).toString("base64url");
       const r = await daemon.call<{ address: string; store: string; keyId: string }>("POST", "/setup/keygen", { passphrase, ...(privateKey ? { privateKey } : {}) });
-      if (r.ok) writeFileSync(sealedPath(), JSON.stringify({ keyId: r.data.keyId, blob: safeStorage.encryptString(passphrase).toString("base64") }), { mode: 0o600 });
+      if (r.ok) storePass(r.data.keyId, passphrase);
       await refreshStatus();
       return r;
     },
