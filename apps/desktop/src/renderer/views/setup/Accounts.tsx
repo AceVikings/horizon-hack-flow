@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import {Btn} from "../../src/ui";
 import { PageHead } from "../../src/shell";
+import { SubscriptionSignIn, TERMS_LINE } from "./Subscriptions";
 import { Details, ErrLine, Spinner, useApproval, useSetup, useSetupGet, StatusText } from "./common";
 
 interface Model {
@@ -37,7 +38,6 @@ const BLURB: Record<string, string> = {
   ollama: "Models running on this Mac. No key needed.",
   proxy: "An OpenAI- or Claude-compatible endpoint you run yourself.",
 };
-const PROXY_WARNING = "Using consumer subscriptions through a proxy may break the provider's terms and can get the account suspended. API keys are the supported path.";
 
 function status(p: Provider): { tone: "ok" | "warn" | "bad" | "mute"; text: string } {
   if (!p.configured) return { tone: "mute", text: "not connected" };
@@ -243,11 +243,17 @@ export default function Accounts() {
   const proxy = d?.providers.find((p) => p.id === "proxy");
   return (
     <div className="sw-col" data-shot="accounts" style={{ paddingTop: 10 }}>
-      <PageHead title="Accounts" sub="Pick the AI the agent thinks with. API keys stay in your Mac's keychain." />
+      <PageHead title="Accounts" sub="Pick the AI the agent thinks with." />
       {!d ? (
         pr.res?.ok === false ? <ErrLine error={pr.res.error} /> : <Spinner label="Loading accounts…" />
       ) : (
         <>
+          <section className="ssec" aria-label="Sign in with your subscription">
+            <h2 className="ssec-t">Sign in with your subscription</h2>
+            <p className="ssec-s">Use the AI plan you already pay for. No API key needed.</p>
+            <SubscriptionSignIn onConnected={() => pr.reload()} />
+          </section>
+          <Details summary="Other ways to connect (advanced)">
           <div className="provgrid" style={{ gridTemplateColumns: "1fr 1fr", marginTop: 8 }}>
             {main.map((p) => (
               <ProviderCard key={p.id} p={p} selectedModel={d.selected.model} onChanged={pr.reload} />
@@ -255,15 +261,14 @@ export default function Accounts() {
           </div>
           {proxy && (
             <Details summary="Advanced: local proxy">
-              <div className="warnbox sm" role="note" style={{ marginBottom: 12 }}>
-                <b>Careful.</b> {PROXY_WARNING}
-              </div>
-              <p className="sm fg2" style={{ marginBottom: 10 }}>Flow does not include a proxy. Run your own and point Flow at it.</p>
+              <p className="xs fg2" style={{ marginBottom: 12 }}>{TERMS_LINE}</p>
+              <p className="sm fg2" style={{ marginBottom: 10 }}>Point Flow at an OpenAI- or Claude-compatible proxy you run.</p>
               <ProviderCard p={proxy} selectedModel={d.selected.model} onChanged={pr.reload} />
               <ProxyCli baseURL={proxy.settings.baseURL ?? ""} />
               {proxy.settings.baseURL && <Details summary="Proxy management key (optional)"><ProxyAccounts baseURL={proxy.settings.baseURL} /></Details>}
             </Details>
           )}
+          </Details>
         </>
       )}
     </div>

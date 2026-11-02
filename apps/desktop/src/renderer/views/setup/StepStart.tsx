@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { AiHealth } from "@shared/bridge";
 import { useApp } from "../../src/app";
 import {Btn, QR} from "../../src/ui";
+import { SubscriptionSignIn } from "./Subscriptions";
 import { Details, ErrLine, HandoffDialog, Section, Spinner, Wizard, go, useOwner, useSetup, useSetupGet, StatusText } from "./common";
 
 interface Fund {
@@ -31,6 +32,7 @@ interface Doctor {
 const pair = (m: string) => (m.includes("WBTC") ? "WBTC/USDT" : "WHSK/USDT");
 
 function AiPart({ onState, rules, setRules }: { onState(ok: boolean): void; rules: boolean; setRules(v: boolean): void }) {
+  const [sub, setSub] = useState(false);
   const { ate } = useApp();
   const [h, setH] = useState<AiHealth | null>(null);
   const [key, setKey] = useState("");
@@ -45,7 +47,7 @@ function AiPart({ onState, rules, setRules }: { onState(ok: boolean): void; rule
     });
   }, [ate]);
   const cli = !!h && h.engine === "claude-code" && !!h.claudeCli;
-  const ok = cli || (!!h && h.credential !== "none" && h.lastCheck?.reachable !== false);
+  const ok = sub || cli || (!!h && h.credential !== "none" && h.lastCheck?.reachable !== false);
   useEffect(() => onState(ok), [ok, onState]);
   const save = async () => {
     if (!ate.ai) return;
@@ -73,7 +75,7 @@ function AiPart({ onState, rules, setRules }: { onState(ok: boolean): void; rule
     if (r.ok) setH(r.data);
   };
   return (
-    <Section title="AI account" done={ok} sub="The agent thinks with Claude. Flow needs an account to run it." right={<button className="linkbtn sm" onClick={() => go("accounts")}>Other accounts</button>}>
+    <Section title="AI account" done={ok} sub="Sign in with the AI subscription you already have." right={<button className="linkbtn sm" onClick={() => go("accounts")}>Other accounts</button>}>
       {!ate.ai ? (
         <p className="sm fg2" style={{ marginTop: 8 }}>The AI engine is not available in this build.</p>
       ) : !h ? (
@@ -87,16 +89,19 @@ function AiPart({ onState, rules, setRules }: { onState(ok: boolean): void; rule
         </div>
       ) : h.credential === "none" ? (
         <>
-          <div className="row g12" style={{ marginTop: 14 }}>
+          <SubscriptionSignIn onConnected={setSub} />
+          <Details summary="Other ways to connect (advanced)">
+          <div className="row g12">
             <input className="textin" type="password" autoComplete="off" spellCheck={false} placeholder="Anthropic API key (sk-ant-…)" aria-label="Anthropic API key" value={key} onChange={(e) => setKey(e.target.value)} />
             <Btn kind="solid" disabled={busy || !/^sk-ant-/.test(key.trim())} onClick={() => void save()}>{busy ? "Checking…" : "Save"}</Btn>
           </div>
-          <div className="xs fg2" style={{ marginTop: 6 }}>Kept in your macOS keychain. Never shown again.</div>
+          <div className="xs fg2" style={{ marginTop: 6 }}>An API key is kept in your macOS keychain and never shown again.</div>
           {h.claudeCli && (
             <Btn size="sm" disabled={busy} style={{ marginTop: 12 }} onClick={() => void useEngine("claude-code")}>
               Use Claude Code on this Mac
             </Btn>
           )}
+          </Details>
           <label className="row g10 sm" style={{ marginTop: 12, cursor: "pointer" }}>
             <input type="checkbox" checked={rules} onChange={(e) => setRules(e.target.checked)} style={{ width: 18, height: 18, accentColor: "#171e19" }} />
             Start without AI for now: a simple rules trader runs until you add an account.
