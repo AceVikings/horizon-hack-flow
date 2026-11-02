@@ -146,6 +146,10 @@ async function invoke(method: IpcMethod, arg: any, arg2?: any): Promise<unknown>
     }
     case "proof.stop":
       return daemon.call("POST", "/proof/stop", {});
+    case "candidates.get":
+      return daemon.tool("ate_candidates_get", (MARKET_IDS as readonly string[]).includes(arg) ? { market: arg as MarketId } : {});
+    case "cycle.request":
+      return daemon.call("POST", "/cycle", {});
     case "settings.get":
       return { ok: true, data: { ...settings, daemonPort: daemon.connection().port ?? null } };
     case "settings.set":

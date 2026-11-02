@@ -2,6 +2,7 @@
 // allowlisted calls to the daemon. Method names below are the IPC allowlist.
 
 import type {
+  CandidatesGetOutput,
   DaemonEvent,
   DecisionKind,
   JournalEntry,
@@ -201,6 +202,9 @@ export interface AteBridge {
   approvals?: { list(): Promise<Res<PendingChange[]>>; reject(changeId: string): Promise<Res<{ rejected: boolean }>> };
   /** Additive (lane D3): the in-app attack suite (testnet only) and the recorded proof. */
   proof?: { get(): Promise<Res<ProofState>>; run(o?: { market?: MarketId; waitPauseSec?: number }): Promise<Res<ProofRun>>; stop(): Promise<Res<{ run: ProofRun | null }>> };
+  /** Additive (lane D1): live candidates for Markets (ate_candidates_get) and an out-of-schedule cycle (POST /cycle). */
+  candidates?: { get(market?: MarketId): Promise<Res<CandidatesGetOutput>> };
+  cycle?: { request(): Promise<Res<{ started: boolean; reason?: string; cycle: number }>> };
   events: { subscribe(handler: (e: DaemonEvent) => void): () => void };
 }
 
@@ -236,6 +240,9 @@ export const IPC_METHODS = [
   "proof.get",
   "proof.run",
   "proof.stop",
+  // lane D1 (additive)
+  "candidates.get",
+  "cycle.request",
 ] as const;
 export type IpcMethod = (typeof IPC_METHODS)[number];
 export const EVENT_CHANNEL = "ate:event";
