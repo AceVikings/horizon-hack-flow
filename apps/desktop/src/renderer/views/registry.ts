@@ -18,6 +18,7 @@ export const NAV = [
 
 /** ⋯ menu, in order. Unregistered ids show a "being built" page. */
 export const MENU = [
+  { id: "wallet", name: "Wallet", icon: "wallet" },
   { id: "proof", name: "Safety & proof", icon: "shield" },
   { id: "agent", name: "Agent & strategy", icon: "bot" },
   { id: "tools", name: "Tools & guides", icon: "book" },
@@ -64,6 +65,7 @@ export const VIEWS: ViewDef[] = [
   { id: "proof", component: lazy(() => import("./Proof")) },
   { id: "payments", component: lazy(() => import("./Payments")) },
   { id: "settings", component: lazy(() => import("./setup/Settings")) },
+  { id: "wallet", component: lazy(() => import("./Wallet")) }, // owner wallet, agent gas, vault deposit/withdraw, key backup
   { id: "accounts", component: lazy(() => import("./setup/Accounts")) },
   { id: "charts", component: lazy(() => import("./Charts")) }, // D4
   { id: "tools", component: lazy(() => import("./Tools")) }, // D4

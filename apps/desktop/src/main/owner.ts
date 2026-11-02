@@ -133,8 +133,8 @@ export class DesktopOwner {
   }
 
   /** Step 1, then (on 428) Touch ID over the owner service's payload, then step 2. */
-  private async op(body: Record<string, unknown>): Promise<Res<{ txs: { hash: string }[]; result?: { vaults?: { market: string; address: string }[] } }>> {
-    type Out = { txs?: { hash: string }[]; result?: { vaults?: { market: string; address: string }[] }; nonce?: string; payload?: string; error?: string };
+  private async op(body: Record<string, unknown>): Promise<Res<{ txs: { hash: string }[]; result?: { vaults?: { market: string; address: string }[]; privateKey?: string; address?: string } }>> {
+    type Out = { txs?: { hash: string }[]; result?: { vaults?: { market: string; address: string }[]; privateKey?: string; address?: string }; nonce?: string; payload?: string; error?: string };
     try {
       let r = await this.call<Out>("POST", "/owner/op", body);
       if (r.status === 428 && r.body.nonce && r.body.payload) {
@@ -179,6 +179,21 @@ export class DesktopOwner {
     setAgent: async (agent: string) => this.txs(await this.op({ op: "setAgent", agent: String(agent), vaults: await this.vaults() })),
     setLimits: async (limits: unknown) => this.txs(await this.op({ op: "setLimits", limits, vaults: await this.vaults() })),
     unpause: async () => this.txs(await this.op({ op: "unpause", vaults: await this.vaults() })),
+    /** Vault → `to` (default: the owner wallet). Amount in the token's smallest unit. Touch ID. */
+    withdraw: async (o: { vault: string; token: string; amount: string; to?: string }) => this.txs(await this.op({ op: "withdraw", vault: String(o?.vault), token: String(o?.token), amount: String(o?.amount), ...(o?.to ? { to: String(o.to) } : {}) })),
+    /** Owner wallet → agent key, `wei` of HSK for gas. Touch ID. */
+    fundAgent: async (wei: string) => {
+      const ag = await this.daemon.call<{ address: string | null }>("GET", "/setup/agent");
+      if (!ag.ok || !ag.data.address) return err("create or unlock the agent key first");
+      return this.txs(await this.op({ op: "fundAgent", agent: ag.data.address, wei: String(wei) }));
+    },
+    /** Backup: Touch ID, then the owner key once. */
+    exportKey: async (): Promise<Res<{ address: string; privateKey: string }>> => {
+      const r = await this.op({ op: "exportKey" });
+      if (!r.ok) return r;
+      const k = r.data.result;
+      return k?.privateKey && k.address ? { ok: true, data: { address: k.address, privateKey: k.privateKey } } : err("the owner service returned no key");
+    },
   };
   private txs(r: Res<{ txs: { hash: string }[] }>): Res<{ txs: string[] }> {
     return r.ok ? { ok: true, data: { txs: r.data.txs.map((t) => t.hash) } } : r;

@@ -60,6 +60,9 @@ const ate = Object.freeze({
     setAgent: (agent: string) => ipcRenderer.invoke("ate:owner.setAgent", agent),
     setLimits: (limits: unknown, o?: unknown) => ipcRenderer.invoke("ate:owner.setLimits", limits, o),
     unpause: (market?: string) => ipcRenderer.invoke("ate:owner.unpause", market),
+    withdraw: (o: unknown) => ipcRenderer.invoke("ate:owner.withdraw", o),
+    fundAgent: (wei: string) => ipcRenderer.invoke("ate:owner.fundAgent", wei),
+    exportKey: () => ipcRenderer.invoke("ate:owner.exportKey"),
   }),
   events: Object.freeze({
     subscribe: (handler: (e: DaemonEvent) => void) => {

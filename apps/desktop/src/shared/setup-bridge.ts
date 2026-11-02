@@ -114,10 +114,17 @@ export interface OwnerTxs {
   txs: string[];
 }
 export interface OwnerBridge {
-  status(): Promise<Res<{ ready: boolean; address: string | null; chainId: number }>>;
+  /** Desktop and cloud also pass `gasHsk` (the owner wallet's HSK, decimal string) from GET /owner/state. */
+  status(): Promise<Res<{ ready: boolean; address: string | null; chainId: number; gasHsk?: string | null }>>;
   createVaults(o?: { markets?: string[] }): Promise<Res<OwnerTxs & { vaults: { market: string; address: string }[] }>>;
   setAgent(agent: string): Promise<Res<OwnerTxs>>;
   /** `loosening` = risk-raising: the caller has already confirmed it with Touch ID (desktop) or a passkey (cloud). */
   setLimits(limits: unknown, o?: { markets?: string[]; loosening?: boolean }): Promise<Res<OwnerTxs>>;
   unpause(market?: string): Promise<Res<OwnerTxs>>;
+  /** Vault → `to` (default the owner wallet); `amount` in the token's smallest unit. Risk-raising: Touch ID. */
+  withdraw?(o: { vault: string; token: string; amount: string; to?: string }): Promise<Res<OwnerTxs>>;
+  /** Owner wallet → agent key, `wei` of HSK for gas. Risk-raising: Touch ID. */
+  fundAgent?(wei: string): Promise<Res<OwnerTxs>>;
+  /** Backup: after Touch ID, the owner key once. Absent or erroring when the key lives in a KMS. */
+  exportKey?(): Promise<Res<{ address: string; privateKey: string }>>;
 }

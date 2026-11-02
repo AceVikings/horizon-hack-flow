@@ -1,5 +1,6 @@
 // Fixtures mode: a complete in-memory AteBridge so every view renders without a daemon (screenshots, dev).
 // Values derive from @ate/core/fixtures (Nov 2 reads) plus a hand-built journal.
+import { FIXTURE_OWNER, FIXTURE_SETUP } from "./fixtures-wallet";
 import {
   MARKETS,
   MARKET_IDS,
@@ -306,6 +307,7 @@ let statusReads = 0;
 export function createFixtureBridge(): AteBridge {
   return {
     fixtures: true,
+    ...({ setup: FIXTURE_SETUP, owner: FIXTURE_OWNER } as object), // Wallet + setup step 1 screenshots
     connection: () => delay({ mode: "fixtures" as const, detail: "fixtures mode: synthetic data, no daemon" }, 10),
     markets: { list: () => (SCENARIO === "loading" ? never() : delay(ok(MARKET_IDS.map(mv)))), get: (id) => delay(ok(mv(id))) },
     quote: { get: (r) => delay(ok(quote(r.market, r.side, r.amountIn)), 250) },
