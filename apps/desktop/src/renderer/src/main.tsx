@@ -1,39 +1,57 @@
-import { StrictMode, useEffect, useState } from "react";
+import { StrictMode, Suspense, useEffect, useState, type ComponentType } from "react";
 import { createRoot } from "react-dom/client";
 import { AppProvider } from "./app";
-import { Shell, VIEWS, type ViewId } from "./shell";
-import Decisions from "./views/Decisions";
-import Trade from "./views/Trade";
-import Agents from "./views/Agents";
-import Positions from "./views/Positions";
-import Chat from "./views/Chat";
-import Payments from "./views/Payments";
+import { PageHead, Shell } from "./shell";
+import { Skeleton } from "./ui";
+import { VIEWS, type ViewDef, type ViewProps } from "../views/registry";
 import "./styles.css";
 
-const MAP: Record<ViewId, () => React.JSX.Element> = { decisions: Decisions, trade: Trade, agents: Agents, positions: Positions, chat: Chat, payments: Payments };
-const fromHash = (): ViewId => {
-  const h = location.hash.replace(/^#\/?/, "") as ViewId;
-  return VIEWS.some((v) => v.id === h) ? h : "decisions";
-};
+/** `#/decisions/exec_1` → { id: "decisions", params: ["exec_1"] }. */
+function parseHash(): { id: string; params: string[] } {
+  const [id = "", ...params] = location.hash.replace(/^#\/?/, "").split("/").map(decodeURIComponent);
+  return { id: id || "overview", params };
+}
+
+function NotBuilt({ id }: { id: string }) {
+  return (
+    <>
+      <PageHead title={id.charAt(0).toUpperCase() + id.slice(1)} sub="This screen is being built in another lane." />
+      <p className="fg2">Nothing is registered for <code>#/{id}</code> in views/registry.ts yet.</p>
+    </>
+  );
+}
+
+function Loading() {
+  return (
+    <div style={{ paddingTop: 26 }} aria-busy="true">
+      <Skeleton w={220} h={44} />
+      <Skeleton h={180} style={{ marginTop: 28 }} />
+    </div>
+  );
+}
 
 function Root() {
-  const [view, setView] = useState<ViewId>(fromHash);
+  const [route, setRoute] = useState(parseHash);
   useEffect(() => {
-    const h = () => setView(fromHash());
+    const h = () => setRoute(parseHash());
     window.addEventListener("hashchange", h);
-    const k = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && /^[1-6]$/.test(e.key)) { location.hash = "#/" + VIEWS[Number(e.key) - 1]!.id; e.preventDefault(); }
-    };
-    window.addEventListener("keydown", k);
-    return () => { window.removeEventListener("hashchange", h); window.removeEventListener("keydown", k); };
+    return () => window.removeEventListener("hashchange", h);
   }, []);
-  const V = MAP[view];
+  const def: ViewDef | undefined = VIEWS.find((v) => v.id === route.id);
+  const V = (def?.component ?? (() => <NotBuilt id={route.id} />)) as ComponentType<ViewProps>;
+  const chrome = def?.chrome ?? "app";
   return (
     <AppProvider>
-      <Shell view={view} setView={(v) => (location.hash = "#/" + v)}>
-        <V key={view} />
+      <Shell nav={def?.nav ?? route.id} chrome={chrome} setupStep={chrome === "setup" ? Number(route.params[0] ?? 0) || 0 : undefined}>
+        <Suspense fallback={<Loading />}>
+          <V key={route.id + "/" + route.params.join("/")} params={route.params} />
+        </Suspense>
       </Shell>
     </AppProvider>
   );
 }
-createRoot(document.getElementById("root")!).render(<StrictMode><Root /></StrictMode>);
+createRoot(document.getElementById("root")!).render(
+  <StrictMode>
+    <Root />
+  </StrictMode>,
+);

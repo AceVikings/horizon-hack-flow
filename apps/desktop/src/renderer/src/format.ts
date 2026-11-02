@@ -66,10 +66,55 @@ export function ago(at: number, now = Math.floor(Date.now() / 1000)): string {
 }
 export const short = (h: string, a = 8, b = 6): string => (h.length > a + b + 3 ? `${h.slice(0, a)}…${h.slice(-b)}` : h);
 
-export const EXPLORER = "https://hsk.blockscout.com";
+/** Block explorer per chain: 133 = HashKey testnet (Blockscout), 177 = mainnet. Set from /status (`setChain`). */
+export const EXPLORERS: Record<number, string> = { 133: "https://testnet-explorer.hskchain.net", 177: "https://hsk.blockscout.com" };
+let chainId = 177;
+export function setChain(id: number): void {
+  if (id in EXPLORERS) chainId = id;
+}
+export const currentChain = (): number => chainId;
+export const networkName = (id = chainId): string => (id === 133 ? "Testnet 133" : `Mainnet ${id}`);
+export const explorerBase = (): string => EXPLORERS[chainId]!;
+/** @deprecated read explorerBase(): the explorer follows the daemon's chain. */
+export const EXPLORER = EXPLORERS[177]!;
 export const explorer = {
-  tx: (h: string) => `${EXPLORER}/tx/${h}`,
-  address: (a: string) => `${EXPLORER}/address/${a}`,
-  /** EAS.getAttestation(uid) read on the EAS contract. */
-  attestation: (_uid: string) => `${EXPLORER}/address/0x4200000000000000000000000000000000000021?tab=read_contract`,
+  tx: (h: string) => `${explorerBase()}/tx/${h}`,
+  address: (a: string) => `${explorerBase()}/address/${a}`,
+  block: (n: string | number) => `${explorerBase()}/block/${n}`,
+  /** EAS.getAttestation(uid) read on the EAS predeploy. */
+  attestation: (_uid: string) => `${explorerBase()}/address/0x4200000000000000000000000000000000000021?tab=read_contract`,
 };
+
+/** "0xF80A…2Bd2" (board style: 6 + 4). */
+export const addrShort = (a: string): string => short(a, 6, 4);
+/** 8-dp integer string → number (display maths only; never for signable values). */
+export const e8n = (raw: string | null | undefined): number => (raw ? Number(BigInt(raw)) / 1e8 : 0);
+/** Number → "$1,234.56" (2 dp, grouped, sign-aware). Display only. */
+export function money(n: number, dp = 2): string {
+  const neg = n < 0;
+  const [i, f] = Math.abs(n).toFixed(dp).split(".");
+  return `${neg ? "−" : ""}$${group(i!)}${f ? "." + f : ""}`;
+}
+export const signedMoney = (n: number, dp = 2): string => (n > 0 ? "+" + money(n, dp) : money(n, dp));
+/** Whole-dollar limit, exact: "$250" or "$250.50". */
+export function usdE8Short(raw: string): string {
+  const v = BigInt(raw);
+  return v % 100_000_000n === 0n ? "$" + group((v / 100_000_000n).toString()) : "$" + fmtUnits(raw, 8, 2);
+}
+export const int = (n: number | string): string => group(String(n));
+/** "8h 14m" / "41m" / "2h 12m" age from seconds. */
+export function age(sec: number): string {
+  const s = Math.max(0, Math.floor(sec));
+  if (s < 90) return `${s} s`;
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  return h > 0 ? `${h}h ${m}m` : `${m} min`;
+}
+const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** "Mon 2 Nov" (local). */
+export function dayName(at: number): string {
+  const d = new Date(at * 1000);
+  return `${DOW[d.getDay()]} ${d.getDate()} ${MON[d.getMonth()]}`;
+}
+export const hm = (at: number): string => clock(at).slice(0, 5);
