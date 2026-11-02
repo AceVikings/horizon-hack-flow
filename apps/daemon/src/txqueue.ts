@@ -4,7 +4,7 @@
 // replaces it at its nonce; if the displaced tx mines first, the pause/exit is re-signed at the next nonce.
 
 import { AteError, type Address, type Hex } from "@ate/core";
-import type { PrivateKeyAccount, TransactionReceipt } from "viem";
+import type { LocalAccount, TransactionReceipt } from "viem";
 
 export type TxPriority = "pause" | "exit" | "execute" | "refresh" | "attest" | "rogue";
 export const PRIORITY_RANK: Record<TxPriority, number> = { pause: 0, exit: 1, execute: 2, rogue: 2, refresh: 3, attest: 4 };
@@ -62,7 +62,7 @@ interface InFlight {
 
 export interface TxQueueOptions {
   chain: TxChain;
-  account: () => PrivateKeyAccount;
+  account: () => LocalAccount; // keystore, env-secret or KMS agent signer (@ate/wallet)
   chainId: number;
   replaceAfterMs?: number;
   pollMs?: number;

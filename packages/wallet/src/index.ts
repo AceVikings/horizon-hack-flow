@@ -7,7 +7,7 @@ import { execFileSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { AteError, CHAIN_ID } from "@ate/core";
-import { generatePrivateKey, privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
+import { generatePrivateKey, privateKeyToAccount, type LocalAccount } from "viem/accounts";
 
 export interface KdfParams {
   name: "scrypt";
@@ -21,6 +21,8 @@ export interface KdfParams {
 export interface EncryptedKey {
   version: 1;
   id: string;
+  /** Additive: which role the key serves (bound into the AES-GCM AAD). Absent = "agent" (pre-role blobs). */
+  role?: SignerRole;
   address: `0x${string}`;
   kdf: KdfParams;
   cipher: { name: "aes-256-gcm"; iv: string; tag: string };
@@ -38,19 +40,25 @@ function derive(pass: string, kdf: KdfParams): Buffer {
   });
 }
 
-export function encryptKey(privateKey: `0x${string}`, passphrase: string, opts: { id?: string; kdf?: { N: number; r: number; p: number } } = {}): EncryptedKey {
+/** Signer roles are strictly separate: a blob sealed for one role never decrypts as the other (AAD). */
+export type SignerRole = "agent" | "owner";
+const aad = (role: SignerRole, id: string) => Buffer.from(`ate/${CHAIN_ID}/${role}/${id}`);
+
+export function encryptKey(privateKey: `0x${string}`, passphrase: string, opts: { id?: string; kdf?: { N: number; r: number; p: number }; role?: SignerRole } = {}): EncryptedKey {
   const k = opts.kdf ?? DEFAULT_KDF;
   const kdf: KdfParams = { name: "scrypt", N: k.N, r: k.r, p: k.p, dkLen: 32, salt: randomBytes(16).toString("hex") };
   const key = derive(passphrase, kdf);
   const iv = randomBytes(12);
   const c = createCipheriv("aes-256-gcm", key, iv);
   const id = opts.id ?? randomUUID();
-  c.setAAD(Buffer.from(`ate/${CHAIN_ID}/agent/${id}`));
+  const role = opts.role ?? "agent";
+  c.setAAD(aad(role, id));
   const ct = Buffer.concat([c.update(Buffer.from(privateKey.slice(2), "hex")), c.final()]);
   key.fill(0);
   return {
     version: 1,
     id,
+    ...(role === "agent" ? {} : { role }),
     address: privateKeyToAccount(privateKey).address,
     kdf,
     cipher: { name: "aes-256-gcm", iv: iv.toString("hex"), tag: c.getAuthTag().toString("hex") },
@@ -58,14 +66,15 @@ export function encryptKey(privateKey: `0x${string}`, passphrase: string, opts: 
   };
 }
 
-export function decryptKey(blob: EncryptedKey, passphrase: string): `0x${string}` {
+export function decryptKey(blob: EncryptedKey, passphrase: string, expectRole: SignerRole = "agent"): `0x${string}` {
   if (blob.version !== 1 || blob.kdf.name !== "scrypt" || blob.cipher.name !== "aes-256-gcm") {
     throw new AteError("WalletError", "ATE_DAEMON_LOCKED", "unsupported keystore format");
   }
+  if ((blob.role ?? "agent") !== expectRole) throw new AteError("WalletError", "ATE_DAEMON_LOCKED", `keystore is sealed for the ${blob.role ?? "agent"} role, not ${expectRole}`);
   const key = derive(passphrase, blob.kdf);
   try {
     const d = createDecipheriv("aes-256-gcm", key, Buffer.from(blob.cipher.iv, "hex"));
-    d.setAAD(Buffer.from(`ate/${CHAIN_ID}/agent/${blob.id}`));
+    d.setAAD(aad(expectRole, blob.id));
     d.setAuthTag(Buffer.from(blob.cipher.tag, "hex"));
     const pt = Buffer.concat([d.update(Buffer.from(blob.ciphertext, "hex")), d.final()]);
     const pk = `0x${pt.toString("hex")}` as `0x${string}`;
@@ -153,9 +162,11 @@ export function loadEncryptedKey(id: string, stores: KeyStore[]): { blob: Encryp
   return null;
 }
 
-/** Holds the unlocked agent account in memory only (§8.3). */
+/** Holds the unlocked agent account in memory only (§8.3). Never holds an owner key (role-checked). */
 export class AgentSigner {
-  private account: PrivateKeyAccount | null = null;
+  private account: LocalAccount | null = null;
+  /** Which backend unlocked it (keychain/file passphrase, env secret, KMS, raw dev key). */
+  backend: SignerBackend | null = null;
   constructor(readonly keyId: string) {}
   get unlocked(): boolean {
     return this.account !== null;
@@ -164,22 +175,34 @@ export class AgentSigner {
     return this.account?.address ?? null;
   }
   unlock(blob: EncryptedKey, passphrase: string): `0x${string}` {
-    const pk = decryptKey(blob, passphrase);
+    const pk = decryptKey(blob, passphrase, "agent");
     this.account = privateKeyToAccount(pk);
+    this.backend = "keystore";
     return this.account.address;
+  }
+  /** Env-secret or KMS backend (signer.ts): the signer must have been built for the agent role. */
+  unlockSigner(s: RoleSigner): `0x${string}` {
+    if (s.role !== "agent") throw new AteError("WalletError", "ATE_DAEMON_LOCKED", "the agent runtime refuses a non-agent signer");
+    this.account = s.account;
+    this.backend = s.backend;
+    return s.account.address;
   }
   /** Test / env helper: ATE_AGENT_PRIVATE_KEY (never logged). */
   unlockRaw(pk: `0x${string}`): `0x${string}` {
     this.account = privateKeyToAccount(pk);
+    this.backend = "raw";
     return this.account.address;
   }
   lock(): void {
     this.account = null; // best-effort zeroing (§8.2)
   }
-  get(): PrivateKeyAccount {
+  get(): LocalAccount {
     if (!this.account) throw new AteError("WalletError", "ATE_DAEMON_LOCKED", "daemon is locked", { hint: "Run `ate unlock`" });
     return this.account;
   }
 }
 
 export { generatePrivateKey };
+import type { RoleSigner, SignerBackend } from "./signer.js";
+export * from "./signer.js";
+export * from "./kms.js";
