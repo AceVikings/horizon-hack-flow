@@ -6,6 +6,7 @@ import type { Res } from "@shared/bridge";
 import { useApp } from "../app";
 import { useNav } from "../shell";
 import { ChartCard, DataTableCard } from "./ChartCard";
+import { isEmptySpec, loadWithTimeout } from "./load";
 import { addPin } from "./pins";
 
 export { ChartView, CrosshairLink } from "./Chart";
@@ -33,23 +34,28 @@ export const PRESETS: { name: string; sub: string; input: ChartInput }[] = [
   { name: "BTC daily budget", sub: "Spent today vs the cap", input: { kind: "budget", market: BTC, interval: "1h", bars: 48 } },
 ];
 
-/** Fetches a chart for `input`; refetches on change and every `every` ms. Keeps the last good spec. */
-export function useChart(input: ChartInput, every = 60_000): { spec: ChartSpec | null; error: string | null; busy: boolean } {
+/**
+ * Fetches a chart for `input`; refetches on change, every `every` ms and on `retry()`. Every request ends within
+ * 15 s (timeout, rejected IPC and errors become `error`), so a chart is never left loading. Keeps the last good spec.
+ */
+export function useChart(input: ChartInput, every = 60_000): { spec: ChartSpec | null; error: string | null; busy: boolean; retry(): void } {
   const { ate } = useApp();
   const key = JSON.stringify(input);
   const [spec, setSpec] = useState<ChartSpec | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(true);
+  const [n, setN] = useState(0);
   useEffect(() => {
     let live = true;
     const load = () => {
-      if (!ate.charts) {
-        setError("Charts need the Flow service running.");
+      const charts = ate.charts;
+      if (!charts) {
+        setError("Charts need the Flow service. Restart Flow to load them.");
         setBusy(false);
         return;
       }
       setBusy(true);
-      void ate.charts.chart(JSON.parse(key) as ChartInput).then((r: Res<ChartSpec>) => {
+      void loadWithTimeout(() => charts.chart(JSON.parse(key) as ChartInput)).then((r: Res<ChartSpec>) => {
         if (!live) return;
         setBusy(false);
         if (r.ok) {
@@ -64,8 +70,8 @@ export function useChart(input: ChartInput, every = 60_000): { spec: ChartSpec |
       live = false;
       clearInterval(i);
     };
-  }, [ate, key, every]);
-  return { spec, error, busy };
+  }, [ate, key, every, n]);
+  return { spec, error, busy, retry: () => setN((x) => x + 1) };
 }
 
 function PinButton({ input }: { input: ChartInput }) {
@@ -104,11 +110,24 @@ export function ToolResultBlock({ tool, result }: { tool: string; result: unknow
   return <ChartCard spec={spec} height={220} compact actions={<PinButton input={spec.input} />} />;
 }
 
-/** Trade's default chart: one clean price line for `market`, with timeframe and "Add indicator". */
+/** Trade's default chart: one clean price line for `market`, with timeframe and "Add indicator". Never stuck loading:
+ * a plain empty or error state with Retry after at most 15 s. */
 export function PriceChart({ market, height = 260 }: { market: MarketId; height?: number }) {
   const [input, setInput] = useState<ChartInput>({ kind: "price", market, interval: "1h", bars: 72 });
   useEffect(() => setInput((i) => ({ ...i, market })), [market]);
-  const { spec, error, busy } = useChart(input);
-  if (!spec) return <div className="chcard chload" style={{ minHeight: height + 60 }}>{error ? <p className="chempty">{error}</p> : <p className="chempty">Loading the price…</p>}</div>;
+  const { spec, error, busy, retry } = useChart(input);
+  const box = (text: string, sub?: string) => (
+    <section className="chcard chstate" style={{ minHeight: height + 60 }} aria-live="polite">
+      <p className="chempty">{text}</p>
+      {sub && <p className="chsub">{sub}</p>}
+      {!busy && (
+        <button className="lnk" onClick={retry}>
+          Try again
+        </button>
+      )}
+    </section>
+  );
+  if (!spec) return busy && !error ? box("Loading the price…") : box("Could not load the price chart.", error ?? undefined);
+  if (isEmptySpec(spec)) return box("No price history yet — trades will appear here.");
   return <ChartCard spec={spec} height={height} busy={busy} onChange={setInput} actions={<PinButton input={input} />} />;
 }

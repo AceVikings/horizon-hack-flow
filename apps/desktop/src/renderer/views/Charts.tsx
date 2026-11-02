@@ -13,7 +13,7 @@ const TRADEABLE = new Set(["price", "cex", "spread", "depth", "oracle", "volume"
 function PinnedChart({ pin, wide, first, last }: { pin: Pin; wide: boolean; first: boolean; last: boolean }) {
   const { remove, update, move } = usePins();
   const go = useNav();
-  const { spec, error, busy } = useChart(pin.input);
+  const { spec, error, busy, retry } = useChart(pin.input);
   const label = pin.input.market?.includes("WBTC") ? "BTC" : "HSK";
   const actions = (
     <>
@@ -46,7 +46,12 @@ function PinnedChart({ pin, wide, first, last }: { pin: Pin; wide: boolean; firs
           <header className="chh">
             <div>
               <h3>{PRESETS.find((p) => JSON.stringify(p.input) === JSON.stringify(pin.input))?.name ?? "Chart"}</h3>
-              <p className="chcap">{error ?? "Loading…"}</p>
+              <p className="chcap">{error ? `Could not load this chart. ${error}` : busy ? "Loading…" : ""}</p>
+              {error && !busy && (
+                <button className="lnk" onClick={retry}>
+                  Try again
+                </button>
+              )}
             </div>
             <div className="chact">{actions}</div>
           </header>
