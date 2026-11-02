@@ -2,7 +2,7 @@
 // sidecar (`window.ate.subscription`, FREEZE-NOTES §D3.8). Primary: in-app sign-in (the provider's login page in the
 // browser, polled through the daemon). Secondary: "Sign in in Terminal" runs `<bin> -config <configPath> <flag>`
 // from main with values the daemon reports, so the login lands in Flow's proxy. Missing helper: one Install button.
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { SubscriptionStatus } from "@shared/bridge";
 import { useApp } from "../../src/app";
 import { Btn } from "../../src/ui";
@@ -35,7 +35,11 @@ export function SubscriptionSignIn({ onConnected }: { onConnected?(ok: boolean):
   }, [sub]);
   useEffect(() => void refresh(), [refresh]);
   const connected = !!st?.healthy && st.models.length > 0;
-  useEffect(() => onConnected?.(connected), [connected, onConnected]);
+  // only when `connected` changes: callers pass an inline callback that reloads data, so depending on its identity
+  // re-ran it on every render (Accounts reloaded /engine/providers in a loop and exhausted local TCP ports)
+  const cb = useRef(onConnected);
+  cb.current = onConnected;
+  useEffect(() => cb.current?.(connected), [connected]);
 
   if (!sub) return <p className="sm fg2" style={{ marginTop: 8 }}>Subscription sign-in isn't available in this build.</p>;
   if (!st) return error ? <ErrLine error={error} /> : <Spinner label="Checking sign-in…" />;
