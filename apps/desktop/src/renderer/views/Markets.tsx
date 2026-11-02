@@ -10,6 +10,7 @@ import { Badge, Banner, Btn, Card, Empty, ErrorBox, Eyebrow, Gauge, KV, Link, Se
 import { age, explorer, fmtUnits, money, price8, tokenAmt, usdE8Short } from "../src/format";
 import { centsE8, vaultRisk } from "../src/risk";
 import { clean, marketOf } from "../src/journal";
+import { PriceChart } from "../src/charts";
 
 const ORDER: MarketId[] = [MARKET_WBTC, MARKET_WHSK];
 const FEE_BPS = 30;
@@ -24,12 +25,11 @@ export default function Trade(props: ViewProps) {
 
 /** Trade (SIMPLIFY.md): prices in dollars and one plain sentence per market, a chart, the manual order collapsed. */
 function SimpleTrade({ params }: ViewProps) {
-  const { ate, mkOk, stale } = useApp();
+  const { mkOk, stale } = useApp();
   const go = useNav();
   const now = useNow();
   const market = byLabel(params[0]);
   const mkd = MARKETS[market];
-  const hist = useRemote(() => ate.journal.list({ limit: 200, market }), [market]);
   const mv = mkOk?.find((m) => m.market === market);
   const g = mv ? gapBps(mv) : null;
   const cost = FEE_BPS + (mv?.cex?.halfSpreadBps ?? 0) + 5;
@@ -56,10 +56,8 @@ function SimpleTrade({ params }: ViewProps) {
             <p style={{ fontSize: 15, marginTop: 12, maxWidth: 640 }}>{line}</p>
             <p className="sm fg2" style={{ marginTop: 6 }}>Pool {price8(mv.pool.price)} · oracle {price8(mv.oracle.price)}, updated {age(mv.oracle.ageSec + Math.max(0, now - mv.at))} ago</p>
           </section>
-          <Card title="Price gap · last 6 hours" right={<span className="xs fg2">dashed line = trading cost</span>} className="chart">
-            <GapChart entries={hist.last?.entries ?? []} market={market} now={now} cost={cost} live={g} />
-          </Card>
-          <ManualOrder mv={mv} disabled={mv.vault.paused} />
+          <PriceChart market={market} />
+          <ManualOrder key={market + (params[1] ?? "")} mv={mv} disabled={mv.vault.paused} initialOpen={params[1] === "order"} />
         </div>
       )}
     </div>
@@ -241,7 +239,7 @@ function Markets({ params }: ViewProps) {
               )}
             </Card>
           </div>
-          <ManualOrder mv={mv} disabled={paused} />
+          <ManualOrder key={market + (params[1] ?? "")} mv={mv} disabled={paused} initialOpen={params[1] === "order"} />
         </div>
       )}
 
@@ -344,12 +342,16 @@ function toUnits(v: string, dp: number): string | null {
   return (BigInt(i || "0") * 10n ** BigInt(dp) + BigInt(f.slice(0, dp).padEnd(dp, "0") || "0")).toString();
 }
 
-function ManualOrder({ mv, disabled }: { mv: MarketView; disabled: boolean }) {
+function ManualOrder({ mv, disabled, initialOpen = false }: { mv: MarketView; disabled: boolean; initialOpen?: boolean }) {
   const { ate, toast, refresh } = useApp();
   const now = useNow();
   const market = mv.market;
   const mkd = MARKETS[market];
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(initialOpen);
+  const detailsRef = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    if (initialOpen) detailsRef.current?.scrollIntoView({ block: "nearest" });
+  }, [initialOpen]);
   const [side, setSide] = useState<Side>("buy");
   const [amount, setAmount] = useState("");
   const [quote, setQuote] = useState<Quote | null>(null);
@@ -431,7 +433,7 @@ function ManualOrder({ mv, disabled }: { mv: MarketView; disabled: boolean }) {
   });
 
   return (
-    <details className="card soft tight" style={{ borderStyle: "dashed" }} open={open} onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
+    <details ref={detailsRef} className="card soft tight" style={{ borderStyle: "dashed" }} open={open} onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
       <summary className="row g10" style={{ cursor: "pointer", listStyle: "none" }}>
         <span className="b7">{open ? "▾" : "▸"} Advanced: manual order</span>
         <span className="xs fg2">checked by your vault like every trade · ⌘↵ to place</span>
@@ -473,7 +475,7 @@ function ManualOrder({ mv, disabled }: { mv: MarketView; disabled: boolean }) {
                 <KV k="Quote age" className="sm" vClass={fresh ? "" : "warn"}>{qAge} s{fresh ? "" : " · re-quote"}</KV>
               </>
             )}
-            {!quote && !err && phase !== "quoting" && <Empty title="Enter an amount">A simulated quote and the vault check() run as you type.</Empty>}
+            {!quote && !err && phase !== "quoting" && <Empty title="Enter an amount">You see the price and your vault's safety check as you type.</Empty>}
           </div>
         </div>
       )}
