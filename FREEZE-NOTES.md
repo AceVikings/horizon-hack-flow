@@ -221,3 +221,32 @@ Lanes may **add** to frozen artifacts; changing anything here needs a lead-appro
      the daemon's one-time code, then `{ nonce, approval }` applies it (same two-step as `/setup/model/key`).
    - `POST /engine/select { provider, model?, engine? }` → switches the agents (a running LLM trader restarts).
    `/ai` (health of the selected provider), `/ai/check`, `/ai/key` (first key only) and `/ai/config` remain.
+
+## D4. Flow v1 lane D4 — charts, data tables, Tools & guides (additive, read-only)
+
+1. **MCP tools** `ate_chart` and `ate_data` (read-only, `readOnlyHint`): added to `TOOL_NAMES`, `CHAT_TOOL_ALLOWLIST` (so the
+   chat engine, `ui` and `session` scopes get them) and the `view` scope list in `AteService.callTool`. Inputs/outputs:
+   `ChartInput → ChartSpec`, `DataInput → DataTable` in `packages/core/src/charts.ts` (`ToolIO` extended). Schemas in
+   `packages/mcp/schemas/ate_chart.json`, `ate_data.json`. No Touch ID, no writes, no journal records.
+   - `ate_chart { kind: price|cex|oracle|spread|depth|volume|pnl|exposure|budget, market?, interval?: 1m|5m|1h|1d,
+     bars? (10–500), indicators?: ema20|ema50|sma20|sma50|vwap|bb20|rsi14|macd|atr14 (≤ 4), markers?, network?: vault|mainnet }`.
+   - `ate_data { table: swaps|book|fills|lots|oracle, market?, limit?, network? }`.
+2. **Backend** `apps/daemon/src/charts/` (`service.charts`, set in `daemon.ts`): Swap-log candles cached in SQLite tables
+   `chart_swaps` / `chart_sync` (created with `CREATE TABLE IF NOT EXISTS`, not a migration); eth_getLogs ≤ 99 000 blocks
+   per call, ≤ 40 calls per request, 120 ms apart, range halves on "range too large"; block time measured per chain.
+   `network: "mainnet"` uses a lazy read-only HashKey Chain 177 client (`ATE_MAINNET_RPC` overrides the URL list).
+3. **Desktop:** `window.ate.charts.{chart,data}` (IPC `charts.chart` / `charts.data`). Kit in
+   `apps/desktop/src/renderer/src/charts` (`index.tsx`):
+   - **D3 (Ask):** render every tool result with `<ToolResultBlock tool={name} result={toolResultJson} />` — it returns
+     null for other tools and draws `ate_chart` as an interactive chart with **Pin** (→ Charts) and `ate_data` as a table.
+     The daemon emits `chat.tool { args, result }`; `result` is the ToolResult object.
+   - **D1 (Trade):** `<PriceChart market={id} />` is the default clean price line with timeframe, "Show candles" and
+     "+ Add indicator". Charts links to `#/trade/<hsk|btc>/order` — please open the manual order panel when `params[1] === "order"`.
+   - Views registered: `charts`, `tools` (routes `tools/<calcId>`, `tools/guides`, `tools/guide/<id>`).
+4. **Chat prompt — for D3** (`agents/chat/PROMPT.md`, D3 owns it). Proposed addition, verbatim:
+   > You can also use `ate_chart` and `ate_data` (read-only). When the user asks to see, chart, graph, plot or compare
+   > something, call `ate_chart` (price, exchange price, oracle, gap, cost by size, volume, P&L, exposure, budget) or
+   > `ate_data` (swaps, order book, fills, lots, prices by source). The app draws the result under your reply, so do not
+   > repeat the numbers as a table: give one or two plain sentences on what the chart shows. Add indicators only when the
+   > user asks for them. When the user trades manually, you inform and never trade or propose a trade for them; point them
+   > to Trade or to Tools & guides for sizing and cost.
