@@ -2,7 +2,7 @@
 // Source of truth for packages/mcp/schemas/*.json (run `pnpm --filter @ate/mcp schemas:emit`; a test
 // asserts the JSON files equal these objects). Verbatim from §7.4 where the spec gives a schema.
 
-import { MARKET_IDS, TOOL_NAMES, type ToolName } from "@ate/core";
+import { CHART_INDICATORS, CHART_INTERVALS, CHART_KINDS, CHART_NETWORKS, DATA_TABLES, MARKET_IDS, TOOL_NAMES, type ToolName } from "@ate/core";
 
 const market = { type: "string", enum: [...MARKET_IDS] } as const;
 const rationale = { type: "string", minLength: 16, maxLength: 1000 } as const;
@@ -267,6 +267,46 @@ export const TOOL_DEFINITIONS: Record<ToolName, ToolDefinition> = {
       additionalProperties: false,
     },
     annotations: { title: "Pause both vaults", readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
+  },
+
+  // ---- additive (Flow v1 lane D4): read-only charts and tables for manual traders (chat scope allowed)
+  ate_chart: {
+    name: "ate_chart",
+    description:
+      "Build a chart for the user (read-only; the app draws it inline). kind: price = HSKSwap pool candles from on-chain Swap logs; cex = HashKey Global klines; oracle = Supra (vault oracle) vs APRO vs pool; spread = pool vs CEX gap in bps with the round-trip cost line; depth = price impact in bps for a ladder of trade sizes (live QuoterV2, both sides); volume = pool USD volume; pnl = the vault's realised + marked P&L curve; exposure = vault exposure vs its cap; budget = epoch budget spent vs cap. Indicators (EMA, SMA, VWAP, Bollinger, RSI, MACD, ATR) are computed server-side; add them only when the user asks. markers adds journal decisions (buys, sells, no-trades). network=mainnet reads HashKey Chain mainnet market data even when the vaults run on testnet. Call when the user asks to see, chart, graph or plot something.",
+    inputSchema: {
+      type: "object",
+      required: ["kind"],
+      properties: {
+        kind: { type: "string", enum: [...CHART_KINDS] },
+        market,
+        interval: { type: "string", enum: [...CHART_INTERVALS], description: "Bar size for time series (default 1h)" },
+        bars: { type: "integer", minimum: 10, maximum: 500, description: "Number of bars (default 120)" },
+        indicators: { type: "array", items: { type: "string", enum: [...CHART_INDICATORS] }, uniqueItems: true, maxItems: 4 },
+        markers: { type: "boolean", description: "Show journal decisions on the chart (default true for price and pnl)" },
+        network: { type: "string", enum: [...CHART_NETWORKS], description: "vault = the daemon's chain (default); mainnet = HashKey Chain 177 market data" },
+      },
+      additionalProperties: false,
+    },
+    annotations: ro("Chart"),
+  },
+
+  ate_data: {
+    name: "ate_data",
+    description:
+      "Return a small data table for the user (read-only; the app draws it inline). table: swaps = recent HSKSwap pool swaps; book = HashKey Global top-of-book depth (bids and asks); fills = the vault's executed fills with prices; lots = open and closed spread-revert lots; oracle = current Supra, APRO, pool and CEX prices side by side with ages.",
+    inputSchema: {
+      type: "object",
+      required: ["table"],
+      properties: {
+        table: { type: "string", enum: [...DATA_TABLES] },
+        market,
+        limit: { type: "integer", minimum: 1, maximum: 100, description: "Rows (default 20)" },
+        network: { type: "string", enum: [...CHART_NETWORKS] },
+      },
+      additionalProperties: false,
+    },
+    annotations: ro("Data table"),
   },
 };
 

@@ -11,7 +11,9 @@
     "ate_strategy_set",
     "ate_journal_read",
     "ate_signal_buy",
-    "ate_pause"
+    "ate_pause",
+    "ate_chart",
+    "ate_data"
   ],
   "chat": [
     "ate_market_get",
@@ -21,7 +23,9 @@
     "ate_strategy_get",
     "ate_strategy_set",
     "ate_journal_read",
-    "ate_pause"
+    "ate_pause",
+    "ate_chart",
+    "ate_data"
   ],
   "hspGated": [
     "ate_signal_buy"

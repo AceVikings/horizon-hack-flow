@@ -1,0 +1,88 @@
+{
+  "name": "ate_chart",
+  "description": "Build a chart for the user (read-only; the app draws it inline). kind: price = HSKSwap pool candles from on-chain Swap logs; cex = HashKey Global klines; oracle = Supra (vault oracle) vs APRO vs pool; spread = pool vs CEX gap in bps with the round-trip cost line; depth = price impact in bps for a ladder of trade sizes (live QuoterV2, both sides); volume = pool USD volume; pnl = the vault's realised + marked P&L curve; exposure = vault exposure vs its cap; budget = epoch budget spent vs cap. Indicators (EMA, SMA, VWAP, Bollinger, RSI, MACD, ATR) are computed server-side; add them only when the user asks. markers adds journal decisions (buys, sells, no-trades). network=mainnet reads HashKey Chain mainnet market data even when the vaults run on testnet. Call when the user asks to see, chart, graph or plot something.",
+  "inputSchema": {
+    "type": "object",
+    "required": [
+      "kind"
+    ],
+    "properties": {
+      "kind": {
+        "type": "string",
+        "enum": [
+          "price",
+          "cex",
+          "oracle",
+          "spread",
+          "depth",
+          "volume",
+          "pnl",
+          "exposure",
+          "budget"
+        ]
+      },
+      "market": {
+        "type": "string",
+        "enum": [
+          "hsk-dex:WHSK/USDT:3000",
+          "hsk-dex:WBTC/USDT:3000"
+        ]
+      },
+      "interval": {
+        "type": "string",
+        "enum": [
+          "1m",
+          "5m",
+          "1h",
+          "1d"
+        ],
+        "description": "Bar size for time series (default 1h)"
+      },
+      "bars": {
+        "type": "integer",
+        "minimum": 10,
+        "maximum": 500,
+        "description": "Number of bars (default 120)"
+      },
+      "indicators": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "ema20",
+            "ema50",
+            "sma20",
+            "sma50",
+            "vwap",
+            "bb20",
+            "rsi14",
+            "macd",
+            "atr14"
+          ]
+        },
+        "uniqueItems": true,
+        "maxItems": 4
+      },
+      "markers": {
+        "type": "boolean",
+        "description": "Show journal decisions on the chart (default true for price and pnl)"
+      },
+      "network": {
+        "type": "string",
+        "enum": [
+          "vault",
+          "mainnet"
+        ],
+        "description": "vault = the daemon's chain (default); mainnet = HashKey Chain 177 market data"
+      }
+    },
+    "additionalProperties": false
+  },
+  "annotations": {
+    "title": "Chart",
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  }
+}

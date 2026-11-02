@@ -87,6 +87,9 @@ export function createStubHandler(opts: StubOptions) {
   function dispatch(tool: ToolName, args: Record<string, unknown>): ToolResult<unknown> {
     const market = args.market as MarketId | undefined;
     switch (tool) {
+      case "ate_chart":
+      case "ate_data":
+        return fail("ATE_VENUE_ERROR", "charts and tables need a live daemon (not served by the stub)", "Run ate-daemon");
       case "ate_market_get":
         return ok<ToolOutput<"ate_market_get">>({ markets: MARKET_IDS.filter((m) => !market || m === market).map((m) => STUB_MARKETS[m]) }, meta());
 

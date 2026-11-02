@@ -3,6 +3,7 @@
 // Every tool returns ToolResult<Output> (§7.5) serialised as JSON text content.
 
 import type { Address, Hex, MarketId, Side } from "./markets.js";
+import type { ChartInput, ChartSpec, DataInput, DataTable } from "./charts.js";
 import type {
   AiScoreboard,
   Candidate,
@@ -37,6 +38,9 @@ export const TOOL_NAMES = [
   "ate_journal_read",
   "ate_signal_buy",
   "ate_pause",
+  // additive (Flow v1 lane D4): read-only charts and data tables
+  "ate_chart",
+  "ate_data",
 ] as const;
 export type ToolName = (typeof TOOL_NAMES)[number];
 
@@ -50,6 +54,8 @@ export const CHAT_TOOL_ALLOWLIST = [
   "ate_strategy_set",
   "ate_journal_read",
   "ate_pause",
+  "ate_chart",
+  "ate_data",
 ] as const satisfies readonly ToolName[];
 
 /** Registered only when G-HSP is go (§7.1). */
@@ -247,6 +253,8 @@ export interface ToolIO {
   ate_journal_read: [JournalReadInput, JournalReadOutput];
   ate_signal_buy: [SignalBuyInput, SignalBuyOutput];
   ate_pause: [PauseInput, PauseOutput];
+  ate_chart: [ChartInput, ChartSpec];
+  ate_data: [DataInput, DataTable];
 }
 export type ToolInput<T extends ToolName> = ToolIO[T][0];
 export type ToolOutput<T extends ToolName> = ToolIO[T][1];

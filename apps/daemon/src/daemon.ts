@@ -18,6 +18,7 @@ import { loadStrategy } from "./strategy-stub.js";
 import { TxQueue, viemTxChain } from "./txqueue.js";
 import { ensureSetupConfig, registerSetupRoutes, type SetupTty } from "./setup/routes.js";
 import { createWriteStream } from "node:fs";
+import { createChartService } from "./charts/index.js";
 
 export const DAEMON_VERSION = "0.1.0";
 
@@ -160,6 +161,7 @@ export async function startDaemon(o: StartOptions = {}): Promise<RunningDaemon> 
     http?.broadcast(e);
   };
   service = new AteService({ cfg, db, journal, chain, signer, txq, strategy, candidateTtlSec: ttl, version: DAEMON_VERSION, emit, attester, profiles: o.profiles ?? {}, log });
+  service.charts = createChartService({ cfg, db, journal, chain, service, log }); // lane D4 (additive): ate_chart / ate_data
 
   for (const [m, prof] of Object.entries(o.profiles ?? {})) {
     if (prof === "demo" && m === "hsk-dex:WHSK/USDT:3000") Object.assign(service.strategy.markets[m], WHSK_DEMO_PROFILE_OVERRIDES);

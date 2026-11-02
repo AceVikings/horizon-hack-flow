@@ -12,7 +12,7 @@ describe("stub handler", () => {
 
   it("scopes tool lists", () => {
     expect(agent.listTools().map((t) => t.name)).not.toContain("ate_signal_buy");
-    expect(agent.listTools()).toHaveLength(11);
+    expect(agent.listTools()).toHaveLength(13); // + ate_chart, ate_data (lane D4, additive)
     expect(chat.listTools().map((t) => t.name)).toEqual([...CHAT_TOOL_ALLOWLIST]);
   });
 
@@ -91,6 +91,8 @@ describe("stub handler", () => {
     const h = createStubHandler({ scope: "agent", hsp: true });
     const minimal: Record<string, unknown> = {
       ate_quote: { market: "hsk-dex:WHSK/USDT:3000", side: "sell", amountIn: "100000000000000000000" },
+      ate_chart: { kind: "price" },
+      ate_data: { table: "swaps" },
       ate_propose: { market: "hsk-dex:WHSK/USDT:3000", side: "sell", amountIn: "1000", candidateId: "cand_c0ffee12ab34cd56", rationale: R },
       ate_decide: { decision: "no_trade", market: "hsk-dex:WHSK/USDT:3000", reason: "no_signal", rationale: R },
       ate_execute: { proposalId: "prop_ffffffffffffffff" },

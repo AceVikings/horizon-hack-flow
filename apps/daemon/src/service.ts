@@ -83,6 +83,7 @@ import type { TransactionReceipt } from "viem";
 import { applyFill, avgEntryE8, emptyBook, fmtE8, seedBook, unrealised, type Book, type FillRow } from "./positions.js";
 import { candidateIdFor, type BreakerStateLike, type StrategyImpl } from "./strategy-stub.js";
 import type { TxQueue, TxPriority } from "./txqueue.js";
+import { chartError, type ChartService } from "./charts/service.js";
 
 export type CallerScope = TokenScope | "internal";
 export const ZERO_ADDR: Address = "0x0000000000000000000000000000000000000000";
@@ -189,6 +190,8 @@ export class AteService {
   private lastSupraRefreshAt = 0;
   private supraRefreshing: Promise<void> | null = null;
   private pendingChanges = new Map<string, { patch: StrategyPatch; scope: CallerScope; rationale: string; changes: StrategyFieldChange[]; next: StrategyParams; expiresAt: number; renderedDiff: string; confirm?: "sells_now" }>();
+  /** Lane D4 (additive): ate_chart / ate_data backend, set by the daemon bootstrap. */
+  charts: ChartService | null = null;
   /** Lane E hook: notified with StrategyApprovalPending when ate_strategy_set returns ATE_APPROVAL_REQUIRED. */
   onStrategyPending: ((d: unknown) => void) | null = null;
   counters = { cycles: 0, trades: 0, routedUsdE8: 0n, lastCycleAt: null as number | null };
@@ -934,7 +937,7 @@ export class AteService {
     const tool = name as ToolName;
     if (scope !== "internal") {
       const allowed: readonly string[] =
-        scope === "agent" ? this.listTools("agent") : scope === "ui" ? this.listTools("ui") : scope === "chat" || scope === "session" ? CHAT_TOOL_ALLOWLIST : scope === "view" ? ["ate_market_get", "ate_candidates_get", "ate_positions", "ate_strategy_get", "ate_journal_read"] : [];
+        scope === "agent" ? this.listTools("agent") : scope === "ui" ? this.listTools("ui") : scope === "chat" || scope === "session" ? CHAT_TOOL_ALLOWLIST : scope === "view" ? ["ate_market_get", "ate_candidates_get", "ate_positions", "ate_strategy_get", "ate_journal_read", "ate_chart", "ate_data"] : [];
       if (!allowed.includes(tool)) {
         return fail("ATE_TOOL_NOT_ALLOWED", `${tool} is not available to the ${scope} scope`, scope === "chat" ? `Chat may call only: ${CHAT_TOOL_ALLOWLIST.join(", ")}` : "Use an agent-scope token");
       }
@@ -982,6 +985,16 @@ export class AteService {
         return this.pause(scope, String(args.rationale));
       case "ate_signal_buy":
         return fail("ATE_PAYMENT_UNAVAILABLE", "HSP payments are not live in this daemon", "Payments run in ate-pay on the worker (§9)");
+      case "ate_chart":
+      case "ate_data": {
+        if (!this.charts) return fail("ATE_VENUE_ERROR", "charts are not available in this daemon", "Restart the daemon");
+        try {
+          const data = tool === "ate_chart" ? await this.charts.chart(args as never) : await this.charts.data(args as never);
+          return ok(data, this.meta());
+        } catch (e) {
+          throw chartError(e);
+        }
+      }
     }
   }
 
