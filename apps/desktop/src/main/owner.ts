@@ -13,7 +13,7 @@ import { decodePayload } from "@ate/approve";
 import type { Res } from "../shared/bridge";
 import type { DaemonClient } from "./daemon";
 import { signApproval } from "./approve";
-import { ateHome, findNode } from "./lifecycle";
+import { ateHome, BACKEND, backendCwd, backendEnv, findNode } from "./lifecycle";
 
 const KC_SERVICE = "flow/owner-key-secret";
 const err = (message: string, code = "ATE_INTERNAL"): Res<never> => ({ ok: false, error: { code: code as never, message } });
@@ -54,7 +54,7 @@ export class DesktopOwner {
   ) {}
 
   private bin() {
-    return process.env.FLOW_OWNER_BIN ?? resolve(this.appPath, "../owner/dist/bin.js");
+    return process.env.FLOW_OWNER_BIN ?? (BACKEND ? join(BACKEND, "owner", "bin.js") : resolve(this.appPath, "../owner/dist/bin.js"));
   }
 
   /** Creates the owner key on first use (sealed blob + keychain secret), then starts the service. */
@@ -73,7 +73,7 @@ export class DesktopOwner {
     if (!existsSync(blob) || !secret) {
       secret = randomBytes(32).toString("base64url");
       const sealed = await new Promise<string>((res, rej) => {
-        const c = spawn(node, [this.bin(), "seal"], { env: { ...process.env, ATE_OWNER_KEY_ID: "owner", ELECTRON_RUN_AS_NODE: undefined }, stdio: ["pipe", "pipe", "inherit"] });
+        const c = spawn(node, [this.bin(), "seal"], { cwd: backendCwd(this.appPath), env: backendEnv({ ...process.env, ATE_OWNER_KEY_ID: "owner" }), stdio: ["pipe", "pipe", "inherit"] });
         let out = "";
         c.stdout!.on("data", (d) => (out += d));
         c.on("exit", (code) => (code === 0 ? res(out.trim()) : rej(new Error("could not create the owner key"))));
@@ -92,9 +92,9 @@ export class DesktopOwner {
     })();
     const pin = [join(home, "approve-pubkey.json"), join(homedir(), ".ate", "approve-pubkey.json")].find((p) => existsSync(p));
     const env: NodeJS.ProcessEnv = { ...process.env, ATE_HOME: home, ATE_OWNER_KEY_ID: "owner", ATE_OWNER_KEY_SECRET: secret, FLOW_OWNER_STDIN: "1", FLOW_CHAIN_ID: chainId, ...(pin ? { ATE_APPROVE_PUBKEY: pin } : {}) };
-    delete env.ELECTRON_RUN_AS_NODE;
+    backendEnv(env);
     for (const k of Object.keys(env)) if (k.startsWith("ATE_AGENT_")) delete env[k];
-    const child = spawn(node, [this.bin(), "serve"], { cwd: resolve(this.appPath, "../.."), env, stdio: ["pipe", "pipe", "inherit"] });
+    const child = spawn(node, [this.bin(), "serve"], { cwd: backendCwd(this.appPath), env, stdio: ["pipe", "pipe", "inherit"] });
     this.child = child;
     child.stdin!.end(`${JSON.stringify({ token: this.token })}\n`);
     await new Promise<void>((res, rej) => {

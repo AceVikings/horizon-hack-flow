@@ -49,7 +49,7 @@ interface ChatSess {
 /** stdio MCP spec for a chat-scoped proxy: this daemon's own bin, `mcp serve`, chat token via env only. */
 export function chatMcpSpec(home: string, chatToken: string) {
   const bin = fileURLToPath(new URL("./bin.js", import.meta.url));
-  return { command: process.execPath, args: [existsSync(bin) ? bin : fileURLToPath(new URL("../dist/bin.js", import.meta.url)), "mcp", "serve"], env: { ATE_HOME: home, ATE_MCP_TOKEN: chatToken } };
+  return { command: process.execPath, args: [existsSync(bin) ? bin : fileURLToPath(new URL("../dist/bin.js", import.meta.url)), "mcp", "serve"], env: { ATE_HOME: home, ATE_MCP_TOKEN: chatToken, ...(process.versions.electron ? { ELECTRON_RUN_AS_NODE: "1" } : {}) } };
 }
 
 async function defaultRunTurn(

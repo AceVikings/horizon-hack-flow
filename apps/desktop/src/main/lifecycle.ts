@@ -51,9 +51,31 @@ export function readRuntime(home = ateHome()): RuntimeJson | null {
   }
 }
 
-/** The daemon needs the system Node (better-sqlite3 is built for it, not for Electron's ABI). */
+/**
+ * Packaged app: the daemon and owner service ship as bundles in <Resources>/backend (scripts/package.mjs), with
+ * better-sqlite3 built for Electron, and run under Electron's own Node (ELECTRON_RUN_AS_NODE). Null in the dev checkout.
+ */
+export const BACKEND: string | null = (() => {
+  const r = (process as { resourcesPath?: string }).resourcesPath;
+  return r && existsSync(join(r, "backend", "daemon", "bin.js")) ? join(r, "backend") : null;
+})();
+
+/** Env for a backend child: Electron runs it as plain Node when packaged; the system Node needs that var unset. */
+export function backendEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  if (BACKEND && !process.env.ATE_NODE) env.ELECTRON_RUN_AS_NODE = "1";
+  else delete env.ELECTRON_RUN_AS_NODE;
+  return env;
+}
+
+/** Working directory for backend children (deployments/ and contracts/ are found from here). */
+export function backendCwd(appPath: string): string {
+  return BACKEND ?? resolve(appPath, "../..");
+}
+
+/** The daemon needs the system Node in the dev checkout (better-sqlite3 is built for it, not for Electron's ABI). */
 export function findNode(): string | null {
   if (process.env.ATE_NODE && existsSync(process.env.ATE_NODE)) return process.env.ATE_NODE;
+  if (BACKEND) return process.execPath;
   const dirs = [...(process.env.PATH ?? "").split(":"), "/opt/homebrew/bin", "/usr/local/bin", join(homedir(), ".volta/bin")];
   const nvm = join(homedir(), ".nvm/versions/node");
   if (existsSync(nvm)) {
@@ -69,7 +91,7 @@ export function findNode(): string | null {
 }
 
 export function daemonBin(appPath: string): string {
-  return process.env.ATE_DAEMON_BIN ?? resolve(appPath, "../daemon/dist/bin.js");
+  return process.env.ATE_DAEMON_BIN ?? (BACKEND ? join(BACKEND, "daemon", "bin.js") : resolve(appPath, "../daemon/dist/bin.js"));
 }
 
 let exitHooked = false;
@@ -153,8 +175,8 @@ export class DaemonSupervisor {
     // chose to keep it running (FLOW_KEEP_DAEMON=1).
     const keep = process.env.FLOW_KEEP_DAEMON === "1";
     const env = { ...process.env, ATE_HOME: home, ATE_APPROVAL_CODE_FD: "3", ATE_APPROVAL_STDIN: "1", ELECTRON_RUN_AS_NODE: undefined, ...(keep ? {} : { ATE_PARENT_PID: String(process.pid) }) };
-    delete env.ELECTRON_RUN_AS_NODE;
-    const child = spawn(node, args, { cwd: resolve(this.appPath, "../.."), env, stdio: ["pipe", "pipe", "pipe", "pipe"], detached: false });
+    backendEnv(env);
+    const child = spawn(node, args, { cwd: backendCwd(this.appPath), env, stdio: ["pipe", "pipe", "pipe", "pipe"], detached: false });
     this.child = child;
     this.owned = true;
     if (!keep && !exitHooked) {
