@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Flow">
+  <title>Flow concept B: F channel with a hard stop (chosen)</title>
+  <!-- F drawn as a channel; the middle arm ends at a yellow full stop: the vault cap (the same full stop as the wordmark). 64-unit grid, edges on multiples of 4 (whole pixels at 16 px). -->
+  <rect width="64" height="64" rx="14" fill="#171e19"/>
+  <path d="M20 12H52V20H32V28H40V36H32V52H20Z" fill="#fff"/>
+  <path d="M44 28H52V36H44Z" fill="#ffe17c"/>
+</svg>

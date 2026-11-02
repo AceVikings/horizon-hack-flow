@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="Flow">
+  <title>Flow app icon (macOS)</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#222b25"/><stop offset="1" stop-color="#171e19"/></linearGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse" x="12" y="12"><path d="M40 0V40H0" fill="none" stroke="#b7c6c2" stroke-opacity=".07" stroke-width="2"/></pattern>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="125%"><feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#000" flood-opacity=".3"/></filter>
+    <clipPath id="body"><rect x="100" y="100" width="824" height="824" rx="185"/></clipPath>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)" filter="url(#shadow)"/>
+  <g clip-path="url(#body)"><rect x="100" y="100" width="824" height="824" fill="url(#grid)"/></g>
+  <rect x="101.5" y="101.5" width="821" height="821" rx="183.5" fill="none" stroke="#fff" stroke-opacity=".06" stroke-width="3"/>
+  <g transform="translate(144 144) scale(11.5)">
+    <path d="M20 12H52V20H32V28H40V36H32V52H20Z" fill="#fff"/>
+    <path d="M44 28H52V36H44Z" fill="#ffe17c"/>
+  </g>
+</svg>

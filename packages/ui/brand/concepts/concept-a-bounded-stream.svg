@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <title>Flow concept A: bounded stream</title>
+  <!-- A stream flows freely, then runs into the vault wall (the yellow hard stop). -->
+  <rect width="64" height="64" rx="14" fill="#171e19"/>
+  <path d="M10 40C18 40 18 24 26 24S34 40 42 40" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="butt"/>
+  <rect x="44" y="14" width="8" height="36" fill="#ffe17c"/>
+</svg>

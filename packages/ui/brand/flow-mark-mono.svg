@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Flow">
+  <title>Flow mark (single colour)</title>
+  <!-- One path, F and stop knocked out of the tile. Recolour the fill freely (e.g. #fff on dark, #171e19 on light). -->
+  <path fill-rule="evenodd" d="M14 0H50A14 14 0 0 1 64 14V50A14 14 0 0 1 50 64H14A14 14 0 0 1 0 50V14A14 14 0 0 1 14 0ZM20 12H52V20H32V28H40V36H32V52H20ZM44 28H52V36H44Z" fill="#171e19"/>
+</svg>
