@@ -102,17 +102,20 @@ export class OwnerChain {
   /** One owner call, waited until mined; a revert is an error. */
   /**
    * Sends one owner tx and waits for it. The nonce is ours to track (a load-balanced RPC can report a stale pending
-   * nonce right after a receipt); on a nonce clash (another tool used the same owner key) we resync and retry.
+   * nonce right after a receipt); on a nonce clash (another tool used the same owner key) we resync and retry. We sign
+   * locally and keep the raw tx, so a tx an RPC node accepted and then dropped is re-broadcast instead of lost.
    */
   private nonce: number | null = null;
-  private async submit(tx: { to: Address | null; data: Hex; value?: bigint }): Promise<Hex> {
+  private async submit(tx: { to: Address | null; data: Hex; value?: bigint }): Promise<{ hash: Hex; raw: Hex }> {
     for (let attempt = 0; ; attempt++) {
       const chainNonce = await this.pub.getTransactionCount({ address: this.address, blockTag: "pending" });
       const nonce = Math.max(chainNonce, this.nonce ?? 0);
       try {
-        const hash = await this.wallet.sendTransaction({ account: this.account, chain: this.wallet.chain, to: tx.to as never, data: tx.data, value: tx.value ?? 0n, nonce });
+        const req = await this.wallet.prepareTransactionRequest({ account: this.account, chain: this.wallet.chain, to: tx.to as never, data: tx.data, value: tx.value ?? 0n, nonce } as never);
+        const raw = (await this.account.signTransaction!(req as never)) as Hex;
+        const hash = await this.pub.sendRawTransaction({ serializedTransaction: raw });
         this.nonce = nonce + 1;
-        return hash;
+        return { hash, raw };
       } catch (e) {
         const m = (e as Error).message;
         if (attempt < 4 && /nonce|underpriced|already known/i.test(m)) {
@@ -125,11 +128,23 @@ export class OwnerChain {
     }
   }
 
+  private async mined(label: string, t: { hash: Hex; raw: Hex }) {
+    for (let round = 0; round < 6; round++) {
+      try {
+        return await this.pub.waitForTransactionReceipt({ hash: t.hash, timeout: 45_000 });
+      } catch {
+        const known = await this.pub.getTransaction({ hash: t.hash }).catch(() => null);
+        if (!known) await this.pub.sendRawTransaction({ serializedTransaction: t.raw }).catch(() => undefined);
+      }
+    }
+    throw new OwnerError(504, `${label}: not mined after several re-broadcasts (${t.hash})`);
+  }
+
   async send(label: string, to: Address, data: Hex, value = 0n): Promise<{ label: string; hash: Hex }> {
-    const hash = await this.submit({ to, data, value });
-    const r = await this.pub.waitForTransactionReceipt({ hash, timeout: 120_000 });
-    if (r.status !== "success") throw new OwnerError(502, `${label} reverted (${hash})`);
-    return { label, hash };
+    const t = await this.submit({ to, data, value });
+    const r = await this.mined(label, t);
+    if (r.status !== "success") throw new OwnerError(502, `${label} reverted (${t.hash})`);
+    return { label, hash: t.hash };
   }
 
   async call(label: string, vault: Address, functionName: string, args: unknown[] = []): Promise<{ label: string; hash: Hex }> {
@@ -137,10 +152,10 @@ export class OwnerChain {
   }
 
   private async create(label: string, data: Hex): Promise<{ label: string; hash: Hex; address: Address }> {
-    const hash = await this.submit({ to: null, data });
-    const r = await this.pub.waitForTransactionReceipt({ hash, timeout: 180_000 });
-    if (r.status !== "success" || !r.contractAddress) throw new OwnerError(502, `${label} failed (${hash})`);
-    return { label, hash, address: r.contractAddress };
+    const t = await this.submit({ to: null, data });
+    const r = await this.mined(label, t);
+    if (r.status !== "success" || !r.contractAddress) throw new OwnerError(502, `${label} failed (${t.hash})`);
+    return { label, hash: t.hash, address: r.contractAddress };
   }
 
   /** Deploy.s.sol `_deployOne`, per market. Returns the new addresses and every tx. */
