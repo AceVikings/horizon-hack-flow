@@ -1,0 +1,19 @@
+{
+  "name": "@ate/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "description": "`ate` command: frozen registry that loads per-lane command directories (§3.3)",
+  "bin": { "ate": "./dist/bin.js" },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "dev": "tsx src/bin.ts"
+  },
+  "dependencies": {
+    "@ate/core": "workspace:*"
+  }
+}

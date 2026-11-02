@@ -1,0 +1,29 @@
+{
+  "name": "@ate/mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "description": "ATE MCP tool schemas (frozen) + stub server for lanes C/D",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+    "./schemas/*.json": "./schemas/*.json"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": { "ate-mcp-stub": "./dist/stub/main.js" },
+  "files": ["dist", "schemas"],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "schemas:emit": "tsx scripts/emit-schemas.ts",
+    "stub": "tsx src/stub/main.ts",
+    "stub:chat": "ATE_STUB_SCOPE=chat tsx src/stub/main.ts"
+  },
+  "dependencies": {
+    "@ate/core": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.20.0",
+    "ajv": "^8.17.1"
+  }
+}

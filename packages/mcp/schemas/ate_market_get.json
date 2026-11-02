@@ -1,0 +1,24 @@
+{
+  "name": "ate_market_get",
+  "description": "Market state per market (or both if market is omitted): pool spot and 300 s TWAP, APRO oracle snapshot and age, HashKey Global CEX reference (mid, half-spread, top-of-book depth, recent trades), pool-vs-oracle deviation, depth, and the vault's balances, epoch budget and limits. Prices are 8-decimal integer strings (USD per whole token).",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "market": {
+        "type": "string",
+        "enum": [
+          "hsk-dex:WHSK/USDT:3000",
+          "hsk-dex:WBTC/USDT:3000"
+        ]
+      }
+    },
+    "additionalProperties": false
+  },
+  "annotations": {
+    "title": "Market state",
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  }
+}

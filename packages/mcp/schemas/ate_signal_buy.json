@@ -1,0 +1,31 @@
+{
+  "name": "ate_signal_buy",
+  "description": "Buy a premium signal from the signal agent via HSP (only registered when HSP payments are live). Requires two human approvals; asynchronous — returns a payment id immediately and never blocks a trade. Use only when the signal's expected value exceeds its price.",
+  "inputSchema": {
+    "type": "object",
+    "required": [
+      "offerId",
+      "rationale"
+    ],
+    "properties": {
+      "offerId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "rationale": {
+        "type": "string",
+        "minLength": 16,
+        "maxLength": 1000
+      }
+    },
+    "additionalProperties": false
+  },
+  "annotations": {
+    "title": "Buy signal (HSP)",
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": true
+  }
+}

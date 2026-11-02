@@ -1,0 +1,25 @@
+{
+  "name": "ate_pause",
+  "description": "Kill switch: signs pause() on BOTH vaults with the agent key and locks the daemon. Only the owner can unpause. A pause also stops stop-loss and take-profit exits; consider 'go to cash' (ate_strategy_set targetAssets: []) first.",
+  "inputSchema": {
+    "type": "object",
+    "required": [
+      "rationale"
+    ],
+    "properties": {
+      "rationale": {
+        "type": "string",
+        "minLength": 16,
+        "maxLength": 1000
+      }
+    },
+    "additionalProperties": false
+  },
+  "annotations": {
+    "title": "Pause both vaults",
+    "readOnlyHint": false,
+    "destructiveHint": true,
+    "idempotentHint": true,
+    "openWorldHint": true
+  }
+}

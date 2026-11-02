@@ -1,6 +1,6 @@
 # ATE — Agentic Trading Environment · *bounded autonomy for AI traders*
 
-**Status:** Draft for implementation · **Version:** 0.8.0 (spec) · ships as **v0.1** (submission) → **v1.0** (GA)
+**Status:** Draft for implementation · **Version:** 0.9.0 (spec; re-timed to the 09:50 IST implementation start — frozen interfaces unchanged, additions marked *additive*) · ships as **v0.1** (submission) → **v1.0** (GA)
 **Owner:** ATE maintainers · **License:** Apache-2.0
 **Team:** Vikings · **Contact:** akash.jsmith@gmail.com
 **Event:** HSK Chain Horizon Hackathon · India (Mumbai Edition) · DoraHacks `hskchainindia`
@@ -14,6 +14,9 @@ optional feature alongside the trading loop (outside the trade path, §9.5), not
 
 > **A seatbelt for AI traders: the agent trades HSKSwap on its own; the contract caps what it can lose.**
 
+**Who it is for.** HashKey agent teams — Maneki-style per-agent fleets and MCP trading bots — that want
+to give an agent funds without trusting the agent.
+
 **Problem.** HashKey's AI-agent push needs a way to let agents hold funds without trusting them: one bad
 prompt or one stolen key can drain an agent's wallet. ATE is that layer — reusable by any agent team, and
 routed through HSKSwap, APRO and EAS.
@@ -24,10 +27,11 @@ shows measured uptime, cycles and trades rather than a claim — and the user st
 from a Chat view, including which assets it holds. It is safe to leave running because the loss from a
 bad or stolen-key trade is capped on-chain by one immutable `PolicyVault` per market; market moves on the
 capped exposure are managed by the stop-loss (§4.6). **Dated snapshot, 03:50 IST Nov 2** (re-read at
-09:00 and shown in `docs/JUDGE.md`; it may have closed since): the WBTC pool sat 112.6 bps below HashKey
-Global's BTCUSDT mid against ~35 bps of entry cost — an entry the *default* profile takes, worth ≈ +78 bps
-marked at the CEX and realised only if the pool reverts (selling at once would realise ≈ −60 bps); the
-discount may be a persistent bridged-WBTC discount, which `ate replay` measures (§11.3) — while the WHSK
+trader start, ~14:00, and shown in `docs/JUDGE.md`; it may have closed since): the WBTC pool sat 112.6 bps
+below HashKey Global's BTCUSDT mid against ~35 bps of entry cost — an entry the *default* profile takes.
+Realised-first: a fresh lot is ≈ −0.6% if sold at once (exit fee included); it is ≈ +0.8% on paper,
+marked at the CEX, and becomes real only if the pool reverts — the market may keep this discount (a
+persistent bridged-WBTC discount, which `ate replay` measures, §11.3) — while the WHSK
 pool sat 30 bps below against ~36 bps — a trade it correctly skips (§0.2). It ships as one loop with four
 parts:
 
@@ -53,8 +57,8 @@ parts:
    only actor that exits without asking an LLM). Only the daemon's single `TxQueue` signs on-chain, with an
    agent key that can only `execute`/`pause`; the guardian and owner keys never touch the agent's machine
    (§8.1).
-3. **An enforcement layer** — two `PolicyVault`s on HashKey Chain mainnet (same verified bytecode, one per
-   market): per-trade and per-epoch USD caps, an exposure cap checked before and after every buy, an
+3. **An enforcement layer** — two `PolicyVault`s on HashKey Chain mainnet (same verified source and creation
+   code, one per market; runtime bytecode differs only in the constructor immutables): per-trade and per-epoch USD caps, an exposure cap checked before and after every buy, an
    oracle-anchored slippage floor, a pool-vs-oracle deviation guard (spot and TWAP), a pool/oracle/router
    fixed at deployment, cooldown, pause. Proceeds never leave the vault. Neither the agent nor a fully
    compromised daemon can raise its own limits. An off-chain portfolio guard allocates turnover and
@@ -68,15 +72,12 @@ parts:
 
 **Thesis — bounded autonomy.** Leave the agent running unattended: it monitors, decides, trades, cuts
 losses and journals every choice without you. You can do that because the contract, not the agent's good
-behaviour, sets the worst case of a bad trade. **The one number:** under default policy and while APRO
-is live, execution loss across both vaults is **≤ $51.50 per UTC day, on every path** (§4.6). The rest
-of the pitch card, per §4.6: the $51.50 is ≤ $103 over any rolling 24 h; ≤ $26.50 per UTC day on the
-normal path (≤ $53 rolling); oracle-lag exits add ≤ $7.50 per vault per episode, inside the $51.50;
-exposure ≤ $150 per vault at every buy. These hold whatever the agent is told or believes, and with its
-key stolen; that key can never withdraw (I3).
-Price risk on the held exposure is managed by the stop-loss, not the contract, and a pause freezes it.
-If APRO itself is wrong, the ceiling per vault per UTC day is $250 of USDT plus its priceToken holdings,
-never more than the vault (§4.6). The demo proves the bound by attacking a vault
+behaviour, sets the worst case of a bad trade. **The pitch card has three items:** the stolen key can
+never withdraw (I3); execution loss across both vaults is **≤ $51.50 per UTC day (~18% of the demo
+wallet), on every path, while APRO is live**; exposure ≤ $150 per vault at every buy. Footnote: price
+risk on held exposure is managed by the stop-loss, not the contract. These hold whatever the agent is
+told or believes, and with its key stolen. Every other bound (rolling 24 h, normal path, oracle-lag
+exits, the APRO-wrong ceiling) is on the Q&A *numbers* card (§4.6, §22.1), not in the pitch. The demo proves the bound by attacking a vault
 live with the agent's own key (§22). Contract-enforced and fuzz-tested, not formally proven. The WHSK
 pool trades ~$513/day (Nov 2), so ATE sells safe unattended operation first and claims returns only where
 measured: WBTC spread trades run the default profile with no waivers and are the T1.8 evidence (E14);
@@ -92,12 +93,23 @@ an oracle-anchored minimum output the agent cannot widen, a pinned venue and poo
 valued at the oracle, the agent's rationale hash on-chain per trade, and an MCP-native tool surface. As
 of Nov 2 we found no oracle-checked agent policy contract on HashKey Chain in Blockscout's verified
 contracts or the HashKey ecosystem directory (the searches are linked in `docs/JUDGE.md`); to our
-knowledge this is the first there. `PolicyVault`, the HSKSwap adapter and the MCP server are standalone
+knowledge this is the first there. Reuse is shown, not only claimed: on stage the rogue attacker is a
+second, unrelated MCP client (a Claude Code session over stdio) pointed at the same vault (§22.3) — "any
+agent, any framework, same bound". `PolicyVault`, the HSKSwap adapter and the MCP server are standalone
 Apache-2.0 packages; v0.1 supports any pool whose `token0` is an 8- or 18-dp `priceToken` against a 6-dp
 USD-stable `token1` `quoteToken`, priced by an 8-dp AggregatorV3 feed — the constructor reads and asserts
 all of it, and both v0.1 markets are instances (§4.1, §24). Other orientations/decimals are v1.0. The
 `VenueAdapter` interface (§6.1) reserves the second venue slot for the **Kredo** prediction market
 (`kredo.fun`, linked from the HSK Chain portal) in v1.0.
+
+**Incubation plan.** *Target adopters:* the Maneki AI and Helm teams, and the HSP agent builders at this
+event — each gets `docs/INTEGRATE.md` and a one-command deploy (`forge script Deploy --sig 'run(address
+pool,address oracle)'`, §24). *30 days:* external audit of `PolicyVault` plus a public bug bounty;
+Safe-by-default owner. *60 days:* Kredo `VenueAdapter`; ERC-8004 agent identity on `AgentRegistry`.
+*90 days:* other token orientations/decimals, on-chain portfolio limits, two design partners live on
+mainnet. **Ask of HashKey:** audit credits or a grant, HSP QA allowlist access, and adoption of the
+`agent-policy-vault` skill into the official HSK-Superpowers set. `@ate/venues` and `@ate/mcp` are
+published to npm by 17:30 Nov 2 (§24).
 
 ### 0.1 What ATE is not
 
@@ -111,8 +123,10 @@ all of it, and both v0.1 markets are instances (§4.1, §24). Other orientations
 
 ### 0.2 Verified chain facts this spec depends on
 
-All values read from mainnet; treat as configuration, not constants. Re-verified 2026-11-02 — see
-`.context/review/onchain-verification.md`.
+All values read from mainnet; treat as configuration, not constants. Read 2026-11-02 IST — core reads
+00:10–00:25 IST (18:40–18:55 UTC Nov 1), HSKSwap app config ~01:55 IST, WBTC market ~03:30–03:50 IST —
+see `.context/review/onchain-verification.md`. Market snapshots drift; they are re-read at trader start
+(~14:00 IST) and the re-read is what `docs/JUDGE.md` shows next to them.
 
 | Item | Value |
 |---|---|
@@ -140,10 +154,10 @@ All values read from mainnet; treat as configuration, not constants. Re-verified
 | SwapRouter v1 (verified) | `0x56d15cF00b5D853D6eE4CbB1463E6DAD2899fBf5` — 8-field struct with `deadline`; same factory |
 | QuoterV2 (same factory) | `0x603f70466fDdbE3F238220B9a74FFF419a2BbFDD` |
 | Multicall3 | `0xcA11bde05977b3631167028862bE2a173976CA11` |
-| HSKSwap app config (mainnet) | `app.hskswap.com` bundle lists factory `0x972c…c742`, SwapRouter02 `0x2c16…D8F3`, QuoterV2 `0x603f…bFDD` — confirms these are HSKSwap's contracts |
+| HSKSwap app config (mainnet; verified ~01:55 IST Nov 2, `onchain-verification.md` § HSKSwap app config) | `app.hskswap.com` bundle (`assets/shared-B-bsW-m1.js`, `[HashKey]` entries) lists factory `0x972c…c742`, SwapRouter02 `0x2c16…D8F3`, QuoterV2 `0x603f…bFDD` — confirms these are HSKSwap's contracts |
 | HashKey Global HSKUSDT, BTCUSDT (public, no key) | `/quote/v1/ticker/24hr` (incl. bid/ask), `/quote/v1/ticker/bookTicker`, `/quote/v1/depth`, `/quote/v1/trades`, `/quote/v1/kline` on `api-glb.hashkey.com` — the endpoint map of HashKey's official `hashkey-public-market` skill (`hashkey-skills`, site `glb`, read-only) |
 | WHSK live snapshot (Nov 2, 02:00 IST; unchanged at 03:50) | CEX bid/ask 0.0878/0.0879 (mid 0.08785, half-spread ~5.7 bps, ~$115–165 at top of book); pool 0.087588 (**29.8 ≈ 30 bps below CEX mid**, 15 bps below APRO); APRO age 3.9 h. Cost of a one-legged trade ~36 bps → **no trade**. Single planning number for the WHSK gap |
-| WBTC live snapshot (Nov 2, 03:50 IST) | Pool $77,144.61; HashKey Global BTCUSDT bid/ask 78,023.38/78,023.49 (half-spread < 0.01 bps) → **pool 112.6 bps below CEX mid**, 100 bps below APRO (77,925.02). Cost at $25: 30 bps fee + ~5 bps impact (full-range estimate from depth: execution ≈ size ÷ USDT reserve; QuoterV2 confirms at 04:00) ≈ **35 bps → net ≈ 78 bps: a live `spread-revert` buy under the default profile**. Each $25 buy moves the pool ~10 bps toward the CEX. Single planning number for the WBTC gap. **Caveat:** the pool holds ~94% of WBTC supply (0.6566 of 0.6997) and its token is a bridged OptimismMintableERC20, so the discount may be a persistent bridge/liquidity discount rather than a transient gap; it already uses 100 of the 250 bps deviation budget. `ate replay` reports its persistence and time-to-close (E11, §11.3) |
+| WBTC live snapshot (Nov 2, 03:50 IST) | Pool $77,144.61; HashKey Global BTCUSDT bid/ask 78,023.38/78,023.49 (half-spread < 0.01 bps) → **pool 112.6 bps below CEX mid**, 100 bps below APRO (77,925.02). Cost at $25: 30 bps fee + ~5 bps impact (full-range estimate from depth: execution ≈ size ÷ USDT reserve; QuoterV2 confirms at the 13:00 dry-run) ≈ **35 bps → net ≈ 78 bps: a live `spread-revert` buy under the default profile**. Each $25 buy moves the pool ~10 bps toward the CEX. Single planning number for the WBTC gap. **Caveat:** the pool holds ~94% of WBTC supply (0.6566 of 0.6997) and its token is a bridged OptimismMintableERC20, so the discount may be a persistent bridge/liquidity discount rather than a transient gap; it already uses 100 of the 250 bps deviation budget. `ate replay` reports its persistence and time-to-close (E11, §11.3) |
 | EAS / SchemaRegistry | `0x4200000000000000000000000000000000000021` / `0x4200000000000000000000000000000000000020` |
 | ERC-4337 EntryPoint v0.6 / v0.7 | `0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789` / `0x0000000071727De22E5E9d8BAf0edAc6f37da032` |
 
@@ -177,21 +191,21 @@ Official brief (DoraHacks `hskchainindia/detail`, verified 2026-11-02), broken i
 
 | # | Brief element | Status | Where | Judge-visible evidence |
 |---|---|---|---|---|
-| T1.1 | Trades on a DEX — HSKSwap (app.hskswap.com) | **Met, verified** | §0.2, §6.2 | HSKSwap's own app config for HashKey mainnet lists factory `0x972c…c742`, SwapRouter02 `0x2c16…D8F3` and QuoterV2 `0x603f…bFDD` — the exact contracts the vault is bound to |
+| T1.1 | Trades on a DEX — HSKSwap (app.hskswap.com) | **Met, verified** | §0.2, §6.2 | HSKSwap's own app config for HashKey mainnet (bundle read ~01:55 IST Nov 2, recorded in `onchain-verification.md`) lists factory `0x972c…c742`, SwapRouter02 `0x2c16…D8F3` and QuoterV2 `0x603f…bFDD` — the exact contracts the vault is bound to; the router and quoter are also verified on-chain to report that factory |
 | T1.2 | AI agent as the core engine | **Met** | §11.1, §7.4 | Every cycle the LLM pulls bound candidates for both markets (`ate_candidates_get`) plus CEX depth/trades from the `hashkey-public-market` skill, and decides act / skip / size down / exit early (standing `discretionary_exit`); it **originates** bounded discretionary trades (≤ 3/day, ≤ $10, required thesis, `origin=discretionary`) and tunes strategy within ±50% of the user's settings (`actor=agent`). The prompt makes it evaluate the discretionary lane and every candidate for veto/size-down each cycle and record why not (§11.1). Journal `engine=llm` with `candidateId` or `origin=discretionary` on every decision; DoD requires ≥ 1 candidate-bound trade, ≥ 1 discretionary trade and ≥ 1 veto/size-down; the **AI scoreboard** tile reports acts / vetoes (bps saved, E13) / discretionary trades (§15.1); EAS attestation per executed trade carries the rationale hash (E3) |
 | T1.3 | Market monitoring | **Met** | §5, §11.2 | Both pools, both APRO feeds and both HashKey Global books in every cycle's record |
 | T1.4 | On-chain data analysis | **Met** | §6.2, §11.2 | Pool `slot0`, TWAP, active liquidity, QuoterV2 impact, swap flow, APRO round per record |
 | T1.5 | Trading signal identification | **Met** | §11.3 | `signal` block per decision, including `no_trade` decisions (`ate_decide`) |
 | T1.6 | Order execution | **Met** | §4.2, §6.2 | `TradeExecuted` txs on Blockscout via each vault → HSKSwap |
-| T1.7 | Without any manual intervention | **Met** | §7.3 `autonomous`, §9.5 | `approvedBy=policy` on executed trades; trader runs ≥ 1 h unattended (G6) and the footer counts measured uptime, cycles and trades. In `autonomous` mode the only human-gated step is the optional HSP payment (two approvals, per the HSP guide), and it runs **outside the trade path**: no trade, exit or stop-loss ever waits on it (§9.5) |
-| T1.8 | Capture arbitrage / price spreads in real time | **Met — one-legged spread capture, stated** | §11.3, §0.2 | `spread-revert` buys the pool toward the CEX price when the gap beats fee + impact + CEX half-spread, and its close leg sells those lots once the exit-executable mark beats their entry by ≥ `minNetEdgeBps`. **Snapshot 03:50 IST: WBTC pool 112.6 bps below CEX mid vs ~35 bps entry cost → a default-profile buy worth ≈ +78 bps marked at the CEX, realised only if the pool reverts (a fresh lot is ≈ −60 bps exit-executable); E14 is the primary evidence** (decision record with gap/cost/net edge, `TradeExecuted`, EAS UID). Same cycle, WHSK: 30 bps vs ~36 bps → correctly `no_trade`. One-legged (no CEX execution): spread capture, not two-leg arbitrage. Cycle 120 s by default (`cycleSeconds`, minimum 30 s) on ~2 s blocks; candidates valid `candidateTtlSec` = max(120 s, 2 × p95 LLM latency) (§11.1). `ate replay --days 7` (E11, both markets) counts every opportunity taken or rejected over the last week and measures whether gaps persist or close (time-to-close, transient/persistent verdict) |
-| T1.9 | Sustained profitability | **Partial — stated honestly** | §11.3, §4.6 | Default profile (the WBTC market): every candidate entry clears net edge after costs (spread ≥ `minNetEdgeBps`, rebalance ≥ 0, both vs CEX mid); go-to-cash and guard/discretionary exits are exempt (they reduce risk); discretionary entries are judged by their thesis and reported separately; WHSK demo-profile trades waive the edge gate and are labelled `profile=demo`. Realised and CEX-marked P&L since the trader's start (~09:00) incl. fee drag, per market, is stated in the README, including no-trade cycles; WBTC lots are realised only when the pool reverts (the close leg pays the exit fee), and the README states next to the CEX-marked number that the WBTC discount may be structural (§11.3). E11 (in the 09:15 BUIDL): 7-day replay from pool `Swap` logs and HashKey Global klines — candidates fired, rejected on net edge, and counterfactual net edge in bps after fee + impact + half-spread, labelled counterfactual. One day and ~$100 of WBTC turnover cannot prove *sustained* profitability; the pitch leads with bounded autonomy |
+| T1.7 | Without any manual intervention | **Met** | §7.3 `autonomous`, §9.5 | `approvedBy=policy` on executed trades; trader runs ≥ 1 h unattended (G6) and the footer counts measured uptime, cycles and trades. In `autonomous` mode **no step on the trade path is human-gated**. Human-gated steps exist only beside it: the optional HSP payment (two approvals, per the HSP guide), loosening strategy changes (Touch ID, §11.5) and trades in the opt-in `confirm` mode; no autonomous trade, exit or stop-loss ever waits on any of them (§9.5, §11.5) |
+| T1.8 | Capture arbitrage / price spreads in real time | **Met — one-legged spread capture, stated** | §11.3, §0.2 | `spread-revert` buys the pool toward the CEX price when the gap beats fee + impact + CEX half-spread, and its close leg sells those lots once the exit-executable mark beats their entry by ≥ `minNetEdgeBps`. **Snapshot 03:50 IST: WBTC pool 112.6 bps below CEX mid vs ~35 bps entry cost → a default-profile buy; realised-first, a fresh lot is ≈ −0.6% if sold now and ≈ +0.8% on paper at the CEX mark if the pool reverts, and the market may keep the discount; E14 is the primary evidence** (decision record with gap/cost/net edge, `TradeExecuted`, EAS UID). **Pre-registered second path:** if the trader-start re-read (~14:00) shows the WBTC gap below cost, E14's evidence is the replay's top-decile historical gaps, each with the default-profile decision and counterfactual net edge (E11), plus the live `no_trade`/suppression records — stated as such. Same cycle, WHSK: 30 bps vs ~36 bps → correctly `no_trade`. One-legged (no CEX execution): spread capture, not two-leg arbitrage. LLM cycle 120 s by default (`cycleSeconds`, minimum 30 s) on ~2 s blocks; the daemon re-scans candidates every `scanSeconds` (20 s, *additive*) and a newly opened entry candidate triggers an out-of-schedule LLM cycle (§11.1); candidates valid `candidateTtlSec` = max(120 s, 2 × p95 LLM latency) (§11.1). `ate replay --days 7` (E11, both markets) counts every opportunity taken or rejected over the last week and measures whether gaps persist or close (time-to-close, transient/persistent verdict) |
+| T1.9 | Sustained profitability | **Partial — stated honestly** | §11.3, §4.6 | Default profile (the WBTC market): every candidate entry clears net edge after costs (spread ≥ `minNetEdgeBps`, rebalance ≥ 0, both vs CEX mid); go-to-cash and guard/discretionary exits are exempt (they reduce risk); discretionary entries are judged by their thesis and reported separately; WHSK demo-profile trades waive the edge gate and are labelled `profile=demo`. Realised and CEX-marked P&L since the trader's start (~14:00) incl. fee drag, per market, is stated in the README, including no-trade cycles; WBTC lots are realised only when the pool reverts (the close leg pays the exit fee), and the README states next to the CEX-marked number that the WBTC discount may be structural (§11.3). E11 (in the BUIDL from its first edit): 7-day replay from pool `Swap` logs and HashKey Global klines — candidates fired, rejected on net edge, and counterfactual net edge in bps after fee + impact + half-spread, labelled counterfactual. One day and ~$100 of WBTC turnover cannot prove *sustained* profitability; the pitch leads with bounded autonomy |
 | T1.10 | Strict risk control | **Met — contract-enforced** | §4, §4.6 | Verified `PolicyVault`s: trade/epoch/exposure caps, oracle floor, deviation guard, pause; portfolio guard across both; rogue-agent reverts (E4) |
 | T1.11 | Stop-loss framework | **Met — contract-backed exit path, stated limits** | §4.2 step 7b, §11.4 | Stop-loss / take-profit per market and a portfolio daily-loss breaker in the guard with defined position, entry and mark (§11.4); when the oracle lags, exits use the vault's exit path floored at `min(APRO, 300 s TWAP)`. Stated limits: exits also wait while spot is more than slippage + fee below that floor price — a drop faster than the 300 s TWAP, up to ~5 min — and while the mark disagrees with the TWAP by more than `maxOracleDeviationBps` (anti-manipulation); and if the TWAP is more than `maxExitDiscountBps` (5%) below APRO, APRO is stale (> `maxOracleAge`) or invalid (step 6 precedes 7), the epoch budget is spent (the exit-reserve rule, §11.4 rule 3, keeps a full exit inside the epoch unless price rose since the last entry or the off-chain guard was bypassed), or the vault is paused (a pause freezes the remaining exposure; §11.4). Recorded stop-out whose card shows entry, exit-executable mark (fees included) and threshold (E6) |
 | T1.12 | NL interface: positions and P&L in real time | **Met** | §7.2 `ate_positions`, §11.5, §15.1 Chat | In-app Chat view (and `ate chat`): "How am I doing?" → `ate_positions` tool card with live balances, fills and P&L per vault and for the portfolio, shown live in the demo (E7) |
-| T1.13 | NL strategy adjustment: sizing, frequency, risk appetite | **Met** | §7.2 `ate_strategy_set`, §11.5 | Chat transcript → `strategy_change` journal records (`actor=human, via=chat`, derived from the `chat` token scope, never from the route) with rationale, clamped to on-chain limits; tightening applies at once, loosening needs a Touch ID `ate-approve` signature over the before/after diff (§11.5); every human change triggers an immediate out-of-schedule cycle (E6, E7) |
+| T1.13 | NL strategy adjustment: sizing, frequency, risk appetite | **Met** | §7.2 `ate_strategy_set`, §11.5 | Chat transcript → `strategy_change` journal records (`actor=human, via=chat`, derived from the `chat` token scope, never from the route) with rationale, clamped to on-chain limits; tightening applies at once, loosening (direction table, §11.5) needs a Touch ID `ate-approve` signature over the before/after diff; risk appetite in one phrase — "Be more aggressive / conservative" → `riskProfile` preset (*additive*, §11.5); every human change triggers an immediate out-of-schedule cycle (E6, E7) |
 | T1.14 | NL strategy adjustment: target assets | **Met** | §7.4 `targetAssets`, §11.4, §11.5 | Conversation selects between **WHSK, WBTC and cash**: "Only trade BTC" / "Go to cash on HSK, keep the BTC" → `ate_strategy_set { targetAssets: ["WBTC"] }` (de-selected markets sell down at once as guard exits, §11.4 rule 9; turnover re-allocated); "Go to cash" → `targetAssets: []`; "Target 20% HSK" → per-market allocation. Shown live in the demo with a real sell (E7). WETH is excluded because APRO has no ETH/USD feed (§0.2) |
-| T1.15 | Human controllability in synergy with automation | **Met** | §4.5, §7.3, §11.5 | Kill switch (both vaults) from chat and from the guardian's device off the agent's machine; owner-only limit changes; optional `confirm` mode |
+| T1.15 | Human controllability in synergy with automation | **Met** | §4.5, §7.3, §11.5 | Kill switch (both vaults) from chat and from the guardian's device off the agent's machine; owner-only limit changes; optional `confirm` mode; reuse by a second, unrelated MCP client (Claude Code over stdio) shown on stage (§22.3) |
 
 **Gates:** HSK Chain mainnet contract deployed and verified (§19, E1) — must ship; built on HSK Chain;
 original work in the window (commit history); in-person demo in Mumbai preferred.
@@ -210,7 +224,9 @@ original work in the window (commit history); in-person demo in Mumbai preferred
 
 **Conditional (not claimed until evidenced):** HSP + OKX Agentic Wallet (G-HSP, §9, E8) — whatever
 G-HSP decides, `docs/hsp-readiness.md` and the recorded tool listing or organiser reply are committed by
-07:00 (§21.4); Supra trade-time pricing (v1.0); Safe (v1.0 owner).
+12:00 IST (§21.4); Supra trade-time pricing (v1.0); Safe — Vault-BTC's ownership moves to a Safe on 177
+after E5/E6 are recorded (~17:00, §19 step 9), claimed only once that transfer tx exists (Safe owner by
+default is v1.0).
 
 ---
 
@@ -318,9 +334,10 @@ the sum of the two vaults' limits (§4.6).
 ate/
 ├─ apps/
 │  ├─ desktop/          electron-vite shell; main + preload + renderer
-│  ├─ daemon/           long-running process; signer adapters & chain connection
+│  ├─ daemon/           long-running process; signer adapters & chain connection; `src/approval/`
+│  │                    (`/ui/attach`, `/chat/session`, `/strategy/approve`, TTY fallback) is Lane E's
 │  ├─ worker/           ate-pay (HSP payments) + ate-signal (receiving agent), runs on AWS
-│  ├─ cli/              `ate` command. `src/commands/index.ts` (frozen at 04:30) loads
+│  ├─ cli/              `ate` command. `src/commands/index.ts` (frozen at 10:30) loads
 │  │                    `src/commands/<lane>/*.ts` by directory; each lane owns only its directory:
 │  │                    `c/` init, daemon, mcp, agent, chat, journal, replay, ui · `b/` doctor, unlock, smoke ·
 │  │                    `a/` rogue (thin entry into agents/rogue)
@@ -330,7 +347,7 @@ ate/
 │                       keystore signing; runs on the second device only
 ├─ packages/
 │  ├─ core/             domain types, invariants, policy math (mirrors PolicyVault), strategy-seam
-│  │                    interfaces `src/strategy.ts` (frozen 04:30, §21.4) + Lane B pass-through stub
+│  │                    interfaces `src/strategy.ts` (frozen 10:30, §21.4) + Lane B pass-through stub
 │  ├─ wallet/           keystore, agent signer
 │  ├─ payments/         HSP client, mandate builder, approval state machine, settlement journal
 │  ├─ chain/            viem clients, contract bindings, tx builder
@@ -338,7 +355,8 @@ ate/
 │  ├─ oracle/           APRO reader, pool reader, HashKey Global reader (`hashkey-public-market`), health
 │  ├─ strategy/         signal engine, sizing, stop-loss, circuit breaker
 │  ├─ mcp/              tool schemas + server
-│  ├─ journal/          append-only decision log, migrations (001 frozen at 04:30, §21.4), EAS attester
+│  ├─ journal/          append-only decision log, migrations (001 frozen at 10:30, §21.4); EAS
+│                       attester in `src/attest/` (Lane E's)
 │  └─ ui/               shared components + design tokens
 ├─ agents/
 │  ├─ trader/           reference trader prompt + loop runner (`ate agent run`)
@@ -386,7 +404,7 @@ SSM Session Manager with an instance role limited to SSM, IMDSv2, and encrypted 
 
 ### 4.1 `PolicyVault.sol`
 
-One vault per market per agent, all from the same verified bytecode; v0.1 deploys two —
+One vault per market per agent, all from the same verified source and creation code (runtime bytecode differs only in immutables); v0.1 deploys two —
 **Vault-HSK** (WHSK/USDT) and **Vault-BTC** (WBTC/USDT). **What a vault trades, how it is priced and where
 it swaps are fixed in the constructor and can never change**; only numeric limits are mutable. A new
 pair, oracle or router means a new vault. This removes the most dangerous owner action — repointing the
@@ -416,7 +434,7 @@ interface IAggregatorV3 {   // latestRoundData is called inside try/catch (§4.2
     function decimals() external view returns (uint8);
 }
 
-// Fixed at deployment (constructor), exposed as immutables. Same bytecode, two instances:
+// Fixed at deployment (constructor), exposed as immutables. Same source and creation code, two instances:
 //                Vault-HSK                          Vault-BTC
 //   quoteToken  USDT 0xF1B5…9029 (6 dp)            USDT 0xF1B5…9029 (6 dp)
 //   priceToken  WHSK 0xB210…1Cf1 (18 dp)           WBTC 0x6119…5b14 (8 dp)
@@ -662,7 +680,7 @@ event OwnershipTransferred(address indexed previousOwner, address indexed newOwn
 
 Custom errors carry the reason code and context (e.g. `TradeCap(uint256 notionalUsd, uint256 cap)`,
 `ExitPrice(uint256 twap, uint256 oracle, uint16 maxExitDiscountBps)`) so Blockscout decodes reverted
-transactions for judges. The error set and the `IPolicyVault` ABI are frozen at 04:30 IST (§21.4) and
+transactions for judges. The error set and the `IPolicyVault` ABI are frozen at 10:30 IST (§21.4) and
 exported as JSON for the daemon and the TS mirror.
 
 ### 4.4 Invariants (must hold under fuzzing)
@@ -706,7 +724,7 @@ pool are immutable; migration is `withdraw` → new vault. Ownership transfer is
 **Owner operations never happen on the agent's machine.** The owner uses `ate-owner`, a separate CLI run
 on a different machine (or a Safe), which takes **typed arguments** (`ate-owner set-limits
 --vault btc --max-epoch-usd 400 …`), reads current state from its own pinned RPC list, prints a full before/after
-diff, and signs with a Ledger (`--ledger`, tested on 177 at 04:00 IST) or, if Ledger signing on 177 fails,
+diff, and signs with a Ledger (`--ledger`, tested on 177 at 10:30 IST) or, if Ledger signing on 177 fails,
 a `cast wallet` encrypted keystore created and used only on that second device (`--account owner`). The
 daemon may *suggest* a change in plain words ("user asked to raise the daily cap to $800"); it never
 produces calldata for the owner to sign. The Safe is deployed on 177 but its hosted UI is not; Safe
@@ -785,7 +803,9 @@ same `A = max(maxOracleDeviationBps, 250)`.
 
 **Pitch card.** Spoken: **one number** — "the stolen key can never withdraw a cent, and the contract caps
 what bad trades can cost at $51.50 a day, about 18% of this demo wallet" (both vaults, all paths, while
-APRO is live). On the card and in Q&A, said exactly this way: "While APRO
+APRO is live). **The pitch card shows three items only:** "Key can never withdraw · ≤ $51.50 per UTC day
+of execution loss across both vaults, every path, while APRO is live (~18%) · exposure ≤ $150 per vault",
+with the footnote below. **The Q&A *numbers* card** (not the pitch) says, exactly this way: "While APRO
 is live: execution loss across both vaults ≤ $51.50 per UTC day on every path (≤ $103 over any rolling
 24 h); ≤ $26.50 per UTC day on the normal path (≤ $53 rolling); oracle-lag exits add ≤ $7.50 per vault
 per episode, inside those totals. Per vault, half of each. If APRO is wrong: per vault ≤ $250 of USDT
@@ -946,7 +966,7 @@ V3 v1.0: compute from `sqrtPriceX96` and active `liquidity()` within the current
 | `ate_decide` | record | Record a decision not to trade (`no_trade`), with rationale and the candidate it rejects |
 | `ate_execute` | **chain** | Re-run the strategy guard (§11.4 rules 2–9) at execute time, re-quote, pre-flight, sign with agent key through `TxQueue`, submit an approved proposal to its market's vault; then EAS-attest it (§13). A proposal invalidated by a guard exit or breaker (§11.4) returns `ATE_STRATEGY_BLOCKED` |
 | `ate_positions` | no | Per vault and for the portfolio: balances, exposure, average-cost basis, realised, CEX-marked and exit-executable unrealised P&L, open spread-revert lots with their own realised P&L (reported alongside, never summed, §11.4), epoch budget and exit reserve, turnover left, AI scoreboard (acts / vetoes + bps saved / discretionary), uptime, cycle and HSKSwap trade counts, routed USD |
-| `ate_strategy_get` / `ate_strategy_set` | **config** | Read/adjust target assets, size, frequency, risk, stop-loss, target allocation, turnover budget, re-entry cooldown — per market or portfolio-wide, clamped to on-chain limits. `chat`/`ui` scope sets the human anchors; `agent` scope may change only `entrySpreadBps`, `minNetEdgeBps`, `tradeSizeUsd`, `cycleSeconds`, each within ×0.5–×1.5 of the human anchor (journalled `actor=agent`). Human-scope **loosening** changes return `ATE_APPROVAL_REQUIRED` until signed with `ate-approve` (§11.5); every applied human change triggers an out-of-schedule cycle |
+| `ate_strategy_get` / `ate_strategy_set` | **config** | Read/adjust target assets, size, frequency, risk, stop-loss, target allocation, turnover budget, re-entry cooldown — per market or portfolio-wide, clamped to on-chain limits. `chat`/`ui` scope sets the human anchors; `agent` scope may change only `entrySpreadBps`, `minNetEdgeBps`, `tradeSizeUsd`, `cycleSeconds`, each within ×0.5–×1.5 of the human anchor (journalled `actor=agent`). Human-scope **loosening** changes (direction table, §11.5) return `ATE_APPROVAL_REQUIRED` until signed with `ate-approve`; `riskProfile` (*additive*) sets risk appetite in one field; every applied human change triggers an out-of-schedule cycle |
 | `ate_journal_read` | no | Recent decisions with reasons ("why did you sell at 3am?"); agent-authored text (rationale, thesis) is returned wrapped in `<untrusted_agent_text>` (§11.5) |
 | `ate_signal_buy` | **payment** | Only if G-HSP: buy a premium signal from the signal agent via HSP (§9); requires two human approvals; asynchronous, never blocks a trade |
 | `ate_pause` | **chain** | Kill switch — signs `pause()` on **both** vaults with the agent key (the vault lets the agent pause); no owner key involved; also locks the daemon (§8.3). The guardian's independent pause runs off the agent's machine (§4.1) |
@@ -1044,7 +1064,7 @@ priceToken when `side=sell` — WHSK 18 dp, WBTC 8 dp). Every quote/proposal res
 // ate_strategy_set
 {
   "name": "ate_strategy_set",
-  "description": "Adjust trading strategy. targetAssets selects which markets hold inventory (others sell down to cash; [] = all cash). Per-market fields apply to patch.market, or to every enabled market if market is omitted. Values outside on-chain policy are clamped and the response says so. Cannot change on-chain policy. Called with a chat/ui scope it sets the human anchors: tightening changes apply at once; loosening changes (raise stopLossBps, dailyLossLimitUsd, maxPositionUsd, maxDailyTurnoverUsd, maxPortfolioExposureUsd, discretionary limits, or add a target asset / enable a market) return ATE_APPROVAL_REQUIRED with a rendered before/after diff and apply only after an ate-approve signature over it. Called with the agent scope only entrySpreadBps, minNetEdgeBps, tradeSizeUsd and cycleSeconds may change, each clamped to ×0.5–×1.5 of the human anchor, and the record is actor=agent.",
+  "description": "Adjust trading strategy. targetAssets selects which markets hold inventory (others sell down to cash; [] = all cash). Per-market fields apply to patch.market, or to every enabled market if market is omitted. Values outside on-chain policy are clamped and the response says so. Cannot change on-chain policy. Called with a chat/ui scope it sets the human anchors: tightening changes apply at once; loosening changes — anything that makes the agent larger or more active: raise stopLossBps, dailyLossLimitUsd, maxPositionUsd, maxDailyTurnoverUsd, maxPortfolioExposureUsd, tradeSizeUsd, the discretionary limits, or rebalanceTargetPct (to any value above the current one and above 0); lower entrySpreadBps, minNetEdgeBps, cycleSeconds, reentryCooldownSec or rebalanceBandPct; change takeProfitBps; enable a market or add a target asset; a riskProfile resolves to its field values and is judged field by field — return ATE_APPROVAL_REQUIRED with a rendered before/after diff and apply only after an ate-approve signature over it. A patch with any loosening field is loosening as a whole. Called with the agent scope only entrySpreadBps, minNetEdgeBps, tradeSizeUsd and cycleSeconds may change, each clamped to ×0.5–×1.5 of the human anchor, and the record is actor=agent.",
   "inputSchema": {
     "type": "object",
     "required": ["patch", "rationale"],
@@ -1069,7 +1089,8 @@ priceToken when `side=sell` — WHSK 18 dp, WBTC 8 dp). Every quote/proposal res
           "maxPortfolioExposureUsd": { "type": "string", "pattern": "^[0-9]+(\\.[0-9]{1,2})?$", "description": "Portfolio off-chain exposure cap; clamped to ≤ the sum of the vaults' maxExposureUsd" },
           "reentryCooldownSec":  { "type": "integer", "minimum": 0, "maximum": 86400 },
           "discretionaryTradesPerDay": { "type": "integer", "minimum": 0, "maximum": 3, "description": "Human scopes only; 0 disables the discretionary lane" },
-          "discretionaryUsd":    { "type": "string", "pattern": "^[0-9]+(\\.[0-9]{1,2})?$", "description": "Human scopes only; clamped to ≤ 10" }
+          "discretionaryUsd":    { "type": "string", "pattern": "^[0-9]+(\\.[0-9]{1,2})?$", "description": "Human scopes only; clamped to ≤ 10" },
+          "riskProfile":         { "type": "string", "enum": ["conservative", "balanced", "aggressive"], "description": "ADDITIVE (v0.9, optional). Human scopes only. Preset that expands to tradeSizeUsd, entrySpreadBps, minNetEdgeBps, stopLossBps and maxPositionUsd per §11.5; explicit fields in the same patch win; clamped to on-chain limits; loosening judged field by field" }
         },
         "additionalProperties": false
       },
@@ -1096,7 +1117,7 @@ priceToken when `side=sell` — WHSK 18 dp, WBTC 8 dp). Every quote/proposal res
 `ate_decide` takes `{ decision: "no_trade", market, candidateId?, reason: "no_signal" | "llm_veto" |
 "awaiting_signal" | "guard" | "timeout", rationale }` (`timeout` is written by the runner when it kills a
 run, §11.1; daemon suppression records use `guard`). `ate_pause` takes `{ rationale }`. `ate_signal_buy` takes
-`{ offerId, rationale }`. The JSON Schemas for all tools are frozen at 04:30 IST in
+`{ offerId, rationale }`. The JSON Schemas for all tools are frozen at 10:30 IST in
 `packages/mcp/schemas/` (§21.4).
 
 ### 7.5 Response envelope
@@ -1230,7 +1251,7 @@ is unknown until `get_chain_config` runs.
 
 **Must-build** (§21.1 item 11): built in full by Lane E either way, tested on recorded HSP responses.
 **Live use is optional**: it goes live only if gate G-HSP (§21.4) is go. Nothing in §4, §7.3 or §11
-depends on it. **No-go deliverable (pre-registered):** whatever G-HSP says, by 07:00 Lane E commits
+depends on it. **No-go deliverable (pre-registered):** whatever G-HSP says, by 12:00 Lane E commits
 `docs/hsp-readiness.md` — each of the eight HSP tools mapped to the §9.4 state-machine transition that
 calls it and the recorded-response test that covers it — plus the recorded QA tool listing or, if access
 never arrived, the organiser's written reply. The premium signal is for the WHSK market only.
@@ -1380,13 +1401,18 @@ Source: official hackathon guide (revision 2026-10-30), summarised in
 - **Every request requires a bearer token**, except step 1 of `/ui/attach`, which only issues a nonce.
   `Origin`, if present, must be `ate://local`; requests with a
   browser origin are rejected. Origin is never a substitute for the token.
-- Token scopes: `agent` (MCP trading tools; trader runner, `ate mcp serve`, external agents), `chat`
+- Token scopes (`rogue` is *additive*, below): `agent` (MCP trading tools; trader runner, `ate mcp serve`, external agents), `chat`
   (minted by the daemon per Chat session, TTL = session, 30 min idle; passed only in the chat runner's
   environment and MCP config, never written to disk; the MCP server enforces the §11.5 allowlist for it),
   `ui` (main process only, via spawn pipe or `/ui/attach`; may open Chat sessions and send `/chat`
   turns), `session` (a handle for one `ate chat` session, issued by `POST /chat/session` only against an
   `ate-approve` signature over a daemon-issued session nonce; it authorizes `/chat` turns for that session and nothing else) and `view` (read-only
-  fallback page, one-time token printed by `ate ui`). The journal `actor` is derived from the scope that
+  fallback page, one-time token printed by `ate ui`). **`rogue` (*additive*, v0.9)** exists only when the
+  daemon was started with `--allow-rogue`: one token minted at daemon start and printed once to the
+  daemon's controlling TTY (never to `runtime.json`, a file, a log or `/events`); it reaches only the
+  `TxQueue` raw-broadcast route (§22.3), which accepts only calldata whose `to` is one of the two vaults
+  and whose selector is `execute`, `withdraw`, `setLimits` or `pause`, and journals every call
+  `profile=rogue`. Any other scope on that route → 403. The journal `actor` is derived from the scope that
   made the call. No scope can perform owner operations, because the daemon has no owner key.
 - 32 KB body limit; 60 req/min per tool.
 - WebSocket `/events` streams `trade.executed`, `trade.rejected`, `policy.violation`, `oracle.health`,
@@ -1430,12 +1456,15 @@ unwanted request, and malware holding the user's login password. Both are bounde
 payment cap (§9.5) and, for trades, by the vault (§4.6). Signed `config.json` is v1.0; in v0.1 the daemon
 refuses RPC URLs not in the list pinned by `ate init`.
 
-**v0.1 degradation — TTY one-time code (only if `ate-approve` is still red at 10:30, §21.4).** Started
-with `--approval-fallback=tty`, the daemon accepts, for `/ui/attach`, `/chat/session` and pending
+**v0.1 degradation — TTY one-time code (only if `ate-approve` is still red at 14:30, §21.4).** The
+mainnet daemon is started once (§19 step 7, ~13:00) with `--approval-fallback=armed` (*additive* value),
+which keeps TTY codes **disabled** until the lead types `approval-fallback enable` on the daemon's own
+controlling TTY (stdin; there is no HTTP route for it) — **no restart, so no `ate unlock`, no gap in
+cycling and no input to the trader** (G6 and the E12 recording stay continuous). Once enabled, the daemon accepts, for `/ui/attach`, `/chat/session` and pending
 loosening strategy changes **only**, a one-time 8-digit code printed solely to the daemon's controlling
 TTY (never to a file, log, `/events` or the journal), TTL 60 s, single use, 5 attempts per code; each use
 is journalled `approval=tty`. Payments, `confirm`-mode trades and RPC/config changes never accept it. It
-switches itself off (and the flag is refused) once `ate-approve` passes its §18.2 test on that machine.
+switches itself off (and `enable` is refused) once `ate-approve` passes its §18.2 test on that machine.
 Weaker than Touch ID — a same-user process that can read that terminal can obtain a code — but it yields
 only `ui`/`session` scope and human-anchor strategy edits, all inside §4.6; stated in SECURITY.md.
 
@@ -1476,17 +1505,25 @@ then requires it, **every cycle**, to (1) evaluate every candidate for act / vet
 explicitly evaluate the discretionary lane, and to record in the cycle's `ate_decide` or `ate_propose`
 rationale why it did *not* veto, size down or originate when it didn't. This makes the DoD's veto and
 discretionary evidence a routine output of the loop rather than luck, and it is still autonomous: there
-is no per-trade human input. A 10:45 lead check backs it up (§21.4).
+is no per-trade human input. A 14:45 lead check backs it up (§21.4).
 
 **Cycle rules (normative).** Cycles never overlap: the runner skips a tick (journalled in the cycle count,
 not as a decision) while the previous LLM run is active, and an out-of-schedule cycle (`POST /cycle`,
 §10.1) obeys the same lock. A run still active after **90 s** is killed and the runner writes
 `ate_decide { reason: "timeout" }` (`engine=rules`); its open proposals expire normally and their
 reservations are released. **Candidate TTL** `candidateTtlSec = max(120 s, 2 × p95 LLM run latency)`,
-measured over the 08:00–09:00 `--dry-run` cycles on the real MCP (decide/propose, never execute) and
+measured over the 13:00–13:45 `--dry-run` cycles on the real MCP (decide/propose, never execute) and
 recorded in `deployments/177.json`; the 90 s kill keeps every run inside it. Proposals keep their 120 s TTL
 (propose and execute happen in the same run). Tests: overlapping tick skipped; 90 s kill → `timeout`
 record; TTL read from `deployments/177.json` (§18.2).
+
+**Deterministic scan (*additive*, v0.9).** The daemon re-reads market state and recomputes candidates and
+`suppressed` entries every `scanSeconds` (default 20 s; one Multicall3 read for both markets, §18.1),
+independently of the LLM cadence. When a scan finds an **entry candidate on a market that had none in
+the previous scan** (a gap just opened), it triggers an out-of-schedule LLM cycle through the same path
+as `POST /cycle` (≤ 1 per 30 s, no-overlap rule). Guard exits already act without the LLM. This is how
+"real time" is met without running the LLM every block. Test: a fixture gap opening between ticks →
+one out-of-schedule cycle within `scanSeconds` + 30 s.
 
 | The daemon (deterministic) | The LLM (judgement) |
 |---|---|
@@ -1558,7 +1595,7 @@ sell notional at `Pcap = max(P, T)` (§4.2 step 7b); a chunk sized at `P` alone 
 
 On WHSK the impact term does not bind below ~$1k per trade. On WBTC at 03:50 it allows up to ~$190 per
 trade (impact ≈ 37 bps at `edgeBps/3`), so `tradeSizeUsd` ($25) binds; each $25 buy moves the pool ~10
-bps toward the CEX, so the WBTC daily allocation (≤ $100, §11.4 rule 3) closes ~40 of the 112 bps. P&L
+bps toward the CEX, so the WBTC daily allocation (≤ $100, §11.4 rule 3), spread over ~2 h by `minEntryIntervalSec` (rule 7), closes ~40 of the 112 bps. P&L
 is reported two ways per lot: **marked at the CEX mid** (the captured gap, ≈ +78 bps per lot at 03:50)
 and **exit-executable** (what selling now would realise, ≈ −60 bps on a fresh lot). The close leg turns
 the first into realised P&L only if the pool reverts toward the CEX; both numbers are reported, never
@@ -1586,7 +1623,7 @@ it is exempt from the edge gate and the turnover budget (it still counts on-chai
 Neither generator is a two-leg arbitrage (ATE does not trade on the CEX). P&L will be small and is
 reported honestly, per market, including no-trade cycles.
 
-**Replay (must-ship, E11, run 06:30–09:00 so its headline is in the 09:15 BUIDL).** `ate replay --days 7`
+**Replay (must-ship, E11, run 11:00–13:00 so its headline is in the BUIDL's first edit).** `ate replay --days 7`
 rebuilds both pools' state from `Swap` logs (via Blockscout, batched) and HashKey Global 1 m klines
 (skill endpoint `/quote/v1/kline`, HSKUSDT and BTCUSDT), runs the generators with the default profile at
 every cycle, and prints per market: pool volume, cycles evaluated, candidates fired per generator,
@@ -1678,7 +1715,12 @@ Soft layer (strategy + portfolio guard in the daemon, **at propose and again at 
    **regardless** (flatten blocked by `ERR_EPOCH_CAP`, stale/invalid APRO or `ERR_EXIT_PRICE` cannot keep
    the vaults unpaused), journalling any unflattened exposure, then notify the user (Chat view,
    `/events`). Test (§18.2): exits blocked → pause after the bound.
-7. **Frequency:** at most one entry per market per `cycleSeconds`; on-chain cooldown is the hard floor.
+7. **Frequency:** at most one entry per market per `cycleSeconds`, **and** (*additive*, v0.9) at least
+   `minEntryIntervalSec` between entries on the same market (default WBTC **1800**, WHSK **0** = the cycle
+   rule only), so the WBTC $100 share spreads over ~2 h of spread-revert buys instead of four
+   back-to-back cycles; a suppressed entry is listed in `suppressed` with `cause=entry_interval`. Exits are
+   never throttled. On-chain cooldown is the hard floor. Test: two WBTC candidates 120 s apart → the second
+   suppressed `cause=entry_interval` (§18.2).
 8. **Discretionary lane (portfolio):** an `autonomous` proposal with `origin=discretionary` needs a
    `thesis` (≥ 40 chars: why, invalidation, exit plan), notional ≤ `discretionaryUsd` (default and v0.1
    maximum **$10**) and fewer than `discretionaryTradesPerDay` (default and v0.1 maximum **3**, across both
@@ -1717,12 +1759,28 @@ from the `chat` scope; an `agent`-token call can never produce it) and the user'
 also reset the human anchors the trader's own tuning is clamped to (§7.2). If no LLM is configured or it fails, a deterministic intent matcher handles
 the five intents below marked ★ and labels its replies `engine=rules`.
 
-**Loosening needs a signature (confused-deputy defence).** Chat-scope changes that **loosen** risk —
-raise `stopLossBps`, `dailyLossLimitUsd`, `maxPositionUsd`, `maxDailyTurnoverUsd`,
-`maxPortfolioExposureUsd` or the discretionary limits, enable a market or add a target asset — return
-`ATE_APPROVAL_REQUIRED` with a rendered before/after diff; main (or `ate chat`) invokes `ate-approve`
-over that diff and posts it to `/strategy/approve` (TTL 60 s; TTY code only in the §10.1 degradation).
-**Tightening** changes (pause, go to cash, de-select, lower size, tighter stop) apply immediately. Every
+**Loosening needs a signature (confused-deputy defence).** Chat- or `ui`-scope changes that **loosen** —
+make the agent larger or more active, per the direction table below — return `ATE_APPROVAL_REQUIRED`
+with a rendered before/after diff; main (or `ate chat`) invokes `ate-approve` over that diff and posts it
+to `/strategy/approve` (TTL 60 s; TTY code only in the §10.1 degradation). **Tightening** changes apply
+immediately. A patch with any loosening field is loosening as a whole; a `riskProfile` is expanded to
+its fields first and judged field by field.
+
+| Field | Loosening (needs `ate-approve`) | Tightening (applies at once) |
+|---|---|---|
+| `stopLossBps`, `dailyLossLimitUsd`, `maxPositionUsd`, `maxDailyTurnoverUsd`, `maxPortfolioExposureUsd`, `tradeSizeUsd`, `discretionaryTradesPerDay`, `discretionaryUsd` | raise | lower |
+| `rebalanceTargetPct` | raise to any value > current and > 0 | lower, or 0 (go to cash) |
+| `entrySpreadBps`, `minNetEdgeBps`, `cycleSeconds`, `reentryCooldownSec`, `rebalanceBandPct` | lower | raise |
+| `takeProfitBps` | any change | — |
+| `enabled` / `targetAssets` | enable a market / add a target asset | disable / remove (sells down) |
+| `riskProfile` (*additive*) | judged per expanded field | judged per expanded field |
+| `ate_pause` | — | always |
+
+Test (§18.2 MCP): one case per field and direction. **`riskProfile` presets (*additive*, v0.9):**
+`conservative` = `tradeSizeUsd 10, entrySpreadBps 90, minNetEdgeBps 25, stopLossBps 200, maxPositionUsd
+75`; `balanced` = the §16 defaults (`25, 60, 15, 300, 150`); `aggressive` = `50, 45, 10, 400, 150`
+(`maxPositionUsd` clamped to the vault's `maxExposureUsd`). Applied to `patch.market` or every enabled
+market; on a demo-profile market only `stopLossBps` and `maxPositionUsd` apply. Every
 tool result that carries agent-authored text (journal rationales, theses, candidate reasons) reaches the
 chat agent wrapped in `<untrusted_agent_text>…</untrusted_agent_text>`, and the chat prompt treats it as
 data. **Scope:** stop-loss / take-profit changes without a market ("stop out at 2%") are not applied until the
@@ -1734,6 +1792,7 @@ timing:** every applied human change triggers an immediate out-of-schedule trade
 |---|---|
 | ★ "How am I doing today?" | `ate_positions` → per vault and portfolio: realised / CEX-marked / exit-executable P&L, exposure, entry vs mark, budget and turnover left, AI scoreboard |
 | "Halve the size and only trade if the spread is over 1%" | `ate_strategy_set { tradeSizeUsd, entrySpreadBps: 100 }` (every enabled market) |
+| "Be more aggressive" / "Be more conservative" | `ate_strategy_set { riskProfile: "aggressive" }` (loosening fields: Touch ID) / `{ riskProfile: "conservative" }` (tightening: applies at once) |
 | ★ "Be more conservative, stop out at 2%" | Asks "HSK, BTC or both?", then `ate_strategy_set { market, stopLossBps: 200 }` per answer (tightening: applies at once) |
 | "Stop out HSK at 0.5%" (E6) / "Back to a 3% stop on HSK" | `ate_strategy_set { market: "hsk-dex:WHSK/USDT:3000", stopLossBps: 50 }` / `{ market: "hsk-dex:WHSK/USDT:3000", stopLossBps: 300 }` (loosening: Touch ID) |
 | ★ "Go to cash" / "Go to cash on HSK, keep the BTC" / "Only trade BTC" / "Target 20% HSK" | `ate_strategy_set { targetAssets: [] }` / `{ targetAssets: ["WBTC"] }` (both phrasings; immediate guard sell-down) / `{ market: "hsk-dex:WHSK/USDT:3000", rebalanceTargetPct: 20 }` |
@@ -1748,7 +1807,7 @@ timing:** every applied human change triggers an immediate out-of-schedule trade
 SQLite (`better-sqlite3`) at `~/.ate/ate.db` (desktop) and `/var/lib/ate/pay.db` (worker), WAL mode.
 Numbered SQL migrations in a transaction, with a `schema_version` table. Migration `001_init.sql` (all
 tables below) is generated from this section by the freeze agent and reviewed and frozen by the lead at
-04:30 IST before lanes branch (§21.4); later changes are new
+10:30 IST, while lanes build against them (§21.4); later changes are new
 numbered migrations owned by Lane B.
 
 ```sql
@@ -2048,17 +2107,20 @@ scope cut: the Electron app with all six v0.1 views still ships (§21.1 item 9).
       "discretionaryTradesPerDay": 3, "discretionaryUsd": "10",   // v0.1 maxima; user may lower
       "agentTuneRange": [0.5, 1.5],                                 // agent-scope clamp vs human anchors
       "runTimeoutSec": 90,                                          // §11.1 kill → no_trade(timeout)
+      "scanSeconds": 20,                                            // ADDITIVE v0.9, optional: deterministic candidate re-scan (§11.1)
       "candidateTtlSec": "from deployments/177.json"                // max(120, 2 × p95 LLM latency)
     },
     "markets": {
       "hsk-dex:WHSK/USDT:3000": { "profile": "default", "generators": ["spread-revert", "rebalance"],
         "tradeSizeUsd": "25", "maxPositionUsd": "150", "cycleSeconds": 120,
         "entrySpreadBps": 60, "minNetEdgeBps": 15, "rebalanceTargetPct": 40, "rebalanceBandPct": 10,
-        "stopLossBps": 300, "takeProfitBps": 150, "reentryCooldownSec": 14400 },
+        "stopLossBps": 300, "takeProfitBps": 150, "reentryCooldownSec": 14400,
+        "minEntryIntervalSec": 0 },        // ADDITIVE v0.9, optional (§11.4 rule 7)
       "hsk-dex:WBTC/USDT:3000": { "profile": "default", "generators": ["spread-revert"],
         "tradeSizeUsd": "25", "maxPositionUsd": "150", "cycleSeconds": 120,
         "entrySpreadBps": 60, "minNetEdgeBps": 15, "rebalanceTargetPct": null, "rebalanceBandPct": 10,
-        "stopLossBps": 300, "takeProfitBps": 150, "reentryCooldownSec": 14400 }
+        "stopLossBps": 300, "takeProfitBps": 150, "reentryCooldownSec": 14400,
+        "minEntryIntervalSec": 1800 }      // ADDITIVE v0.9, optional: spreads the $100 WBTC share over ~2 h
     }
   },
   "chat":  { "runner": "claude -p", "prompt": "agents/chat/PROMPT.md", "fallback": "rules",
@@ -2074,13 +2136,16 @@ scope cut: the Electron app with all six v0.1 views still ships (§21.1 item 9).
     "signalPriceUsd": "0.02", "perPaymentCapUsd": "0.10", "dailyCapUsd": "1.00"
   },
   "daemon": { "autoLockMinutes": 15, "port": 0, "gasAlarmHsk": "2", "attestFloorHsk": "1",
-              "approvalFallback": "off" },   // "tty" only per §10.1 degradation; refused once ate-approve passes
+              "approvalFallback": "off" },   // "off" | "armed" (ADDITIVE v0.9: codes off until enabled on the daemon TTY, no restart) | "tty"; §10.1; refused once ate-approve passes
   "supra":  { "storage": "0x58e158c74DF7Ad6396C0dcbadc4878faC9e93d57", "use": "entry-gate+crosscheck",
               "maxDisagreeBps": 250, "maxAgeSec": 3600 },   // §5.1; inactive for unlisted/stale pairs
   "ui": { "theme": "dark", "reducedMotion": false }
 }
 ```
 
+**Additive keys (v0.9):** `strategy.portfolio.scanSeconds` (default 20), per-market
+`minEntryIntervalSec` (default 0; WBTC 1800) and the `daemon.approvalFallback` value `"armed"` are
+optional with defaults, so a v0.8 config still validates; the Zod schema adds them, nothing is renamed.
 Precedence: CLI flag > env (`ATE_*`) > config file > defaults. Secrets never live in this file. The second
 RPC is a fallback candidate and must pass `ate doctor` (chain ID, head freshness) before use.
 For each entry in `vaults`, `venues.hskdex.router`, `factory` and the matching market's `pool`, `oracle`,
@@ -2115,7 +2180,7 @@ cannot be given the demo profile in v0.1. Each market's turnover share is clampe
 | T14 | Local process hits forwarded worker port | Unauthorized payment | Worker token + Secure Enclave–signed, digest-bound approvals |
 | T15 | AWS operator credentials stolen, or the agent's Mac compromised while an operator AWS session is live | Payer funds (≤ $1.00), OKX session | MFA 1 h sessions, SSM logging, payer balance ≤ daily cap; vault unaffected. Residual, stated in §3.4/§8.1: no Touch ID is needed on this path |
 | T16 | Same-user malware edits config/journal | Bad data to guard/UI; forged history | Signed config (v1.0; pinned RPC list in v0.1); append-only triggers; hash chain anchored on-chain by every `proposalId` and EAS attestation (edits before the last anchor detectable); on-chain limits unaffected |
-| T17 | Prompt injection via chat text, CEX data or journal content (confused deputy: agent-written rationale read by the chat agent) | Agent changes strategy or target assets, pauses, or spends its discretionary lane | Chat runner started with a tool **allowlist** (`mcp__ate__*` only; no built-ins, no skills — tested) and the MCP server enforces the `chat`-scope allowlist (no shell, no file access, no `ate_execute`); agent-authored text wrapped in `<untrusted_agent_text>`; **loosening changes need an `ate-approve` signature over the rendered diff** (§11.5); trader tuning clamped ×0.5–×1.5 of human anchors; discretionary lane ≤ 3 × $10/day; strategy clamped to on-chain limits; every change journalled. Worst case without a Touch ID: a pause, go-to-cash or a *tighter* / less active agent, inside §4.6 |
+| T17 | Prompt injection via chat text, CEX data or journal content (confused deputy: agent-written rationale read by the chat agent) | Agent changes strategy or target assets, pauses, or spends its discretionary lane | Chat runner started with a tool **allowlist** (`mcp__ate__*` only; no built-ins, no skills — tested) and the MCP server enforces the `chat`-scope allowlist (no shell, no file access, no `ate_execute`); agent-authored text wrapped in `<untrusted_agent_text>`; **loosening changes need an `ate-approve` signature over the rendered diff** (§11.5); trader tuning clamped ×0.5–×1.5 of human anchors; discretionary lane ≤ 3 × $10/day; strategy clamped to on-chain limits; every change journalled. Worst case without a Touch ID: a pause, go-to-cash or a *tighter* / less active agent, inside §4.6 — accurate because every field that makes the agent larger or more active is loosening (§11.5 direction table, one test per field and direction) |
 | T18 | Sandwich / back-run of honest trades | Worse fills | Honest `minAmountOut = max(floor, quote × 0.995)` re-quoted at execute (§4.2); ≤ ~50 bps + fee per honest trade; $5–$100 clips too small to pay a sandwich |
 | T19 | Nonce collisions or a stuck tx between executes, exits, attests and pause on either vault | Stuck or dropped exit or pause | Single `TxQueue`, depth-1 (one agent-key tx in flight), priority (pause > exits > executes > attests) at every nonce; same-nonce replacement after 20 s at `max(original × 1.25, suggested)` fees; a pause or guard exit replaces a pending execute/attest at its nonce, and is re-signed at the next nonce if the displaced tx mines first (§7.1) |
 | T20 | WBTC loses its BTC peg, or the WBTC pool's TWAP is unavailable (low observation cardinality) | Mis-valued exposure; buys and exits on Vault-BTC blocked | Peg is a stated §4.6 assumption, `doctor` warns when the pool disagrees with both APRO and the CEX; cardinality is 240 (read Nov 2) and `doctor` re-checks ≥ 64 before deploy and the demo (§19); `check()` pre-filter withholds deviation-blocked buys (§11.3); exposure ≤ $150 on that vault |
@@ -2184,17 +2249,17 @@ attestations deferred).
 | Policy math TS ↔ Sol | vitest + forge | — (Demo Day: 200 cases, both shapes) | 500 |
 | Adapter | vitest on Anvil fork of 177 | one quote vs fork execution (in the fork smoke) | Demo Day: within 1 bps over 50 sizes; in CI |
 | Journal | vitest | `UPDATE`/`DELETE` abort; chain recomputes; `proposalId` == record hash; every id derivable from its hash; a second record with the same `prev_hash` is rejected (`UNIQUE`); concurrent writers serialise via `BEGIN IMMEDIATE` | — |
-| MCP | vitest + MCP Inspector CLI | schemas, envelope, error codes (incl. `ATE_MARKET_UNKNOWN`), candidate binding (required / mismatch / expired), discretionary lane (thesis, count, size), **propose buy → guard exit → execute rejected `ATE_STRATEGY_BLOCKED`**, loosening change → `ATE_APPROVAL_REQUIRED` until signed, tightening applies at once, agent text wrapped `<untrusted_agent_text>`, deviation/`oracle_disagree` buys listed in `suppressed`, not emitted, reservations (two concurrent proposals cannot exceed turnover), scope tool sets (`chat` → `ATE_TOOL_NOT_ALLOWED` on `ate_execute`), `actor` from scope, agent tuning clamp; stdio proxy | — |
-| Portfolio guard | vitest | turnover split among target assets and clamped to `maxEpochUsd − maxExposureUsd`; portfolio exposure cap; **exit reserve: start at $150 exposure, close $100, re-buy → blocked once the reserve would be breached**; `targetAssets` de-selection → immediate `guard_exit` sell-down (turnover-exempt, no re-entry lock); breaker flattens, and **with exits blocked pauses both vaults after 2 cycles / 5 min**; lots: every sell consumes spread-revert lots FIFO, position P&L stays average-cost; token caps sized at `max(P, T) × 0.99` | — |
+| MCP | vitest + MCP Inspector CLI | schemas, envelope, error codes (incl. `ATE_MARKET_UNKNOWN`), candidate binding (required / mismatch / expired), discretionary lane (thesis, count, size), **propose buy → guard exit → execute rejected `ATE_STRATEGY_BLOCKED`**, loosening change → `ATE_APPROVAL_REQUIRED` until signed, **one case per field and direction of the §11.5 table** (incl. `riskProfile` expansion and mixed patches), tightening applies at once, `rogue` scope: an `agent` token on the raw path → 403, a foreign `to` or selector → refused, agent text wrapped `<untrusted_agent_text>`, deviation/`oracle_disagree` buys listed in `suppressed`, not emitted, reservations (two concurrent proposals cannot exceed turnover), scope tool sets (`chat` → `ATE_TOOL_NOT_ALLOWED` on `ate_execute`), `actor` from scope, agent tuning clamp; stdio proxy | — |
+| Portfolio guard | vitest | `minEntryIntervalSec`: two WBTC candidates 120 s apart → second suppressed `cause=entry_interval`; `scanSeconds`: a gap opening between ticks → one out-of-schedule cycle; turnover split among target assets and clamped to `maxEpochUsd − maxExposureUsd`; portfolio exposure cap; **exit reserve: start at $150 exposure, close $100, re-buy → blocked once the reserve would be breached**; `targetAssets` de-selection → immediate `guard_exit` sell-down (turnover-exempt, no re-entry lock); breaker flattens, and **with exits blocked pauses both vaults after 2 cycles / 5 min**; lots: every sell consumes spread-revert lots FIFO, position P&L stays average-cost; token caps sized at `max(P, T) × 0.99` | — |
 | Strategy seam | vitest, both lanes | Lane B's pass-through stub (rules 1–3) and Lane C's implementation pass the same `strategy.ts` contract fixtures (generate, check at propose/execute, reserve/release, onGuardExit) | — |
 | Runner | vitest with a stub LLM | overlapping tick skipped; 90 s kill → `no_trade(timeout)`; `candidateTtlSec` read from `deployments/177.json`; `strategy_change` → out-of-schedule cycle ≤ 1 per 30 s; `ate smoke` binds its `smoke` candidate in `autonomous` mode with no approval path | — |
 | TxQueue | vitest on Anvil | concurrent execute + exit + attest + pause across both vaults: no nonce gap or reuse; depth-1; priority order; **stuck attest → pause replaces it at the same nonce** with fees `max(original × 1.25, suggested)`; **displaced tx mined first → pause re-signed at the next nonce**; unmined 20 s → same-nonce replacement | — |
 | Chat | vitest with a stub runner | allowlist enforced server-side; **runner's reported tool list == `mcp__ate__*` allowlist** (no built-ins); five ★ intents via rules fallback; strategy change journalled `actor=human, via=chat`; unscoped stop change asks "HSK, BTC or both?" before applying | Playwright |
-| `ate-approve` | XCTest + vitest | payload-derived prompt text; signature verifies against pinned key; key item ACL rejects an unsigned reader; `/ui/attach` issues a `ui` token only for a valid signature over a fresh nonce; strategy-diff payload signs and applies; TTY-code fallback refused once this test passes | — |
+| `ate-approve` | XCTest + vitest | payload-derived prompt text; signature verifies against pinned key; key item ACL rejects an unsigned reader; `/ui/attach` issues a `ui` token only for a valid signature over a fresh nonce; strategy-diff payload signs and applies; TTY-code fallback refused once this test passes; `armed` mode: codes refused until `approval-fallback enable` is typed on the daemon TTY (no HTTP route), and enabling needs no restart | — |
 | Replay | vitest on a recorded day of logs | deterministic output for the fixture, both markets, incl. gap-persistence stats and verdict | — |
 | Rogue agent | `ate rogue` on mainnet (§22.3) | every on-chain attack reverts with expected code | in CI on fork |
 | Payments | vitest with recorded HSP responses | state machine incl. 30043, denial, uncertain submit | live QA |
-| E2E | Playwright (Electron) | Decisions view renders E3–E7 and E14 rows with links (Lane E if G-HSP not confirmed by 07:00, else Lane D) | happy, blocked, kill switch, crash-restart |
+| E2E | Playwright (Electron) | Decisions view renders E3–E7 and E14 rows with links (Lane E if G-HSP not confirmed by 12:00, else Lane D) | happy, blocked, kill switch, crash-restart |
 | Security | `pnpm audit`, gitleaks | no high/critical, no secret in bundle | CSP test |
 
 ---
@@ -2210,32 +2275,34 @@ will revert — record it and re-check later); router `factory()` matches; pool 
 no cardinality transaction is planned); QuoterV2 impact at $5 / $25 / $100; Supra vs APRO printed (bps,
 ages, whether the entry gate is active per market); agent gas ≥ 2 HSK (else alarm).
 
-Step 0 runs at 04:00 IST; steps 1–5 and 8 run from the second device (owner); steps 6–7 run on the agent's
+Step 0 runs at 10:30 IST; steps 1–5, 8 and 9 run from the second device (owner); steps 6–7 run on the agent's
 machine with the daemon unlocked. Step 1 starts only after the Anvil-fork smoke of both vaults (§18.2) is
-green and the bytecode is frozen (06:30 checkpoint, §21.4).
+green and the bytecode is frozen (11:45 checkpoint, §21.4).
 
-**Funding (02:30–05:30, ops).** All funds land first in an **ops hot wallet** on 177, never directly on
+**Funding (09:50–11:00, ops).** All funds land first in an **ops hot wallet** on 177, never directly on
 the owner. Route: USDT and HSK withdrawn from HashKey Global to HashKey Chain where the exchange supports
 that network, otherwise bridged from Ethereum through the OP-standard L2StandardBridge predeploy
-(`0x4200…0010`); arrival confirmed on Blockscout by 04:00. Target: ≥ 40 HSK gas (25 agent, 2 guardian,
+(`0x4200…0010`); arrival confirmed on Blockscout by 11:00. Target: ≥ 40 HSK gas (25 agent, 2 guardian,
 ~13 for two deploys, two verifies, limits, the EAS schema and margin), ~$60 of HSK to wrap
 into WHSK (`WHSK.deposit()`), and ~$220 USDT. **Smaller-seed fallback:** if < $220 USDT is on 177 by
-05:30, deploy anyway with the minimum seed — Vault-HSK $60 USDT + $25 WHSK, Vault-BTC $40 USDT — and set
+11:00, deploy anyway with the minimum seed — Vault-HSK $60 USDT + $25 WHSK, Vault-BTC $40 USDT — and set
 `maxExposureUsd` to $60 per vault in step 3 (so the §22.3 exposure attack still has a reachable
 precondition); §4.6 per-vault and portfolio numbers are then recomputed by the UI from `limits()`, and
 the pitch card is regenerated from them.
 
-0. **Owner signer test (04:00 IST).** `cast send --ledger` a 0-value tx to self on 177 **from the ops hot
+0. **Owner signer test (10:30 IST).** `cast send --ledger` a 0-value tx to self on 177 **from the ops hot
    wallet-funded Ledger address** (fund it with 1 HSK only). If Ledger signing on 177 fails or is not
-   working by 06:30, create the fallback owner with `cast wallet import owner --interactive` (encrypted
+   working by 11:30, create the fallback owner with `cast wallet import owner --interactive` (encrypted
    keystore) **on the second laptop only**. Only after step 0 passes (Ledger or fallback) does ops move
    gas and seed from the hot wallet to the owner. Create the guardian keystore on the third device if
    available, else on the second laptop (§4.1). Never on the agent machine.
-1. Deploy **twice from the same bytecode**: `forge script Deploy --rpc-url $HSK_RPC --ledger --broadcast`
-   (or `--account owner`) with constructor args `(USDT, WHSK, APRO HSK/USD 0x86CE…224b, SwapRouter02
+1. Deploy **twice from the same source and creation code** (runtime bytecode differs only in the
+   immutables): `forge script Deploy --sig 'run(address,address)' <pool> <oracle> --rpc-url $HSK_RPC
+   --ledger --broadcast` (or `--account owner`; the script reads `token0`/`token1`/`factory` from the
+   pool and fixes SwapRouter02, so the full constructor args are `(USDT, WHSK, APRO HSK/USD 0x86CE…224b, SwapRouter02
    0x2c16…D8F3, pool 0x4ff5…05dc, factory 0x972c…c742)` for Vault-HSK and `(USDT, WBTC 0x6119…5b14, APRO
-   BTC/USD 0x204E…360F, SwapRouter02 0x2c16…D8F3, pool 0xd9EA…449A, factory 0x972c…c742)` for Vault-BTC
-   (never a plaintext `--private-key`).
+   BTC/USD 0x204E…360F, SwapRouter02 0x2c16…D8F3, pool 0xd9EA…449A, factory 0x972c…c742)` for Vault-BTC;
+   never a plaintext `--private-key`). The same one-command form is the `docs/INTEGRATE.md` example.
 2. Record both addresses in `deployments/177.json`; verify each on Blockscout with its own
    `forge verify-contract --constructor-args …` (immutables differ, so Blockscout may label the second a
    similar match); register the EAS schema (§13) once on SchemaRegistry
@@ -2255,25 +2322,39 @@ the pitch card is regenerated from them.
    `ate_execute` → `TradeExecuted` + EAS attestation (counts against that market's turnover share; labelled
    `smoke`, not Track 1 evidence). No approval path is involved, so it does not depend on `ate-approve`.
    $5,000 `check()` → `ERR_TRADE_CAP`. Record all in `docs/evidence.md` (§22.2).
-7. Start the trader (`ate agent run --mode autonomous --profile WHSK=demo`; WBTC runs the default
+7. **Start the mainnet daemon once, headless, with `--approval-fallback=armed --allow-rogue`** (~13:00,
+   before step 6; the `rogue` token is printed once to its TTY and is dormant until §22.3 runs), so neither
+   the 14:30 TTY degradation nor the 15:30 rogue run needs a restart (a restart locks the daemon, §8.3).
+   Start the trader (`ate agent run --mode autonomous --profile WHSK=demo`; WBTC runs the default
    profile; portfolio turnover $200) **as soon as step 6 is green and Lane C's strategy guard has replaced
-   the stub, target 08:45–09:00** (never on the stub; latest 09:30), so the 09:15 BUIDL can cite a first
-   LLM-decided trade. 10:00 remains the start of the G6/E12 window.
-8. After any demo or circuit-breaker pause: `ate-owner unpause --all` from the second device; record the
+   the stub, target ~14:00** (never on the stub; latest 14:30). **Trader start opens the G6/E12 window**:
+   ops-2's continuous screen recording starts at the same minute, and no human input reaches the trader
+   until the 15:30 rogue run.
+8. After any demo or circuit-breaker pause: `ate-owner unpause --all` from the second device (after
+   step 9: Vault-HSK via `ate-owner`, Vault-BTC as a Safe transaction); record the
    txs (E5); **then, if the pause came from `ate_pause` or the breaker (which lock the daemon, §8.3),
    `ate unlock` on the agent's machine**, and confirm the trader's next cycle (a new journal row) before
    declaring recovery.
+9. **Safe owner for Vault-BTC (~17:00, after E5 and E6 are recorded).** Ops-1 creates a Safe on 177 with
+   `safe-core-sdk` (v0.1: the Ledger/keystore owner as sole Safe owner, threshold 1 — never the guardian
+   or agent key; 2-of-3 at v1.0) and runs the two-step ownership transfer of Vault-BTC to it (§4.5); the transfer and
+   acceptance txs go in `docs/evidence.md`. Vault-HSK keeps the Ledger owner, so `ate-owner` still covers
+   it; Vault-BTC's owner operations (incl. Demo Day unpause) run as Safe transactions via `safe-core-sdk`.
 
 **Epoch budget for Nov 2, per vault** (UTC day = 05:30 IST Nov 2 → 05:30 IST Nov 3; `maxEpochUsd`
 $250): entries incl. the $5 smoke and discretionary trades ≤ $100 (the market's turnover share, §11.4
 rule 3); the exit reserve (rule 3b) keeps `exposure / (1 − dev)` of budget free after every non-guard
 trade, so a full exit fits by that rule (stated exceptions in rule 3b). Reverted rogue txs consume nothing; only the exposure and slippage attacks need headroom
-(they must pass step 9 to reach steps 11–13). The rogue run is on **Vault-HSK** at 11:30 IST, when
-entries have used ≤ $100, so ≥ $150 of headroom remains; `ate rogue` sizes its buys from `epoch()` (the
-slippage attack needs ≥ $5; the exposure attack asserts holdings + amount > $150 via `check()` — at the
-default seed Vault-HSK holds ~$72 of WHSK and ~$108 USDT at its 40% band, so an $80–$100 buy meets it;
-the rogue key bypasses the off-chain reserve, which is the point). E6 runs right after, on Vault-HSK only
-(market-scoped stop, §11.5).
+(they must pass step 9 to reach steps 11–13). The rogue run is on **Vault-HSK** at 15:30 IST. On-chain
+`spentUsd` counts entries **and** turnover-exempt sells (spread-close, `discretionary_exit`, guard exits),
+so headroom is not assumed: **`ate doctor` reads `headroom = maxEpochUsd − spentUsd` at 15:15**; the
+exposure attack needs ≥ (150 − WHSK holdings) × 0.975 of it (at the default seed Vault-HSK holds ~$72 of
+WHSK and ~$108 USDT at its 40% band, so ~$76–$100), the slippage attack ≥ $5. `ate rogue` sizes its buys
+from `epoch()`; the rogue key bypasses the off-chain reserve, which is the point. Until E4 is recorded the
+guard keeps an off-chain $100 rogue reserve on Vault-HSK (non-guard trades only). **If headroom is short
+at 15:15**, the exposure attack runs at 05:35 IST Nov 3 (fresh epoch, before the pitch list) and is
+added to E4; the other attacks run at 15:30 as planned. E7 and the HSK rebuild follow, then E6, on
+Vault-HSK only (market-scoped, §11.5; §21.4 15:45–16:30).
 
 Gas on 177 is negligible: ~500 gwei on Nov 2, so a 3M-gas deploy costs ~$0.13 plus the L1 data fee.
 
@@ -2312,42 +2393,46 @@ Every error carries `{ code, message, hint, retryable, context }`. Hints are wri
 
 ## 21. Scope, plan and gates
 
-**Submission deadline:** team-confirmed **≈ 18:30 IST, 2026-11-02** (~16 h remaining as of 02:30 IST).
-Public sources conflict (page text says Nov 1 21:30 IST; the DoraHacks widget says Nov 2 04:00 UTC =
-09:30 IST). Plan against the team's confirmation, and protect against the earliest reading: **a complete,
-submittable Track 1 BUIDL is submitted by 09:15 IST** — repo link, both verified vault addresses on
-Blockscout, first mainnet trade tx with its EAS UID (LLM-decided if one has executed by 09:10, else the
-`smoke` trade, labelled), the WBTC gap snapshot, the E11 replay headline, a
-one-paragraph summary, and a `docs/JUDGE.md` stub with those links — and is then edited through 17:30.
-**The 09:15 BUIDL is never submitted without a mainnet vault address** (the 08:45 rule, §21.4, guarantees
-one). The timeline is re-read live at 12:00, a full draft is saved by 14:00, and the final edit is
-submitted by 17:30 (hard), leaving the 17:30–18:30 buffer.
+**Submission deadline:** team-confirmed **≈ 18:30 IST, 2026-11-02**. Public sources conflict (page text
+says Nov 1 21:30 IST; the DoraHacks widget said Nov 2 04:00 UTC = 09:30 IST); both earlier readings had
+passed when implementation started at 09:50. **Ops-2 gets the deadline in writing from the organisers by
+11:00** (organisers' channel or in person; screenshot committed as `docs/deadline.md`). If they say the
+window has closed, nothing in this plan recovers it: ops-2 asks in the same message for written
+acceptance of a late BUIDL, and the build continues for Demo Day either way. **The Track 1 BUIDL is
+created and submitted as soon as the first vault is deployed and verified (target ~12:30; latest 13:30
+via the 13:15 rule)** — repo link, the vault address(es) on Blockscout, `limits()` read, the 03:50 WBTC
+snapshot, a one-paragraph summary whose first sentence names the customer (§0 *Who it is for*) and states
+the WBTC figure realised-first, and a `docs/JUDGE.md` stub. It is then edited: smoke tx + EAS UID and the
+E11 replay headline (~13:30), the first LLM-decided trade (~14:30), JUDGE.md link (3) (16:00), full draft
+saved 17:00, **final edit submitted by 18:00 (hard)**, leaving the 18:00–18:30 buffer. **The BUIDL is
+never submitted without a mainnet vault address.** The timeline is re-read live at 16:00.
 **Pitch list:** Nov 3. **Demo Day:** Nov 4, Mumbai, in person (in-person gets selection priority).
 
-Starting point at 02:30 IST: spec, AWS network + worker, no application code. The scope below is a fixed
-team decision and is kept whole; the WBTC market (added in v0.7 at 04:00) adds a second instance of the
-same vault, a second market config and per-market strategy state, not a second design. It is delivered by
-five lane coding agents working in parallel against interfaces and stubs frozen at 04:30 (every lane can
-run its acceptance tests on day one without waiting for another lane), fixed checkpoints with
-pre-agreed reassignments (§21.4), and a demo-path fallback for every user-facing surface. The human team
-does only what agents cannot: signing, funding, organizer contact, recording.
+Starting point: the plan was written 02:30–04:00 IST; implementation lanes started at **09:50 IST** from
+the spec, the AWS network + worker and no application code. The scope below is a fixed team decision and
+is kept whole; the WBTC market adds a second instance of the same vault, a second market config and
+per-market strategy state, not a second design. It is delivered by five lane coding agents working in
+parallel against interfaces and stubs frozen at **10:30** (every lane can run its acceptance tests
+without waiting for another lane), fixed checkpoints with pre-agreed reassignments (§21.4), and a
+demo-path fallback for every user-facing surface. The human team does only what agents cannot: signing,
+funding, organizer contact, recording.
 
 ### 21.1 v0.1 — must ship (submission)
 
 | # | Item | Lane |
 |---|---|---|
-| 1 | `PolicyVault` (generic 8/18-dp priceToken, exit path 7b with `min(P, T)` floor, post-swap exposure check) fork-smoked against both pools, **deployed twice (Vault-HSK, Vault-BTC) and verified** on 177, limits set on both, EAS schema registered, smoke evidence recorded | A |
+| 1 | `PolicyVault` (generic 8/18-dp priceToken, exit path 7b with `min(P, T)` floor, post-swap exposure check) fork-smoked against both pools, **deployed twice (Vault-HSK, Vault-BTC) and verified** on 177, limits set on both, EAS schema registered, smoke evidence recorded; one-command `Deploy --sig 'run(address,address)'` script | A |
 | 2 | Foundry suite at the submission gate (§4.4): unit, parity, core invariants on local mocks for both shapes, fork smoke of both vaults | A |
-| 3 | Daemon: keystore (agent), config (two markets), chain client (Multicall3, ≥ 2 RPCs), single depth-1 `TxQueue` with same-nonce replacement (§7.1), gas alarm, oracle + pool + CEX readers for both markets (`hashkey-public-market`), candidates incl. spread-revert open/close, `discretionary_exit`, `check()` pre-filter and `smoke`, QuoterV2 quote + vault pre-flight, strategy-seam stub (rules 1–3) behind the frozen `strategy.ts` (Lane C's full guard, §11.4 rules 1–9 incl. 3b, reservations, replaces it), single-writer append-only hash-chained SQLite journal (§12–§13), EAS attestation per executed trade, veto `outcome` scoring (E13), `/status` uptime + HSKSwap routed counters, `/cycle`, `/strategy/approve`, `/ui/attach` (+ §10.1 TTY degradation, off by default); `ate doctor` incl. the **Supra entry gate + cross-check** and pool cardinality; `ate smoke` | B |
-| 4 | MCP server with the §7.2 trading tools (both markets, `targetAssets`), scope-enforced tool sets (`agent` / `chat`), `actor` from scope, stdio proxy | B |
-| 5 | Reference trader running autonomously from ~09:00 (cycle rules §11.1: no overlap, 90 s kill, measured candidate TTL; WHSK demo profile allowed, labelled by profile and generator; WBTC default profile): ≥ 1 candidate-bound LLM trade, ≥ 1 discretionary LLM trade, ≥ 1 veto/size-down and ≥ 1 `no_trade` on mainnet; the WBTC spread-revert trade when the gap is open (E14) | C |
-| 6 | Chat (§11.5): prompt, allowlisted runner with the `chat` token, rules fallback, `ate chat` (C); Chat view (D) | C, D |
-| 7 | `ate replay --days 7` for both markets → `docs/replay-7d.md` (E11), headline in the 09:15 BUIDL | C |
-| 8 | Rogue-agent script (`agents/rogue` + `ate rogue` entry); every on-chain attack in §22.3 reverted on Blockscout | A |
+| 3 | Daemon: keystore (agent), config (two markets, *additive* keys §16), chain client (Multicall3, ≥ 2 RPCs), single depth-1 `TxQueue` with same-nonce replacement (§7.1) and the `rogue`-scoped raw route (§10.1), gas alarm, oracle + pool + CEX readers for both markets (`hashkey-public-market`), candidates incl. spread-revert open/close, `discretionary_exit`, `check()` pre-filter, `scanSeconds` re-scan (§11.1) and `smoke`, QuoterV2 quote + vault pre-flight, strategy-seam stub (rules 1–3) behind the frozen `strategy.ts` (Lane C's full guard, §11.4 rules 1–9 incl. 3b, reservations, replaces it), single-writer append-only hash-chained SQLite journal (§12–§13), veto `outcome` scoring (E13), `/status` uptime + HSKSwap routed counters, `/cycle`; `ate doctor` incl. the **Supra entry gate + cross-check**, pool cardinality and epoch headroom; `ate smoke`; npm publication of `@ate/venues` and `@ate/mcp` by 17:30 | B |
+| 4 | MCP server with the §7.2 trading tools (both markets, `targetAssets`, *additive* `riskProfile`), scope-enforced tool sets (`agent` / `chat`), `actor` from scope, stdio proxy | B |
+| 5 | Reference trader running autonomously from ~14:00 (cycle rules §11.1: no overlap, 90 s kill, measured candidate TTL; WHSK demo profile allowed, labelled by profile and generator; WBTC default profile with `minEntryIntervalSec` 1800): ≥ 1 candidate-bound LLM trade, ≥ 1 discretionary LLM trade, ≥ 1 veto/size-down and ≥ 1 `no_trade` on mainnet; the WBTC spread-revert trade when the gap is open (E14) | C |
+| 6 | Chat (§11.5): prompt, allowlisted runner with the `chat` token, loosening direction table, `riskProfile`, rules fallback, `ate chat` (C); Chat view (D) | C, D |
+| 7 | `ate replay --days 7` for both markets → `docs/replay-7d.md` (E11, incl. top-decile gaps for the T1.8 second path), headline in the BUIDL's first edit | C |
+| 8 | Rogue-agent script (`agents/rogue` + `ate rogue` entry), runnable from a Claude Code session over stdio as the on-stage second client; every on-chain attack in §22.3 reverted on Blockscout | A |
 | 9 | Electron app with Chat, Decisions, Trade, Agents (AI scoreboard), Positions and Payments views and the evidence footer (uptime counter), attaching to the running daemon; daemon-served read-only `/view` page | D |
-| 10 | `ate-approve` (Swift, Secure Enclave, keychain-ACL-held key blob, §10.1) for `confirm`-mode trades, `ate chat` sessions, UI attaches, loosening strategy changes and payment approvals (E; Lane A from 09:00 if red); `ate-owner` incl. `pause --guardian --all` / `unpause --all` (A) | E, A |
-| 11 | Payments **built**: `ate-signal`, `ate-pay` state machine tested on recorded HSP responses, wired to the Payments view; `docs/hsp-readiness.md` + recorded tool listing or organiser reply by 07:00. **Live use is optional**: only if G-HSP is go (then `ate_signal_buy` is registered and E8 is required) | E |
-| 12 | Evidence and submission: `docs/evidence.md` E1–E14 and README incl. per-market realised and CEX-marked P&L since the trader's start with fee drag and the WBTC structural-discount caveat (lead); `docs/JUDGE.md` (D, or E per the 07:00 contingency); `docs/superpowers-log.md` (A); 60 s unedited live capture E12 as a separate file linked from `docs/JUDGE.md`, and a demo video ≤ 3 min containing a 25–30 s unedited E12 excerpt with timestamp overlay, plus the 90 s cut (ops-2); DoraHacks BUIDL submitted by 09:15 and final by 17:30 (ops-2); `vault-v0.1.0` tag + `docs/INTEGRATE.md` (with HSKSwap trades/routed USD) + draft `agent-policy-vault` skill PR to `HashKeyChain/HSK-Superpowers` + ecosystem-directory listing request by 17:30 (A; request sent by ops-2) | lead, A, D/E, ops-2 |
+| 10 | `ate-approve` (Swift, Secure Enclave, keychain-ACL-held key blob, §10.1) for `confirm`-mode trades, `ate chat` sessions, UI attaches, loosening strategy changes and payment approvals, **plus the daemon approval endpoints `/ui/attach`, `/chat/session`, `/strategy/approve`, the `armed` TTY degradation (§10.1) and the EAS attester** (E; Lane A takes `apps/approve/` from 14:00 if red); `ate-owner` incl. `pause --guardian --all` / `unpause --all` (A) | E, A |
+| 11 | Payments **built**: `ate-signal`, `ate-pay` state machine tested on recorded HSP responses, wired to the Payments view; `docs/hsp-readiness.md` + recorded tool listing or organiser reply by 12:00. **Live use is optional**: only if G-HSP is go (then `ate_signal_buy` is registered and E8 is required) | E |
+| 12 | Evidence and submission: `docs/evidence.md` E1–E14 and README incl. per-market realised and CEX-marked P&L since the trader's start with fee drag, realised-first, and the WBTC structural-discount caveat (lead); `docs/JUDGE.md` (D, or E per the 12:00 contingency); `docs/superpowers-log.md` (A); 60 s unedited live capture E12 as a separate file linked from `docs/JUDGE.md`, and a demo video ≤ 3 min containing a 25–30 s unedited E12 excerpt with timestamp overlay, plus the 90 s cut (ops-2); `docs/deadline.md` by 11:00, DoraHacks BUIDL created at the first vault deploy and final by 18:00 (ops-2); `vault-v0.1.0` tag + `docs/INTEGRATE.md` (one-command deploy, HSKSwap trades/routed USD) + draft `agent-policy-vault` skill PR to `HashKeyChain/HSK-Superpowers` + ecosystem-directory listing request by 17:30 (A; request sent by ops-2); Vault-BTC → Safe transfer (ops-1, §19 step 9) | lead, A, D/E, ops-1, ops-2 |
 
 ### 21.2 Should ship (in order; cut from the bottom)
 
@@ -2361,109 +2446,116 @@ bps, finish should-ship items, HSP live if access arrived late.
 v1.0 GA: knowledge bases, `AgentRegistry`, daily EAS journal anchoring, Supra trade-time pricing, other
 token orientations/decimals, more markets (WETH once an ETH/USD feed exists), one agent key per vault,
 on-chain portfolio limits, Kredo adapter, Safe owner by default, Chart view, Tauri shell, signed
-releases, backtesting, SSM tunnel under a separate macOS user (§3.4), npm publication.
+releases, backtesting, SSM tunnel under a separate macOS user (§3.4).
 
-### 21.4 Plan (IST, 02:30 → 18:30)
+### 21.4 Plan (IST, re-timed: lanes started 09:50 → submit 18:00 → buffer to 18:30)
 
 **Staffing (resolves Q12).** One **lead** (human: orchestrates the agents, owns the frozen interfaces and
 the integration branch, writes `docs/evidence.md` and the README), **five lane coding agents** (one per
-lane, each in its own git worktree `lane-a` … `lane-e`, branched from the 04:30 freeze commit), and **two
-ops humans, pre-assigned and named in the lane briefs at 04:00**: **ops-1 — signing** (second laptop:
-funding, Ledger/keystore owner, guardian key, deploy/limits/seed signing, pause/unpause) and **ops-2 —
-recording and submission** (screen recording, E12 cut, demo beats, video, DoraHacks, HSP/organiser
-contact, ecosystem-directory request). Each is the other's named backup; the lead backs up both. The
-11:30 pause/unpause signing (ops-1) and the E12/demo recording (ops-2) never share one person. "Ops" below
-means ops-1 unless a row says ops-2. Lane PRs that touch only the lane's owned paths merge automatically when CI is
-green; the lead reviews only PRs that touch frozen interfaces or another lane's paths, so the lead is not
-an hourly merge bottleneck. If an ops human is unavailable at a checkpoint, the other ops human takes the
-task, then the lead.
-Checkpoints are fixed: **04:00, 05:30, 06:30, 07:00, 08:00, 08:45, 09:00, 09:15, 10:00, 10:30, 10:45,
-11:45, 12:00, 14:00, 16:30, 17:30**.
+lane, each in its own git worktree `lane-a` … `lane-e`; started 09:50 from the lane briefs and rebased
+onto the 10:30 freeze commit), and **two ops humans, named in the lane briefs**: **ops-1 — signing**
+(second laptop: funding, Ledger/keystore owner, guardian key, deploy/limits/seed signing, pause/unpause,
+Safe transfer) and **ops-2 — recording and submission** (deadline in writing, screen recording, E12 cut,
+demo beats, video, DoraHacks, HSP/organiser contact, ecosystem-directory request). Each is the other's
+named backup; the lead backs up both. The 15:30 pause/unpause signing (ops-1) and the E12/demo recording
+(ops-2) never share one person. "Ops" below means ops-1 unless a row says ops-2. Lane PRs that touch only
+the lane's owned paths merge automatically when CI is green; the lead reviews only PRs that touch frozen
+interfaces or another lane's paths. If an ops human is unavailable at a checkpoint, the other ops human
+takes the task, then the lead.
+Checkpoints are fixed: **10:30, 11:00, 11:45, 12:00, 12:45, 13:15, 14:00, 14:30, 14:45, 15:15, 15:30,
+16:00, 16:20, 16:30, 17:00, 17:30, 18:00**.
 
-**Interface freeze and stubs.** *Generation (02:30–04:00, the freeze agent — Lane B's agent before its
-lane opens):* from §4, §7, §12 and §13 it generates `contracts/src/IPolicyVault.sol` + custom errors +
+**Interface freeze and stubs.** *Generation (09:50–10:30, the freeze agent — Lane B's agent before its
+lane work):* from §4, §7, §12 and §13 it generates `contracts/src/IPolicyVault.sol` + custom errors +
 `Limits`/`SwapParams` (ABI exported as JSON); `packages/core/src/types.ts` (`Decision`, `Candidate`,
 `ToolResult`, `AteErrorCode`, `PriceSnapshot`, `Limits`, `MarketId`); **`packages/core/src/strategy.ts`**
 — the B↔C seam: `CandidateGenerator.generate(snap: MarketSnapshot, pf: PortfolioState): Candidate[]`;
 `StrategyGuard.check(p: ProposalDraft, pf: PortfolioState, phase: "propose" | "execute"): GuardVerdict`;
 `Reservations.reserve(proposalId) / release(proposalId)`; `Invalidation.onGuardExit(market)` — with shared
 contract-test fixtures; Lane B ships a pass-through stub implementing rules 1–3 so its MCP tools and the
-smoke run on day one, and Lane C replaces it with the full guard (target 08:30, latest 09:30; the
-autonomous trader never runs on the stub); `packages/journal/migrations/
-001_init.sql` (§12); `packages/mcp/schemas/*.json` (§7.4, incl. `ate_candidates_get`, the discretionary
-fields, `targetAssets` and the market enum); `/events`, `/chat`, `/status` and `/ui/attach` payload
-types; `apps/cli/src/commands/index.ts` (§3.3); and **`packages/mcp/stub`**, an MCP server generated from
-the frozen schemas that returns fixture responses for both markets (Lanes C and D build against it until
-the real server is up at 08:00). *Review and commit (04:00–04:30, lead only):* the lead reviews against
-the spec and commits to `main` before any lane branches. Lanes may add, never change, these without a
-lead-approved freeze bump.
+smoke run early, and Lane C replaces it with the full guard (target 13:30, latest 14:15; the autonomous
+trader never runs on the stub); `packages/journal/migrations/001_init.sql` (§12);
+`packages/mcp/schemas/*.json` (§7.4, incl. `ate_candidates_get`, the discretionary fields, `targetAssets`
+and the market enum); `/events`, `/chat`, `/status` and `/ui/attach` payload types;
+`apps/cli/src/commands/index.ts` (§3.3); and **`packages/mcp/stub`**, an MCP server generated from the
+frozen schemas that returns fixture responses for both markets (Lanes C and D build against it until the
+real server is up at ~13:00). Lane A builds `PolicyVault` against §4 in parallel; the lead reviews and
+commits the freeze to `main` by **10:30**. Lanes may add, never change, these without a lead-approved
+freeze bump. **v0.9 additions are additive only** (§16 *Additive keys*, `riskProfile`, the `rogue` scope,
+`approvalFallback: "armed"`); none renames or removes a frozen field, tool, error, event or table.
+
+**Lane re-brief at 10:30 (v0.9, D4).** The EAS attester and the approval endpoints (`/ui/attach`,
+`/chat/session`, `/strategy/approve`, the TTY degradation) move from Lane B to Lane E, which already owns
+`ate-approve`; Lane B keeps the critical path (TxQueue → execute → smoke → MCP) and is never the
+designated pair for another lane.
 
 | Lane | Owner | Owns | Deliverables (acceptance) |
 |---|---|---|---|
-| A — contracts | Agent A (worktree `lane-a`); ops-1 signs | `contracts/`, `apps/owner-cli/`, `agents/rogue/`, `apps/cli/src/commands/a/`, `docs/superpowers-log.md`, `docs/INTEGRATE.md` | `PolicyVault` per §4 (generic decimals, exit path with `min(P, T)` floor, post-swap check); mocks for both shapes; unit/parity/invariants green (§4.4); Anvil-fork smoke of both vaults green; deploy ×2 + verify + EAS schema via the HSK-Superpowers workflow, logged; `ate-owner` (set-limits `--vault`, unpause `--all`, pause --guardian `--all`); `ate rogue` (sole owner) with `check()` assertions, `--stage` = `minAmountOut = 1` buy + `withdraw`; `vault-v0.1.0` tag; `docs/INTEGRATE.md`; draft `agent-policy-vault` skill PR to `HashKeyChain/HSK-Superpowers`; from 09:00, `apps/approve/` if `ate-approve` is red; E1, E2, E4, E5, E9 |
-| B — daemon + MCP | Agent B (`lane-b`; freeze agent 02:30–04:00) | `apps/daemon/`, `packages/{core,wallet,chain,venues,oracle,mcp,journal}` (after the lead's freeze), `apps/cli/src/commands/b/` (`doctor`, `unlock`) | Keystore, two-market config, Multicall3 chain client with RPC failover, depth-1 `TxQueue` with same-nonce replacement, gas alarm, APRO/pool/CEX readers for both markets, Supra cross-check, QuoterV2, pre-flight, single-writer journal with triggers, `UNIQUE(prev_hash)` and id-from-hash, EAS attester, all §7.2 tools with scope-enforced tool sets and execute-time guard re-run, stdio proxy, `/events`, `/status`, `/chat` + `/chat/session`, `/cycle`, `/strategy/approve`, `/ui/attach` (+ TTY degradation); `strategy.ts` pass-through stub; `check()` pre-filter + Supra entry gate; `ate smoke`; first mainnet trade (smoke) by 09:00; E3 |
-| C — trader + strategy | Agent C (`lane-c`) | `packages/strategy/`, `agents/trader/`, `agents/chat/`, `apps/cli/src/commands/c/` | Per-market generators (spread-revert open/close, rebalance with edge gate, `discretionary_exit`) + strategy and portfolio guard rules 1–9 incl. exit reserve 3b, immediate target-asset sell-down and bounded breaker, with reservations, invalidation and the FIFO lot sub-ledger, behind `strategy.ts` (replaces B's stub by 08:30, latest 09:30), veto `outcome` scoring, trader prompt (per-cycle veto/discretionary evaluation) + runner (cycle rules §11.1, discretionary lane, agent tuning, per-market profile), chat prompt + allowlisted runner + rules fallback, `ate chat`, `ate replay --days 7` (both markets); E6, E7, E11, E13, E14 |
-| D — UI | Agent D (`lane-d`) | `apps/desktop/`, `packages/ui/`, `/view` | Electron shell that attaches via `/ui/attach`; Chat, Decisions, Trade (market selector), Agents (AI scoreboard), Positions (per vault + portfolio), Payments views; evidence footer with uptime counter; `/view` fallback; `docs/JUDGE.md` and the Decisions-view E2E (unless reassigned to E at 07:00) |
-| E — payments + approvals | Agent E (`lane-e`) | `apps/worker/`, `packages/payments/`, `apps/approve/`, `docs/hsp-readiness.md` | `ate-signal`, `ate-pay` state machine on recorded HSP responses (§9.4 incl. 30043, denial, uncertain submit), `ate-approve` Swift helper with keychain-ACL key storage (incl. UI-attach payloads); `docs/hsp-readiness.md` + recorded listing or organiser reply by 07:00; HSP tool listing once allowlisted; if go, live QA payment and E8 |
+| A — contracts | Agent A (worktree `lane-a`); ops-1 signs | `contracts/`, `apps/owner-cli/`, `agents/rogue/`, `apps/cli/src/commands/a/`, `docs/superpowers-log.md`, `docs/INTEGRATE.md` | `PolicyVault` per §4 (generic decimals, exit path with `min(P, T)` floor, post-swap check); mocks for both shapes; unit/parity/invariants green (§4.4); Anvil-fork smoke of both vaults green; deploy ×2 + verify + EAS schema via the HSK-Superpowers workflow with the one-command `run(pool, oracle)` script, logged; `ate-owner` (set-limits `--vault`, unpause `--all`, pause --guardian `--all`); `ate rogue` (sole owner) with `check()` assertions, `--stage` per §22.3, runnable from a Claude Code stdio session; `vault-v0.1.0` tag; `docs/INTEGRATE.md`; draft `agent-policy-vault` skill PR; from 14:00, `apps/approve/` if `ate-approve` is red; E1, E2, E4, E5, E9 |
+| B — daemon + MCP | Agent B (`lane-b`; freeze agent 09:50–10:30) | `apps/daemon/` (except `src/approval/`), `packages/{core,wallet,chain,venues,oracle,mcp,journal}` (after the freeze; except `journal/src/attest/`), `apps/cli/src/commands/b/` (`doctor`, `unlock`) | Keystore, two-market config (+ additive keys), Multicall3 chain client with RPC failover, depth-1 `TxQueue` with same-nonce replacement and the `rogue` raw route, gas alarm, APRO/pool/CEX readers for both markets, `scanSeconds` re-scan, Supra cross-check (pair indices read 11:00), QuoterV2, pre-flight, single-writer journal with triggers, `UNIQUE(prev_hash)` and id-from-hash, all §7.2 tools with scope-enforced tool sets and execute-time guard re-run, stdio proxy, `/events`, `/status`, `/chat`, `/cycle`; `strategy.ts` pass-through stub; `check()` pre-filter + Supra entry gate; `ate smoke`; first mainnet trade (smoke) by ~13:30; npm publish of `@ate/venues` + `@ate/mcp` by 17:30; E3 |
+| C — trader + strategy | Agent C (`lane-c`) | `packages/strategy/`, `agents/trader/`, `agents/chat/`, `apps/cli/src/commands/c/` | Per-market generators (spread-revert open/close, rebalance with edge gate, `discretionary_exit`) + strategy and portfolio guard rules 1–9 incl. exit reserve 3b, `minEntryIntervalSec`, immediate target-asset sell-down and bounded breaker, with reservations, invalidation and the FIFO lot sub-ledger, behind `strategy.ts` (replaces B's stub by 13:30, latest 14:15), veto `outcome` scoring, trader prompt + runner (cycle rules §11.1, discretionary lane, agent tuning, per-market profile), chat prompt + allowlisted runner + loosening table + `riskProfile` + rules fallback, `ate chat`, `ate replay --days 7` (both markets, top-decile gaps); E6, E7, E11, E13, E14 |
+| D — UI | Agent D (`lane-d`) | `apps/desktop/`, `packages/ui/`, `/view` | Electron shell that attaches via `/ui/attach`; Chat, Decisions, Trade (market selector), Agents (AI scoreboard), Positions (per vault + portfolio), Payments views; evidence footer with uptime counter; `/view` fallback; `docs/JUDGE.md` and the Decisions-view E2E (unless reassigned to E at 12:00) |
+| E — payments + approvals | Agent E (`lane-e`) | `apps/worker/`, `packages/payments/`, `apps/approve/`, `apps/daemon/src/approval/`, `packages/journal/src/attest/`, `docs/hsp-readiness.md` | `ate-signal`, `ate-pay` state machine on recorded HSP responses (§9.4 incl. 30043, denial, uncertain submit), `ate-approve` Swift helper with keychain-ACL key storage (incl. UI-attach payloads); **daemon approval endpoints `/ui/attach`, `/chat/session`, `/strategy/approve`, the `armed` TTY degradation, and the EAS attester**; `docs/hsp-readiness.md` + recorded listing or organiser reply by 12:00; HSP tool listing once allowlisted; if go, live QA payment and E8 |
 
 | Time | Lead + ops-1 / ops-2 | A — contracts | B — daemon + MCP | C — trader + strategy | D — UI | E — payments + approvals |
 |---|---|---|---|---|---|---|
-| 02:30–04:00 | Lead: spec v0.8 final (WBTC market at ~04:00), five lane briefs (owned paths, deliverables, acceptance tests; ops-1/ops-2 named). Ops-1: **fund the ops hot wallet** (§19 Funding: ≥ 40 HSK, ~$60 HSK to wrap, ~$220 USDT; HashKey Global withdrawal or OP bridge; arrival confirmed by 04:00) | — | **Freeze agent:** generates every freeze artifact (above) | — | — | — |
-| 04:00–04:30 | **Lead: reviews and commits the freeze + MCP stub**; reads APRO `answeredInRound`/`decimals()` on both feeds on mainnet (cardinality already 240/240 on both pools). Ops-1: **Ledger 0-value tx on 177** (§19 step 0), then moves funds to the owner; guardian keystore (third device if available). Ops-2: **G-HSP checks in person or on the organisers' channel with Operations** (allowlist status, worker health), not only the form | — | — | — | — | — |
-| 04:30–06:00 | Lead: integration branch; reviews only cross-lane PRs. 05:30: funding check → smaller-seed fallback if < $220 USDT (§19) | PolicyVault (generic decimals) + mocks (both shapes) + unit/parity/invariants | Config, keystore, chain, `TxQueue`, readers (skill endpoint map, both markets), QuoterV2, journal + triggers | Generators, guard rules 1–9, trader + chat prompts, runner **against the MCP stub** | Electron shell; Chat + Decisions + Trade views on stub/fixtures; `/view` | `ate-signal` + `ate-pay` on recorded responses; `ate-approve`; if allowlisted: 8-tool listing, `get_chain_config`, OKX network check |
-| 06:00–06:30 | Ops-1: if Ledger failed, fallback keystore owner (§19 step 0) | **Anvil-fork smoke, both vaults** | MCP tools (scope tool sets, market enum), pre-flight | Runner + discretionary lane against the stub | Agents + Positions views on stub | Payments state machine tests green; `docs/hsp-readiness.md` |
-| **06:30** | **Checkpoint: bytecode frozen and fork smoke green, or the lead escalates** (Lane B pauses to pair on Lane A) | Deploy script dry-run on the fork; `ate-owner` (set-limits, pause --guardian --all, unpause --all) ready for 07:00; test hardening | | **`ate replay --days 7`, both markets (E11; needs no vault)** | | |
-| **07:00** | **Checkpoint: G-HSP re-check.** Allowlist not confirmed → Lane E contingency (below). `docs/hsp-readiness.md` + recorded listing or organiser reply committed either way | | | | | |
-| 07:00–08:00 | Ops-1 signs deploy ×2, verify ×2, EAS schema, limits ×2, seeds (§19 1–5). Checkpoint 08:00: not deployed → lead + ops unblock before anything else | **Deploy + verify both vaults on 177**; superpowers log | Execute path via `TxQueue`, EAS attester | Replay report → `docs/replay-7d.md`; chat runner (`chat` token, allowlist) + rules fallback | Chat view wired | Payments view wiring with D; (contingency: Decisions-view E2E scaffold) |
-| 08:00–09:00 | Lead: `docs/JUDGE.md` stub (both vaults, `limits()`, first trade + EAS UID labelled `smoke` or `engine=llm`, WBTC gap snapshot, replay headline). **≈ 08:45–09:00: start the autonomous trader** as soon as the smoke is green and Lane C's guard is in (§19 step 7). **08:45: no vault yet → deploy the fork-smoked bytecode with the fork-smoked constructor args now, without waiting for the remaining tests** (a later test failure ships a fixed v0.1.1 vault, both listed) | Smoke both vaults (E1/E2) | **First real mainnet trade (`ate smoke`)** + attestation | Strategy stub replaced (target 08:30); MCP stub retired; LLM runner on the real MCP in `--dry-run` → p95 latency → `candidateTtlSec` in `deployments/177.json`; then **start the autonomous trader** | Payments view; evidence footer (uptime counter) | `ate-approve` wired to daemon + `ate-pay` |
-| 09:00–10:00 | **09:00: WBTC gap re-read (§0.2 numbers) for the BUIDL; `ate-approve` checkpoint. 09:15: ops-2 submits the complete Track 1 BUIDL** (repo, both vaults, first trade tx + EAS UID — LLM-decided if one has executed, else smoke, labelled — gap snapshot, replay headline, summary, JUDGE.md stub). Lead: integration on mainnet. **The mainnet daemon runs headless from here on; Electron only attaches** | `ate-owner` read-only checks on mainnet; **if `ate-approve` red: takes `apps/approve/`** | Positions/P&L (per vault + portfolio, lots), `ate_decide`, events, `/ui/attach`, `/cycle` | Trader running autonomously (since ~09:00): watch cycles, timeouts, TTL; latest start 09:30 | Wire all views to the mainnet daemon via `/ui/attach` | `ate chat` session approval; UI-attach approval; strategy-diff approval |
-| **10:00** | **G6/E12 window opens: the autonomous trader (running since ~09:00, `--profile WHSK=demo`, WBTC default, portfolio turnover $200) runs all day. G-HSP go/no-go. Ops-2 starts a continuous screen recording (10:00–11:30) for E12.** No human input to the trader until 11:30 (G6 window) | — | — | — | — | — |
-| 10:00–11:30 | Unattended window; lanes work only in their repos. **10:30: `ate-approve` still red → TTY degradation on (§10.1).** **10:45: lead check (read-only)** — journal has an `origin=discretionary` trade and an `llm_veto`/size-down? (see contingency) | Rogue script dry-run on fork (incl. `--stage`) | Hardening; `doctor` incl. Supra cross-check, gas alarm | Stop-loss/TP/breaker tuning (fork); veto `outcome` scoring | Polish | If go: live QA payment end-to-end |
-| 11:30–12:30 | 11:30: stop trader for the rogue run; ops-1 signs guardian pause-all + owner unpause-all (ops-2 records); restart (with the prompt amendment if the 10:45 check triggered it). 11:45: E6 pre-check, E6 "stop out HSK at 0.5%" (WHSK-scoped) and E7 via Chat (ops-2 records the E7 sell tx as the stage fallback), then "back to a 3% stop on HSK" (Touch ID). **12:00: lead re-reads the DoraHacks timeline live; JUDGE.md link (3) added** | **Rogue run on Vault-HSK (E4), guardian pause + owner unpause of both vaults (E5)** | Bug fixes | **E6/E7 via Chat** | Polish | If go: `ate_signal_buy` in the loop |
-| 12:30–15:00 | Ops-2: cut the **E12 60 s unedited capture** (a real cycle — ideally the first WBTC spread-revert — from the 10:00–11:30 recording) and its 25–30 s video excerpt; record the demo beats. 14:00: ops-2 saves the full draft; lead picks the on-stage AI-decision example (one real `llm_veto`/size-down with its +30 min outcome, or the discretionary thesis + EAS UID) | Fork/invariant re-run on final bytecode; `docs/INTEGRATE.md`; skill PR draft | Bug fixes | E6 retries if the pre-check failed; unattended-run evidence | `docs/JUDGE.md` final, screenshots, Decisions E2E | E8 evidence (if go); otherwise contingency work |
-| 15:00–16:30 | Ops-2: **compile the demo video (≤ 3 min, with the 25–30 s E12 excerpt) and the 90 s cut**; send the ecosystem-directory listing request. Lead: evidence pack (E1–E14), README with per-market realised and CEX-marked P&L since the trader's start and the WBTC structural-discount caveat | `vault-v0.1.0` tag | — | — | — | — |
-| 16:30–17:30 | Ops-2: final upload of the video; lead: submission text; **17:30: final edit submitted (hard)** | | | | | |
-| 17:30–18:30 | Buffer | | | | | |
+| 09:50–10:30 | Lead: lane briefs out at 09:50; reads APRO `answeredInRound`/`decimals()` on both feeds at 10:15 (decides the step-6 clause before the freeze); **reviews and commits the freeze + MCP stub by 10:30**, then the v0.9 re-brief of B and E. Ops-1: **fund the ops hot wallet** (§19 Funding; arrival by 11:00). Ops-2: **deadline in writing** (by 11:00) and **G-HSP check in person or on the organisers' channel with Operations** | `PolicyVault` (generic decimals) + mocks (both shapes) | **Freeze agent:** generates every freeze artifact | Generators + guard rules from the spec and fixtures | Electron shell scaffold | `ate-signal` + `ate-pay` on recorded responses; `ate-approve` |
+| 10:30–11:45 | Lead: integration branch; reviews only cross-lane PRs. **10:30 ops-1: Ledger 0-value tx on 177** (§19 step 0), then funds the owner; guardian keystore (third device if available). **11:00: funding check** → smaller-seed fallback if < $220 USDT (§19); ops-2 commits `docs/deadline.md` | Unit/parity/invariants; **Anvil-fork smoke, both vaults** | Config, keystore, chain, `TxQueue` (+ `rogue` route), readers (skill endpoint map, both markets, `scanSeconds`), QuoterV2, journal + triggers; 11:00 Supra pair indices | Guard rules 1–9 incl. 3b and `minEntryIntervalSec`; trader + chat prompts; runner **against the MCP stub**; **`ate replay --days 7` from 11:00 (needs no vault)** | Chat + Decisions + Trade views on stub; `/view` | Payments tests; EAS attester; `/ui/attach`, `/chat/session`, `/strategy/approve` + `armed` TTY mode; if allowlisted: 8-tool listing, `get_chain_config` |
+| **11:45** | **Checkpoint: bytecode frozen and fork smoke green, or the lead escalates** (Lane E's agent pairs on Lane A; see contingencies) | Deploy-script dry-run on the fork (`run(pool, oracle)`); `ate-owner` ready | MCP tools (scope tool sets, market enum, `riskProfile`), pre-flight | Runner + discretionary lane against the stub; replay running | Agents + Positions views on stub | `docs/hsp-readiness.md` |
+| **12:00–12:45** | **12:00: G-HSP re-check** (contingency trigger); `docs/hsp-readiness.md` + recorded listing or organiser reply committed either way. Ops-1 signs **deploy ×2, verify ×2, EAS schema, limits ×2, seeds (§19 1–5), target 12:30**. **As soon as the first vault is verified, ops-2 creates and submits the BUIDL** (§21) | **Deploy + verify both vaults on 177**; superpowers log | Execute path via `TxQueue` on the fork | Replay → `docs/replay-7d.md`; chat runner (`chat` token, allowlist, loosening table) + rules fallback | Chat view wired | EAS attester on the fork; Payments view wiring with D; (contingency: Decisions-view E2E scaffold) |
+| **12:45** | **Checkpoint: not deployed → lead + ops unblock before anything else.** Lane-B overload check (contingencies) | Smoke prep both vaults | Execute path green on the fork? | — | — | — |
+| 13:00–14:00 | **13:00: start the mainnet daemon headless with `--approval-fallback=armed --allow-rogue`** (§19 step 7; it is never restarted for the TTY fallback or the rogue run). **13:15: still no vault → deploy the fork-smoked bytecode with the fork-smoked constructor args now, without waiting for remaining tests** (a later test failure ships a fixed v0.1.1 vault, both listed; the BUIDL is created from it). ~13:30: BUIDL edit — smoke tx + EAS UID (labelled `smoke`), replay headline. Lead: `docs/JUDGE.md` stub | Smoke both vaults (E1/E2) | **First real mainnet trade (`ate smoke`)** + attestation | Strategy stub replaced (target 13:30); MCP stub retired; LLM runner on the real MCP in `--dry-run` 13:00–13:45 → p95 latency → `candidateTtlSec` in `deployments/177.json` | Payments view; evidence footer (uptime counter) | `ate-approve` wired to the daemon endpoints + `ate-pay` |
+| **14:00** | **Start the autonomous trader (~14:00; latest 14:30) = G6/E12 window opens (14:00–15:30).** WBTC gap re-read (decides the T1.8 evidence path, §0.3); **ops-2 starts the continuous screen recording at trader start**; G-HSP go/no-go; `ate-approve` checkpoint. No human input to the trader until 15:30. The mainnet daemon runs headless from here on; Electron only attaches | `ate-owner` read-only checks on mainnet; **if `ate-approve` red: takes `apps/approve/`** | Positions/P&L (per vault + portfolio, lots), `ate_decide`, events, `/cycle` | Trader running autonomously: watch cycles, timeouts, TTL, WBTC entries spaced 30 min | Wire all views to the mainnet daemon via `/ui/attach` (attaching never touches the trader) | `ate chat` session approval; UI-attach approval; strategy-diff approval |
+| 14:00–15:30 | Unattended window; lanes work only in their repos. ~14:30: first LLM-decided trade → BUIDL edit. **14:30: `ate-approve` still red → lead types `approval-fallback enable` on the daemon's TTY** (armed since 13:00; no restart, no unlock, no trader input). **14:45: lead check (read-only)** — journal has an `origin=discretionary` trade and an `llm_veto`/size-down? **15:15: `ate doctor` reads Vault-HSK epoch headroom** for the exposure attack (§19) | Rogue dry-run on the fork incl. `--stage` and the Claude Code stdio client | Hardening; `doctor` incl. Supra cross-check, gas alarm, headroom | Stop-loss/TP/breaker tuning (fork); veto `outcome` scoring | Polish | If go: live QA payment end-to-end |
+| 15:30–16:30 | **15:30: trader disabled (`strategy.enabled=false`) for the rogue run on Vault-HSK (E4)**; ops-1 signs guardian pause-all + owner unpause-all (ops-2 records) (E5); trader re-enabled (with the prompt amendment if the 14:45 check triggered it). **15:45: E7 via Chat** — "Go to cash on HSK, keep the BTC" → guard sell (ops-2 records the sell tx: the stage fallback) → "Trade HSK again" (adds a target asset: Touch ID) → the demo rebalance rebuilds WHSK, ~14 × $5 buys at 120 s ≈ 28 min (turnover: smoke $5 + ~$15 demo buys + ≤ $10 discretionary + ~$70 rebuild ≤ the $100 WHSK share; if the share runs out first, E6 runs on the smaller position). **16:00: lead re-reads the DoraHacks timeline live; JUDGE.md link (3) added.** **~16:20: E6 pre-check** (a position of fresh buys marks ≈ −60 bps, so it passes by construction) → "Stop out HSK at 0.5%" (WHSK-scoped) → guard exit; then "Back to a 3% stop on HSK" (Touch ID) | **Rogue run on Vault-HSK (E4)** (from the Claude Code stdio session), guardian pause + owner unpause of both vaults (E5) | Bug fixes | **E7, rebuild and E6 via Chat** | Polish | If go: `ate_signal_buy` in the loop |
+| 16:30–17:30 | **16:30: ops-2 cuts the E12 60 s unedited capture** (a real cycle — ideally a WBTC spread-revert, which `minEntryIntervalSec` spreads across the window — from the 14:00–15:30 recording) and its 25–30 s excerpt; **records the demo beats**; **compiles the demo video (≤ 3 min) and the 90 s cut by 17:30**; sends the ecosystem-directory listing request. 16:30: lead picks the on-stage AI-decision example. **17:00: ops-2 saves the full draft; ops-1 moves Vault-BTC to the Safe (§19 step 9).** Lead: evidence pack (E1–E14), README with per-market realised-first P&L and the WBTC structural-discount caveat | Fork/invariant re-run on final bytecode; `docs/INTEGRATE.md`; skill PR draft; **`vault-v0.1.0` tag by 17:30** | Bug fixes; **npm publish `@ate/venues`, `@ate/mcp` by 17:30** | E6 retries if the pre-check failed; unattended-run evidence | `docs/JUDGE.md` final, screenshots, Decisions E2E | E8 evidence (if go); otherwise contingency work |
+| 17:30–18:00 | Ops-2: final upload of the video; lead: submission text; **18:00: final edit submitted (hard)** | | | | | |
+| 18:00–18:30 | Buffer | | | | | |
 
 **Contingency reassignments (decided now, applied at the checkpoint without discussion).**
 
 | Checkpoint | Trigger | Action |
 |---|---|---|
-| 05:30 | < $220 USDT on 177 | Smaller-seed fallback (§19 Funding); `maxExposureUsd` $60 per vault; pitch card regenerated from `limits()` |
-| 06:30 | Bytecode not frozen or fork smoke red | Lane B's agent pairs on Lane A until green; lead triages failing tests against the §4.4 submission gate |
-| 07:00 | HSP allowlist not confirmed | Lane E keeps building payments against recorded responses (still must-build) **and** takes the Decisions-view Playwright E2E and `docs/JUDGE.md` from Lane D, so Lane D spends the day on the six Electron views. `docs/hsp-readiness.md` and the organiser reply are committed |
-| 08:00 | Vaults not deployed | Lead + ops unblock first; Lane B keeps testing against the Anvil fork |
-| 08:45 | Still no vault | Deploy the fork-smoked bytecode with the fork-smoked args immediately (above); the 09:15 BUIDL always carries a mainnet vault address |
-| 09:00 | No first mainnet trade | Lane C pairs on Lane B's execute path; the 09:15 BUIDL ships with vaults, `check()` reads and the replay; trader starts by 10:30 at the latest; the rogue run moves so the unattended window stays ≥ 1 h |
-| 09:00 | Lane C's guard not yet replacing the stub | Trader start waits (never runs on the stub); Lane B pairs on Lane C; latest 09:30, else the 10:00 row applies |
-| 09:00 | `ate-approve` not signing end-to-end (UI attach, `ate chat` session, strategy diff) | Lane A (free after deploy) takes `apps/approve/`; Lane E stays on payments. Until green: Electron uses `/view` (no attach needed) and the demo path uses the rules-only CLI; nothing on the trade path depends on it (smoke and trader are autonomous) |
-| 10:30 | `ate-approve` still red | Daemon restarted with `--approval-fallback=tty` (§10.1) so `/ui/attach`, `ate chat` and the E6 restore work; it switches off when `ate-approve` passes; SECURITY.md states it |
-| 09:00 / 10:00 | WBTC gap below cost (closed by others before we trade), or Vault-BTC buys `suppressed` (deviation after an APRO push, or Supra–APRO disagreement) | The trader keeps watching it (it fires whenever the gap reopens and `check()` passes); the hands-off beat uses its spoken branch (§22.1): the WBTC `no_trade`/suppression with its numbers next to the 03:50 snapshot and the replay's persistence verdict; T1.8 is reported as Partial in the README until E14 exists, with the structural-discount caveat. Nothing else changes |
-| 10:00 | Autonomous trader not running | Lanes D and E pause polish; lead + B + C swarm; the unattended window starts when the trader runs and must start by 13:00 |
-| 10:45 | No `origin=discretionary` trade or no `llm_veto`/size-down in the journal | At the 11:30 restart (not during the G6 window) the lead amends `agents/trader/PROMPT.md` with an explicit demo-profile directive — originate one thesis trade (≤ $10) and evaluate vetoes on the next WHSK candidate — labelled `profile=demo` and journalled as a `strategy_change` with `actor=human, via=cli`. 14:00: if still missing, the directive stays on through 17:00 and the README states the gap |
-| 11:45 | E6 pre-check: Vault-HSK unrealised > −55 bps (the WHSK-scoped 0.5% stop would not fire) | Do not run the stop-out yet; retry every 15 min until 14:00 (each demo buy pulls the blended mark toward −60 bps). If still not met by 14:00, E6 is recorded as a "go to cash" sell and the stop-loss is evidenced by the guard tests plus any natural guard exit, stated |
-| 14:00 | Electron views not wired to the mainnet daemon | Demo and recording use `/view` + `ate chat`; Lane D keeps building and the app ships in the repo by 17:30 |
-| 14:00 | E13 net negative, or no veto/thesis worth showing | The on-stage AI example is still one real record; the narration states the scoreboard sign in one sentence |
-| 14:00 | Replay output missing for a market | Lane B takes the Blockscout/kline data plumbing; Lane C finishes the report |
+| 11:00 | < $220 USDT on 177 | Smaller-seed fallback (§19 Funding); `maxExposureUsd` $60 per vault; pitch card regenerated from `limits()` |
+| 11:00 | Organisers say the deadline has passed | Ops-2 requests written acceptance of a late BUIDL in the same thread; the plan runs unchanged for Demo Day |
+| 11:45 | Bytecode not frozen or fork smoke red | **Lane E's agent** pairs on Lane A until green (payments are tested on recorded responses and are off the critical path); lead triages failing tests against the §4.4 submission gate |
+| 12:00 | HSP allowlist not confirmed | Lane E keeps building payments against recorded responses (still must-build) **and**, once its approval endpoints are green, takes the Decisions-view Playwright E2E and `docs/JUDGE.md` from Lane D, so Lane D spends the day on the six Electron views. `docs/hsp-readiness.md` and the organiser reply are committed |
+| 12:45 | Vaults not deployed | Lead + ops unblock first; Lane B keeps testing against the Anvil fork |
+| 12:45 | **Lane B overload:** execute path not green on the fork | `ate smoke` moves to Lane A (free after deploy); Lane B keeps only TxQueue → execute → MCP |
+| 13:15 | Still no vault | Deploy the fork-smoked bytecode with the fork-smoked args immediately (above); the BUIDL is created from that address |
+| 14:00 | No first mainnet trade | Lane C pairs on Lane B's execute path; the BUIDL carries vaults, `check()` reads and the replay; trader starts by 14:30 at the latest; the window and the rogue run shift so the unattended window stays ≥ 1 h |
+| 14:00 | Lane C's guard not yet replacing the stub | Trader start waits (never runs on the stub); **Lane D's agent** pairs on Lane C (Electron falls back to `/view`); latest 14:15, else the next row applies |
+| 14:00 | `ate-approve` not signing end-to-end (UI attach, `ate chat` session, strategy diff) | Lane A (free after deploy) takes `apps/approve/`; Lane E keeps the endpoints and payments. Until green: Electron uses `/view` (no attach needed) and the demo path uses the rules-only CLI; nothing on the trade path depends on it |
+| 14:30 | `ate-approve` still red | Lead types `approval-fallback enable` on the daemon's TTY (armed since 13:00; **no restart**, so no `ate unlock` and no break in G6/E12) so `/ui/attach`, `ate chat` and the E6/E7 Touch-ID steps work by code; it switches off when `ate-approve` passes; SECURITY.md states it |
+| 14:00 / 14:30 | WBTC gap below cost (closed before we trade), or Vault-BTC buys `suppressed` | The trader keeps watching it (it fires whenever the gap reopens and `check()` passes). **Pre-registered second path (T1.8):** E14 shows the replay's top-decile historical gaps with the default-profile decision and counterfactual net edge, plus the live `no_trade`/suppression records next to the 03:50 snapshot; the hands-off beat uses its spoken branch (§22.1); T1.8 is reported as Partial in the README until a live E14 exists, with the structural-discount caveat |
+| 14:00 | Replay output missing for a market | Lane A (free after deploy) takes the Blockscout/kline data plumbing; Lane C finishes the report |
+| 14:00 | Autonomous trader not running | Lanes D and E pause polish; lead + B + C swarm; the unattended window starts when the trader runs and must start by 15:00; the rogue run, E7 and E6 follow ≥ 1 h later and finish by 17:15 |
+| 14:45 | No `origin=discretionary` trade or no `llm_veto`/size-down in the journal | At the 15:30 trader re-enable (not during the G6 window) the lead amends `agents/trader/PROMPT.md` with an explicit demo-profile directive — originate one thesis trade (≤ $10) and evaluate vetoes on the next WHSK candidate — labelled `profile=demo` and journalled as a `strategy_change` with `actor=human, via=cli`. 16:30: if still missing, the directive stays on through 17:30 and the README states the gap |
+| 15:15 | Vault-HSK epoch headroom < (150 − WHSK holdings) × 0.975 | The other rogue attacks run at 15:30; the exposure attack runs at 05:35 IST Nov 3 (fresh epoch, before the pitch list) and is added to E4 |
+| 16:20 | E6 pre-check: Vault-HSK unrealised > −55 bps | Do not run the stop-out yet; retry every 15 min until 17:00. If still not met, the stop-loss is evidenced by the guard tests plus any natural guard exit, stated; the 15:45 E7 tx stays the stage fallback |
+| 16:30 | Electron views not wired to the mainnet daemon | Demo and recording use `/view` + `ate chat`; Lane D keeps building and the app ships in the repo by 17:30 |
+| 16:30 | E13 net negative, or no veto/thesis worth showing | The on-stage AI example is still one real record; the narration states the scoreboard sign in one sentence |
+| 12:45 / 13:15 / 14:00 | **Lead tie-break:** two or more of these checkpoints miss together | The lead drops, in this order and only until the misses clear: `docs/JUDGE.md` polish, the README P&L table, the Decisions-view E2E (each resumes afterwards — scope is fixed, this is ordering, not cutting). Deploy, the first trade, the rogue revert and the BUIDL keep the lead's attention |
 | any | A lane agent stalls > 30 min | Lead restarts it in a fresh worktree from the lane's last green commit with the same brief |
 
-**Gate G-HSP.** Checked first by ops-2 at 04:00 — in person or on the organisers' channel with Operations,
-not only the form — re-checked at 07:00 (contingency trigger), decided at 10:00. Go only if all are
-true: allowlist confirmed and health `ok`; all eight tools listed; `get_chain_config` returns a network
-OKX (or the fallback signer) can sign for; the exact token is funded. **Either way** `docs/hsp-readiness.md`
-and the recorded listing or organiser reply are in the repo by 07:00 (§9). If no-go: Lane E's work stays
-behind `payments.enabled=false`, the submission describes HSP as built-but-not-live with that evidence,
-the HSP Q&A card (§22.1) answers it on stage, and live use resumes for Demo Day if access arrives. If go:
-E8 is a DoD item and the premium-signal purchase becomes a 10 s beat in the main script (§22.1). The
-submission is Track 1 either way; HSP never blocks it and never touches the trade path.
+**Gate G-HSP.** Checked first by ops-2 at 10:30 — in person or on the organisers' channel with
+Operations, not only the form — re-checked at 12:00 (contingency trigger), decided at 14:00. Go only if
+all are true: allowlist confirmed and health `ok`; all eight tools listed; `get_chain_config` returns a
+network OKX (or the fallback signer) can sign for; the exact token is funded. **Either way**
+`docs/hsp-readiness.md` and the recorded listing or organiser reply are in the repo by 12:00 (§9). If
+no-go: Lane E's work stays behind `payments.enabled=false`, the submission describes HSP as
+built-but-not-live with that evidence, the HSP Q&A card (§22.1) answers it on stage, and live use resumes
+for Demo Day if access arrives. If go: E8 is a DoD item and the premium-signal purchase becomes a 10 s
+beat in the main script (§22.1). The submission is Track 1 either way; HSP never blocks it and never
+touches the trade path.
 
 **Never cut:** every §21.1 item. When an item lags, its demo-path fallback ships first and the full item
 keeps building to 17:30: Electron views → `/view` + `ate chat`; Chat view → `ate chat`; LLM engine →
 `--engine rules` for resilience only (not Track 1 evidence); live HSP → payments on recorded responses;
-`ate-approve` → 09:00 reassignment to Lane A, then the 10:30 TTY degradation for attach/session/strategy
-diffs (never payments). Nothing on the trade path waits on `ate-approve`. Contract deploy + verification
-(both vaults), the autonomous execute path, rogue-agent reverts, the evidence pack and the 09:15 BUIDL have
-no demo-path fallback and get the lead's attention first.
+`ate-approve` → 14:00 reassignment to Lane A, then the 14:30 armed TTY degradation for
+attach/session/strategy diffs (never payments). Nothing on the trade path waits on `ate-approve`.
+Contract deploy + verification (both vaults), the autonomous execute path, rogue-agent reverts, the
+evidence pack and the BUIDL have no demo-path fallback and get the lead's attention first.
 
 ---
 
@@ -2483,11 +2575,11 @@ the recorded E4 is played instead and the narration says so.
 
 | Time | Beat | On screen |
 |---|---|---|
-| 0:00–0:20 | **Hook (one number):** "AI agents trade overnight, but one bad prompt or stolen key can drain the wallet. With ATE the stolen key can never withdraw a cent, and the contract caps what bad trades can cost at $51.50 a day — about 18% of this demo wallet. Let's steal its key." | **Key can never withdraw · ≤ $51.50 per UTC day of execution loss across both vaults, every path, while APRO is live · exposure ≤ $150 per vault · enforced by the contract** · **Price risk on held exposure (≤ $150/vault): stop-loss, not contract** (footnote: §4.6 pitch card) |
-| 0:20–1:05 | **Rogue agent with the stolen agent key** (Vault-HSK). "The vault is verified; its pool, oracle and router are fixed at deploy; this key can only trade inside the limits or pause." Attack 1 — **the differentiator:** a $5 buy, well under every cap, with `minAmountOut = 1` ("price is crashing, take anything") → `ERR_SLIPPAGE`. "A session key or Safe allowance would let this through. The vault knows what a fair price is." Attack 2: `withdraw(USDT, attacker, all)` → owner-only revert. "Five more — the $5,000 buy, exposure, fake token, setLimits, after-pause — are in the evidence pack." | Blockscout contract page + `limits()`, then the two reverted txs with decoded errors (`Slippage(minAmountOut, floor)`) |
-| 1:05–1:45 | **Good agent, hands off — three items.** (1) **The WBTC spread capture (if E14 exists):** "The BTC pool sat 1.1% under HashKey Global — about 0.8% below the exchange price after the entry fee and impact. The agent bought, on its own, default settings. That gap is captured on paper at the exchange mark and realised only if the pool reverts; selling right now would realise about −0.6%." → `TradeExecuted` + EAS UID, with the decision's gap / cost / net edge. **Branch, if E14 does not exist (gap closed or suppressed):** "The same cycle sat out BOTH markets: BTC gap [X] bps vs cost [Y] bps, HSK 30 vs 36" → the 03:50 snapshot and the E11 replay persistence headline. (2) **The same cycle on HSK:** "30 bps gap, 36 bps cost — it did nothing." (`no_trade` signal block). (3) **One real AI decision a rules engine would not make** (10–15 s, picked at 14:00): an `llm_veto`/size-down with its reason and +30 min bps outcome, or the discretionary thesis with its EAS UID; if E13 is net negative, one sentence says so. "It has been running for [uptime] — [N] cycles, [M] trades." If E8 exists: 10 s — the trader buys a premium signal over HSP | 25–30 s E12 excerpt, Decisions view (`engine=llm`, market, generator, `candidateId`), tx with `rationaleHash`, EAS UID, the chosen veto/thesis record, uptime counter |
-| 1:45–2:30 | **Live Chat.** "How am I doing?" → `ate_positions` card per vault: the BTC lot marked at the CEX (the captured gap) and exit-executable (what selling now realises), HSK P&L, fee drag. "**Go to cash on HSK — keep the BTC.**" → `ate_strategy_set { targetAssets: ["WBTC"] }` card → the guard's immediate `reason=target_assets` sell on Vault-HSK on Blockscout (§11.4 rule 9; no LLM cycle to wait for). **If the sell has not landed in 20 s**, the narrator opens the E7 sell tx recorded at 11:45. "Target assets, by conversation. Stop-losses work the same way; here's one from today — we tightened the HSK stop to 0.5% so exit fees trip it; the guard sold with no LLM involved" → E6 card (recorded, staged and labelled so) | Chat view with both cards, the HSK sell tx, the E6 card |
-| 2:30–3:00 | **Close.** Ops-1 presses the guardian pause → `Paused` on both vaults; the stolen key's next `execute` (rogue, fixed gas) reverts `ERR_PAUSED` on-chain. "**Bounded autonomy. Two live vaults, [N] HSKSwap trades routed, Apache-2.0, a one-page integration guide — any HashKey agent team can put its agent behind this vault today. We're contributing it back as an HSK-Superpowers skill and have asked for an ecosystem-directory listing. The bound is the product.**" QR to `docs/JUDGE.md` | Guardian `Paused` txs, the `ERR_PAUSED` revert, footer HSKSwap counters, QR to `docs/JUDGE.md` |
+| 0:00–0:20 | **Hook (one number):** "AI agents trade overnight, but one bad prompt or stolen key can drain the wallet. With ATE the stolen key can never withdraw a cent, and the contract caps what bad trades can cost at $51.50 a day — about 18% of this demo wallet. Let's steal its key." | Three items only: **Stolen key can never withdraw · ≤ $51.50/day, about 18% · exposure ≤ $150/vault** — footnote: *price risk on held exposure: stop-loss, not contract* (every other number is on the Q&A *numbers* card) |
+| 0:20–1:05 | **Rogue agent with the stolen agent key** (Vault-HSK) — **a second, unrelated agent: a Claude Code session over stdio, pointed at the same vault** (§22.3). "Different agent, different framework, same vault. The vault is verified; its pool, oracle and router are fixed at deploy; this key can only trade inside the limits or pause." Attack 1 — **the differentiator:** a $5 buy, well under every cap, with `minAmountOut = 1` ("price is crashing, take anything") → `ERR_SLIPPAGE`. "A session key or Safe allowance would let this through. The vault knows what a fair price is." Attack 2: `withdraw(USDT, attacker, all)` → owner-only revert. "Five more — the $5,000 buy, exposure, fake token, setLimits, after-pause — are in the evidence pack." | Blockscout contract page + `limits()`, then the two reverted txs with decoded errors (`Slippage(minAmountOut, floor)`) |
+| 1:05–1:45 | **Good agent, hands off — one item.** **The WBTC spread capture (if E14 exists), realised-first:** "The BTC pool sat 1.1% under HashKey Global. The agent bought, on its own, default settings. Sold right now that lot is about −0.6% after fees; if the pool reverts it is +0.8% — and the market may keep this discount, which is why the contract caps the downside. Same cycle, HSK: 30 bps gap, 36 bps cost — it did nothing." → `TradeExecuted` + EAS UID with the decision's gap / cost / net edge, and the HSK `no_trade` in the same frame. **Branch, if E14 does not exist (gap closed or suppressed):** "The same cycle sat out BOTH markets: BTC gap [X] bps vs cost [Y] bps, HSK 30 vs 36 — and here is what it would have done on last week's widest gaps" → the replay's top-decile gaps (the pre-registered second path). "Running for [uptime] — [N] cycles, [M] trades." The on-stage AI veto/thesis record is in `docs/JUDGE.md` link (3) and the Q&A *What does the AI decide* card. If E8 exists: 10 s — the trader buys a premium signal over HSP | 25–30 s E12 excerpt, Decisions view (`engine=llm`, market, generator, `candidateId`), tx with `rationaleHash`, EAS UID, uptime counter |
+| 1:45–2:30 | **Live Chat.** "How am I doing?" → `ate_positions` card per vault: the BTC lot exit-executable first (what selling now realises), then marked at the CEX (the gap captured on paper), HSK P&L, fee drag. "**Go to cash on HSK — keep the BTC.**" → `ate_strategy_set { targetAssets: ["WBTC"] }` card → the guard's immediate `reason=target_assets` sell on Vault-HSK on Blockscout (§11.4 rule 9; no LLM cycle to wait for). **If the sell has not landed in 20 s**, the narrator opens the E7 sell tx recorded at 15:45. "Target assets, by conversation." Then a **5 s recorded E6 cut-in**, captioned "Stop-loss: guard sold with no LLM (staged: stop tightened to 0.5%)" — not narrated further | Chat view with both cards, the HSK sell tx, the 5 s E6 cut-in |
+| 2:30–3:00 | **Close.** Ops-1 presses the guardian pause → `Paused` on both vaults; the stolen key's next `execute` (rogue, fixed gas) reverts `ERR_PAUSED` on-chain. "**Bounded autonomy. Four clients — our trader, the chat agent, a stolen key, a Claude Code session — one vault, one bound: any agent, any framework. Two live vaults, [N] HSKSwap trades routed, Apache-2.0, on npm, one-command deploy. Next: audit, Safe by default, Kredo. Our ask: audit credits, HSP access, and the skill in HSK-Superpowers. The bound is the product.**" QR to `docs/JUDGE.md` | Guardian `Paused` txs, the `ERR_PAUSED` revert, footer HSKSwap counters, QR to `docs/JUDGE.md` |
 
 **90-second cut** (for a shorter slot): hook (0:00–0:15) → one rogue revert, the `minAmountOut = 1` buy →
 `ERR_SLIPPAGE` (0:15–0:40) → one hands-off decision, the WBTC spread capture with its EAS UID or the
@@ -2497,12 +2589,14 @@ After the pitch the owner unpauses both vaults from the second device (§19 step
 `targetAssets: ["WHSK", "WBTC"]` (loosening: Touch ID, §11.5).
 
 **Q&A cards (prepared answers):**
-- *The numbers* — the §4.6 pitch card verbatim (per vault and portfolio; normal path, exits, rolling 24 h;
-  APRO-wrong case: per vault ≤ $250 of USDT plus its token holdings, never above the vault).
+- *The numbers* — the §4.6 Q&A numbers card verbatim: $51.50 is ≤ $103 over any rolling 24 h; ≤ $26.50
+  per UTC day on the normal path (≤ $53 rolling); oracle-lag exits add ≤ $7.50 per vault per episode,
+  inside those totals; per vault, half of each; APRO-wrong case: per vault ≤ $250 of USDT plus its token
+  holdings, never above the vault.
 - *Why not a Safe module or session key* — §0 Positioning, incl. the Zodiac Roles-style comparison and the
   "first on HashKey Chain, to our knowledge" searches in `docs/JUDGE.md`.
-- *Is it profitable* — the WBTC lots: captured gap marked at the CEX vs exit-executable, realised only
-  when the pool reverts, and the discount may be structural (bridged WBTC, ~94% of supply in one pool);
+- *Is it profitable* — realised-first: the WBTC lots are ≈ −0.6% if sold now (fees included) and ≈ +0.8%
+  on paper at the CEX mark, realised only when the pool reverts; the discount may be structural (bridged WBTC, ~94% of supply in one pool);
   README states per-market realised P&L since the trader's start incl. fee drag; E11 replay,
   counterfactual, with its transient/persistent verdict. If the replay shows no edge after fees: "the market gave us no edge after fees this
   week, and the agent correctly did nothing".
@@ -2516,7 +2610,8 @@ After the pitch the owner unpauses both vaults from the second device (§19 step
   trusting it — Maneki-style per-agent fleets, trading bots behind an MCP agent. The caps are owner
   parameters, not constants; $280 is our demo wallet. `docs/INTEGRATE.md` is a 15-line example — constructor
   args for any qualifying pool, run on the Anvil fork in CI — and `forge install …@vault-v0.1.0`. It is
-  unaudited and fuzz-tested; we say so."
+  unaudited and fuzz-tested; we say so. Next 30/60/90 days: audit + bug bounty and Safe by default;
+  Kredo adapter and ERC-8004 identity; two design partners live (§0 *Incubation plan*)."
 - *Which pools can it guard?* — any HSKSwap pool whose `token0` is an 8- or 18-dp token against a 6-dp
   USD stable with an 8-dp AggregatorV3 feed; the constructor checks it; WHSK and WBTC are two instances.
   WETH is excluded only because APRO has no ETH/USD feed.
@@ -2532,28 +2627,28 @@ source + immutables), (2) `limits()` reads, (3) LLM-decided `TradeExecuted` txs 
 spread-revert trade (E14)** and one discretionary trade — each with its EAS attestation and journal
 record, plus the on-stage veto/size-down record with its +30 min outcome, (4) one decoded rogue revert
 (the `ERR_SLIPPAGE` buy), (5) the guardian `Paused` txs and the owner `Unpaused` txs. It also links the full
-60 s E12 file, the 03:50 and 09:00 WBTC snapshots, the skill PR and the directory request. An appendix
+60 s E12 file, the 03:50 and trader-start (~14:00) WBTC snapshots, the skill PR and the directory request. An appendix
 links the Blockscout verified-contract and ecosystem-directory searches behind the §0 positioning claim.
-**The 09:15 stub carries (1), (2) and the first mainnet trade + EAS UID** — the first LLM-decided trade
-if one has executed by 09:10 (labelled `engine=llm`), else the smoke trade (labelled `smoke`,
-`engine=rules`); link (3) is added at the 12:00 edit. Everything else is in `docs/evidence.md`:
+**The stub created with the BUIDL (first vault deploy, ~12:30) carries (1) and (2)**; the ~13:30 edit adds
+the smoke trade + EAS UID (labelled `smoke`, `engine=rules`), the ~14:30 edit the first LLM-decided trade
+(labelled `engine=llm`); link (3) is added at the 16:00 edit. Everything else is in `docs/evidence.md`:
 
 | # | Claim | Evidence |
 |---|---|---|
-| E1 | Contracts deployed and verified on mainnet | Both vault addresses + Blockscout verified-source links (same bytecode); fork-smoke log |
+| E1 | Contracts deployed and verified on mainnet | Both vault addresses + Blockscout verified-source links (same source and creation code; immutables differ); fork-smoke log; Vault-BTC → Safe ownership transfer + acceptance txs (§19 step 9) |
 | E2 | Limits as stated; oracle health | `LimitsUpdated` txs + `limits()` reads; immutables (pair, oracle, router, pool, `priceDecimals`) on each contract page; `ate doctor` output incl. APRO ages, pool cardinality and the Supra cross-check |
 | E3 | Autonomous LLM-decided trades | For one candidate-bound trade (the E14 WBTC trade) and one `origin=discretionary` trade: `TradeExecuted` tx; `proposalId` == journal record hash; journal record with `engine=llm`, market, `candidateId` or thesis, generator, `profile`, `approvedBy=policy`, matching `rationaleHash`; **EAS attestation UID** resolving to the same `proposalId`, `rationaleHash`, `txHash`, `origin` |
-| E4 | Rogue attacks rejected on-chain | One reverted tx per §22.3 on-chain attack, decoded custom error |
+| E4 | Rogue attacks rejected on-chain | One reverted tx per §22.3 on-chain attack, decoded custom error, sent from the Claude Code stdio session (the second client); the exposure attack is dated 05:35 IST Nov 3 if the 15:15 headroom read deferred it |
 | E5 | Kill switch | Guardian `Paused` txs on both vaults + subsequent `ERR_PAUSED` revert + owner `Unpaused` txs from the second device + the trader's next journal row |
-| E6 | Stop-loss (recorded) | `ate_positions` card showing entry, exit-executable mark (fees both ways included; a fresh position is ≈ −60 bps), fee drag and unrealised ≤ −0.55%. Then Chat "stop out HSK at 0.5%" → `ate_strategy_set { market: "hsk-dex:WHSK/USDT:3000", stopLossBps: 50 }` → `guard_exit` sell on Vault-HSK only (`engine=guard`) with the guard rationale; 600 s re-entry lock on WHSK journalled; the WBTC lot untouched; then Chat "back to a 3% stop on HSK" → Touch ID → `strategy_change`. **Staged, and said so on stage and here:** the trigger is met by fee drag on the exit-executable mark, not by a price move (fallback per §21.4 11:45) |
-| E7 | NL positions, strategy and target assets via Chat | Chat transcript ("How am I doing?" → `ate_positions` card; "Go to cash on HSK, keep the BTC" → `targetAssets` change → immediate `reason=target_assets` guard sell on Vault-HSK, tx recorded as the stage fallback; the E6 change) and the `strategy_change` records (`actor=human, via=chat`) |
+| E6 | Stop-loss (recorded) | `ate_positions` card showing entry, exit-executable mark (fees both ways included; a fresh position is ≈ −60 bps), fee drag and unrealised ≤ −0.55%. Then Chat "stop out HSK at 0.5%" → `ate_strategy_set { market: "hsk-dex:WHSK/USDT:3000", stopLossBps: 50 }` → `guard_exit` sell on Vault-HSK only (`engine=guard`) with the guard rationale; 600 s re-entry lock on WHSK journalled; the WBTC lot untouched; then Chat "back to a 3% stop on HSK" → Touch ID → `strategy_change`. Runs ~16:20 on the WHSK position rebuilt after E7 (fresh buys only, so the pre-check passes by construction). **Staged, and said so on stage and here:** the trigger is met by fee drag on the exit-executable mark, not by a price move (fallback per §21.4 16:20) |
+| E7 | NL positions, strategy and target assets via Chat | Chat transcript ("How am I doing?" → `ate_positions` card; "Go to cash on HSK, keep the BTC" → `targetAssets` change → immediate `reason=target_assets` guard sell on Vault-HSK at 15:45, tx recorded as the stage fallback; "Trade HSK again" (Touch ID) and the rebuild; the E6 change; a `riskProfile` change) and the `strategy_change` records (`actor=human, via=chat`) |
 | E8 | (If G-HSP) A2A settlement | Conditions hash, `orderId`, `payment_request_id`, gateway tx, `SETTLED`, `attribution_verified=true`; if no-go, `docs/hsp-readiness.md` + recorded listing or organiser reply |
 | E9 | Tests | CI run link: forge unit, parity, invariants (both shapes), fork smoke (both vaults); `docs/superpowers-log.md` (each HSK-Superpowers skill invoked, with its command output incl. `forge verify-contract`) |
 | E10 | Journal integrity | Chain head hash; latest on-chain anchor (`proposalId`); EAS attestation UIDs; trigger, fork (`UNIQUE(prev_hash)`) and id-from-hash tests |
-| E11 | Spread opportunities and profitability, measured (counterfactual) | `docs/replay-7d.md` from `ate replay --days 7`, per market: pool volume, cycles, candidates fired / rejected on net edge, net-edge distribution, counterfactual net edge, **gap persistence** (signed-gap distribution, share of cycles with gap > cost, median time-to-close, `transient` / `persistent` verdict) — labelled counterfactual; headline in the 09:15 BUIDL |
-| E12 | Real cycle, unedited (must-ship) | 60 s excerpt, unedited, from the 10:00–11:30 continuous screen recording, with timestamps and a live Blockscout tab, as a separate file linked from `docs/JUDGE.md`; the demo video (≤ 3 min) contains a 25–30 s unedited excerpt of it with a timestamp overlay |
+| E11 | Spread opportunities and profitability, measured (counterfactual) | `docs/replay-7d.md` from `ate replay --days 7`, per market: pool volume, cycles, candidates fired / rejected on net edge, net-edge distribution, counterfactual net edge, **gap persistence** (signed-gap distribution, share of cycles with gap > cost, median time-to-close, `transient` / `persistent` verdict), **top-decile gaps** with the default-profile decision and counterfactual net edge (the T1.8 second path) — labelled counterfactual; headline in the BUIDL's first edit (~13:30) |
+| E12 | Real cycle, unedited (must-ship) | 60 s excerpt, unedited, from the continuous screen recording started at trader start (14:00–15:30), ideally a WBTC spread-revert, with timestamps and a live Blockscout tab, as a separate file linked from `docs/JUDGE.md`; the demo video (≤ 3 min) contains a 25–30 s unedited excerpt of it with a timestamp overlay |
 | E13 | What the LLM adds | AI scoreboard: count of LLM acts, vetoes/size-downs with the counterfactual bps and USD saved at +30 min (negative allowed), from `outcome` records; discretionary trades with their theses and realised P&L |
-| E14 | **Live spread capture (primary T1.8 evidence)** | The WBTC `spread-revert` decision record (pool price, CEX bid/ask, APRO, `edgeBps`, `costBps`, `netEdgeBps`, `profile=default`), its `TradeExecuted` tx on Vault-BTC and EAS UID; per-lot P&L marked at CEX (captured on paper) and exit-executable, realised only via the close leg if the pool reverted; the structural-discount caveat. If the gap closed or buys were `suppressed` before we traded: the 03:50 and 09:00 snapshots, the `no_trade`/suppression records and the replay persistence verdict, stated as such |
+| E14 | **Live spread capture (primary T1.8 evidence)** | The WBTC `spread-revert` decision record (pool price, CEX bid/ask, APRO, `edgeBps`, `costBps`, `netEdgeBps`, `profile=default`), its `TradeExecuted` tx on Vault-BTC and EAS UID; per-lot P&L marked at CEX (captured on paper) and exit-executable, realised only via the close leg if the pool reverted; the structural-discount caveat. **Pre-registered second path** (if the trader-start re-read shows the gap below cost, or buys were `suppressed`): the 03:50 and ~14:00 snapshots, the `no_trade`/suppression records, and the replay's top-decile historical gaps with the default-profile decision and counterfactual net edge plus the persistence verdict, stated as such |
 
 Every row is labelled by `profile`, market and generator/`origin` where that applies.
 
@@ -2562,19 +2657,31 @@ Every row is labelled by `profile`, market and generator/`origin` where that app
 Owned by Lane A (`agents/rogue/` and the `ate rogue` entry). Runs with the real agent key against the
 real **Vault-HSK**: it signs through the daemon's `TxQueue` raw-broadcast path (no pre-flight, fixed gas),
 which exists only when the daemon is started with `--allow-rogue`, so the key is still loaded by one
-process only (§7.1). Before each attack it waits out `cooldown`, calls `check()` and asserts the expected
+process only (§7.1). **Raw-path access (D6):** only the `rogue` token (§10.1) reaches it — minted at daemon
+start, printed once to the daemon's controlling TTY, never in `runtime.json`; calldata must target one of
+the two vaults with selector `execute`, `withdraw`, `setLimits` or `pause` (anything else refused); every
+call is journalled `profile=rogue`; an `agent`, `chat` or `ui` token → 403 (test, §18.2). **Flag
+lifecycle:** the mainnet daemon is started once at ~13:00 with `--allow-rogue` (§19 step 7), so neither
+the 15:30 run nor a Demo Day `--stage` run needs a restart; the flag is dropped at the first restart after
+Demo Day. **Second client on stage:** `ate rogue` is driven from a separate Claude Code session over stdio
+(`ate mcp serve`, `agent` scope) whose environment the operator gives the `rogue` token — "the stolen
+key"; it first tries `ate_propose` for $5,000 (refused by pre-flight), then shells `ate rogue` for the
+on-chain attacks. Before each attack it waits out `cooldown`, calls `check()` and asserts the expected
 code (so an earlier check cannot mask it), then broadcasts so the revert lands on-chain. For the full run
-(11:30, E4) the background trader is stopped (`strategy.enabled=false`) so it cannot reset `cooldown`.
+(15:30, E4) the background trader is stopped (`strategy.enabled=false`) so it cannot reset `cooldown`.
 The staged pitch subset (`ate rogue --stage`: a $5 buy with `minAmountOut = 1`, then `withdraw`) runs
 with the trader live: the `withdraw` fails owner-only, and the $5 buy passes steps 1–10 and fails at step
 11 (`ERR_SLIPPAGE`) — the price check a Safe allowance or session key lacks. It therefore needs Vault-HSK
 spot and TWAP within the deviation bound (7), ≥ $5 of epoch headroom (9) and an elapsed `cooldown` (10):
-`--stage` asks the daemon to hold Vault-HSK candidate executes for ≤ 30 s (guard exits are never held),
-waits out `cooldown`, calls `check()`, asserts `ERR_SLIPPAGE`, then broadcasts. The pre-stage `doctor`
+`--stage` asks the daemon to hold Vault-HSK candidate executes for `cooldown` + 30 s (90 s at defaults),
+waits out `cooldown`, then `check()` → asserts `ERR_SLIPPAGE` → broadcasts within the same `TxQueue` slot.
+Guard exits are never held: **if any Vault-HSK tx (incl. a guard exit) enters the queue between `check()`
+and broadcast, `--stage` aborts to the recorded E4.** The pre-stage `doctor`
 check (§22.1) guards this, and `ate rogue --stage` aborts to the recorded E4 if `check()` returns any other
 code. In the full run the exposure and slippage buys are
 sized to the epoch headroom read from `epoch()` (a spent epoch returns `ERR_EPOCH_CAP` before §4.2 steps
-11–13; §19 leaves ≥ $150 at 11:30). `ate rogue` submits a `proposal` and an `execution` journal record per
+11–13); headroom is read by `ate doctor` at 15:15 and, if short of the exposure attack's need, that one
+attack runs at 05:35 IST Nov 3 (§19 *Epoch budget*). `ate rogue` submits a `proposal` and an `execution` journal record per
 attempt to the daemon's journal API (`profile=rogue`, `verdict.code` = expected code,
 `execution.reverted=true`; §13 single writer); the daemon journals `Paused`/`Unpaused` vault events.
 
@@ -2592,7 +2699,8 @@ attempt to the daemon's journal API (`profile=rogue`, `verdict.code` = expected 
 
 After the run, the owner unpauses both vaults from the second device (runbook §19 step 8). On stage the
 `minAmountOut = 1` and `withdraw` attacks open the pitch and the guardian pause closes it (§22.1); all rows
-are in E4. Vault-BTC runs the same bytecode, so the attacks are not repeated there.
+are in E4. Vault-BTC runs the same source and creation code (only immutables differ), so the attacks are
+not repeated there.
 
 ---
 
@@ -2601,7 +2709,7 @@ are in E4. Vault-BTC runs the same bytecode, so the attacks are not repeated the
 ### 23.1 Submission (v0.1) — every item binary
 
 - [ ] Anvil-fork smoke of both vaults green before deploy; Vault-HSK and Vault-BTC verified on
-      `hsk.blockscout.com` at the addresses in `deployments/177.json` (same bytecode); EAS schema UID
+      `hsk.blockscout.com` at the addresses in `deployments/177.json` (same source and creation code); EAS schema UID
       recorded there; limits on both match §19 step 3 (`maxEpochUsd = 250`, `maxExitDiscountBps = 500`)
       or the recorded smaller-seed values
 - [ ] Foundry unit (codes 1–15 incl. exit path with `T > P` and `T < P`; I5 owner-only; `exposureUsd()`)
@@ -2612,11 +2720,13 @@ are in E4. Vault-BTC runs the same bytecode, so the attacks are not repeated the
 - [ ] ≥ 1 autonomous LLM-decided mainnet trade bound to a `candidateId` **and** ≥ 1 `origin=discretionary`
       LLM trade (≤ $10, thesis), each with `proposalId` == journal record hash and an EAS attestation UID
       (E3); ≥ 1 LLM-sized-down or LLM-vetoed decision and ≥ 1 `no_trade` decision in the journal; trader
-      started autonomously by 09:30 (target ~09:00) and ran ≥ 1 h unattended (10:00–11:30, G6); runner
+      started autonomously by 14:30 (target ~14:00) and ran ≥ 1 h unattended from trader start (14:00–15:30,
+      G6) with no daemon restart in the window; runner
       tests (no overlap, 90 s kill → `timeout`, `candidateTtlSec` from `deployments/177.json`) green
 - [ ] WBTC `spread-revert` trade on Vault-BTC under the default profile with its gap/cost/net-edge record
-      and EAS UID (E14) — or, if the gap closed before the trader ran, the snapshots and `no_trade`
-      records stated as such (§21.4 contingency)
+      and EAS UID (E14) — or, if the gap closed before the trader ran, the pre-registered second path
+      (snapshots, `no_trade`/suppression records, replay top-decile gaps) stated as such (§21.4);
+      WBTC entries ≥ `minEntryIntervalSec` apart (test)
 - [ ] Agents view shows the AI scoreboard: LLM acts, veto/size-down count with counterfactual bps saved
       (negative allowed), discretionary n/3 (E13); footer shows the uptime counter and HSKSwap trades /
       routed USD
@@ -2634,14 +2744,17 @@ are in E4. Vault-BTC runs the same bytecode, so the attacks are not repeated the
 - [ ] Every on-chain attack in §22.3 reverted; tx links in `docs/evidence.md`
 - [ ] Kill switch via the guardian key on both vaults and owner unpause verified on mainnet, trader
       cycling again afterwards (E5)
-- [ ] Stop-loss via a WHSK-scoped Chat strategy change recorded (WBTC lot untouched), card shows entry,
-      exit-executable mark and fee drag, labelled staged, then the HSK stop restored to 3% with Touch ID (E6,
-      or its §21.4 fallback); "go to cash on HSK, keep the BTC" via Chat produces an immediate guard sell
-      on Vault-HSK (E7)
+- [ ] "Go to cash on HSK, keep the BTC" via Chat produces an immediate guard sell on Vault-HSK (E7,
+      15:45), then "trade HSK again" (Touch ID) rebuilds WHSK; stop-loss via a WHSK-scoped Chat strategy
+      change on the rebuilt position recorded (WBTC lot untouched), card shows entry, exit-executable mark
+      and fee drag, labelled staged, then the HSK stop restored to 3% with Touch ID (E6, ~16:20, or its
+      §21.4 fallback)
 - [ ] Chat view and `ate chat` answer "How am I doing?" and apply strategy and target-asset changes
       through MCP tools; rules fallback passes the five ★ intents (§11.5); a `chat`-token call to
       `ate_execute` returns `ATE_TOOL_NOT_ALLOWED`, `actor` is derived from scope, the chat runner's
-      tool list equals the `mcp__ate__*` allowlist, loosening returns `ATE_APPROVAL_REQUIRED` until signed,
+      tool list equals the `mcp__ate__*` allowlist, loosening (every field and direction of the §11.5 table, incl. `riskProfile`) returns
+      `ATE_APPROVAL_REQUIRED` until signed, the `rogue` raw route refuses non-`rogue` tokens and foreign
+      calldata,
       agent text arrives wrapped `<untrusted_agent_text>`, an unscoped stop change asks which market (tests)
 - [ ] `ate-approve` signs a `confirm`-mode trade approval, an `ate chat` session open, a UI attach, a
       loosening strategy diff and a payment approval (recorded responses) with a payload-derived Touch ID prompt; daemon and `ate-pay`
@@ -2651,8 +2764,8 @@ are in E4. Vault-BTC runs the same bytecode, so the attacks are not repeated the
 - [ ] Electron app attaches (`/ui/attach`) to the headless mainnet daemon with Chat, Decisions, Trade,
       Agents, Positions and Payments views and the evidence footer; `/view` serves the read-only
       Decisions fallback
-- [ ] `docs/replay-7d.md` produced by `ate replay --days 7` for both markets (E11), headline in the 09:15
-      BUIDL
+- [ ] `docs/replay-7d.md` produced by `ate replay --days 7` for both markets (E11, incl. top-decile
+      gaps), headline in the BUIDL's first edit
 - [ ] `ate doctor` prints the Supra cross-check vs APRO (and whether the entry gate is active per market),
       both pools' observation cardinality and the agent gas level; the gas alarm fires below 2 HSK; Supra
       disagreement > 250 bps and `check()`-deviation buys are withheld and journalled as suppressions (tests)
@@ -2667,12 +2780,14 @@ are in E4. Vault-BTC runs the same bytecode, so the attacks are not repeated the
       numbers, negative allowed) with the WBTC structural-discount caveat; the 60 s unedited E12 file
       linked from JUDGE.md and a demo video ≤ 3 min containing a 25–30 s unedited E12 excerpt with
       timestamp overlay, plus the 90 s cut; Apache-2.0 LICENSE; SECURITY.md; `docs/superpowers-log.md`
-      linked from E9; `vault-v0.1.0` tag, `docs/INTEGRATE.md` (HSKSwap trades/routed USD), draft
-      HSK-Superpowers skill PR and ecosystem-directory request linked
-- [ ] Complete Track 1 DoraHacks BUIDL (repo, both vaults, first trade tx — LLM-decided if one has
-      executed, else smoke, labelled — WBTC gap snapshot, replay headline, summary, JUDGE.md stub)
-      submitted by 09:15 IST with a mainnet vault address and updated
-      with the final submission by 17:30
+      linked from E9; `vault-v0.1.0` tag, `docs/INTEGRATE.md` (one-command deploy, HSKSwap trades/routed
+      USD), `@ate/venues` and `@ate/mcp` on npm, draft HSK-Superpowers skill PR and ecosystem-directory
+      request linked; Vault-BTC owned by a Safe on 177 (transfer + acceptance txs, §19 step 9)
+- [ ] `docs/deadline.md` (organisers' written deadline) committed by 11:00; Track 1 DoraHacks BUIDL
+      created and submitted as soon as the first vault is verified (target ~12:30, latest 13:30) with a
+      mainnet vault address and a summary that names the customer first and states the WBTC figure
+      realised-first; edited with the smoke trade, replay headline and first LLM-decided trade; final
+      edit submitted by 18:00 IST
 - [ ] G-HSP decision recorded; if go: E8 complete, with expired-quote, denied-approval and
       uncertain-submission handling tested without duplicate payment
 
@@ -2698,12 +2813,14 @@ restricted to configured hosts.
   released under Apache-2.0 with a one-page integration guide, so other HashKey agent teams can put
   their agents behind a vault without adopting the desktop app. **By 17:30 on Nov 2:** the public repo is
   tagged `vault-v0.1.0`, the Foundry package installs from that tag (`forge install <repo>@vault-v0.1.0`),
-  and `docs/INTEGRATE.md` gives the constructor args for any qualifying pool, with the two live
-  deployments as worked examples. **Scope of reuse in v0.1:** the vault supports an 8- or 18-dp
+  and `docs/INTEGRATE.md` gives a one-command deploy for any qualifying pool — `forge script Deploy --sig
+  'run(address,address)' <pool> <oracle> --rpc-url $HSK_RPC --ledger --broadcast` (the script reads
+  `token0`/`token1`/`factory` from the pool and asserts the §4.1 shape) — with the two live deployments as
+  worked examples. **Scope of reuse in v0.1:** the vault supports an 8- or 18-dp
   `priceToken` as pool `token0` priced against a 6-dp USD-stable `quoteToken` (`token1`) with an 8-dp
   AggregatorV3 feed — the constructor reads and asserts this shape (§4.1); WHSK/USDT and WBTC/USDT are
-  the two live instances. Other orientations and decimals, and a second venue (Kredo), are v1.0. npm
-  publication of `@ate/venues` and `@ate/mcp` follows the submission.
+  the two live instances. Other orientations and decimals, and a second venue (Kredo), are v1.0. `@ate/venues`
+  and `@ate/mcp` are **published to npm by 17:30 Nov 2** (Lane B; `vault-v0.1.0`-matched `0.1.0`).
 - **Ecosystem contribution (by 17:30 Nov 2):** a draft PR to `HashKeyChain/HSK-Superpowers` adding an
   `agent-policy-vault` skill (deploy + verify + `setLimits` + fork-smoke a vault for any qualifying pool,
   Lane A); an ecosystem-directory listing request (ops-2); `docs/INTEGRATE.md` and the evidence footer
@@ -2717,26 +2834,26 @@ restricted to configured hosts.
 |---|---|---|---|---|
 | Q1 | ~~Canonical router~~ **Resolved Nov 2:** verified SwapRouter02 `0x2c16…D8F3`. The "active router" `0x1127…B790` is a private bot contract, not a router; it calls SwapRouter v1 `0x56d1…fBf5` | Eng | — | SwapRouter02 |
 | Q2 | ~~APRO ETH/USD feed for WETH notional?~~ **Resolved Nov 2:** none exists; the HSKSwap WETH/USDT pool `0xb92b…4C16` is excluded (unpriced). WBTC/USDT is the second market (APRO BTC/USD) | Eng | — | WETH excluded |
-| Q3 | Supra pull cost/complexity for trade-time pricing; which HSK pair index the storage contract serves | Eng | v1.0 pricing; v0.1 entry-gate coverage | APRO + deviation check in the vaults; the Supra entry gate runs for BTC/USD and for HSK/USD if listed (else inactive for WHSK, stated); `doctor` cross-checks |
-| Q4 | Owner signer for v0.1? | Ops | Deploy | Ledger on the second laptop, tested on 177 at 04:00 from a 1-HSK float (§19 step 0); fallback `cast wallet` encrypted keystore created and used only on that laptop; Safe at v1.0. Guardian on a third device if available (§4.1) |
+| Q3 | Supra pull cost/complexity for trade-time pricing; which HSK pair index the storage contract serves | Eng | v1.0 pricing; v0.1 entry-gate coverage | **Lane B reads the storage contract's HSK/USD and BTC/USD pair indices at 11:00 and records them in `deployments/177.json`**; APRO + deviation check in the vaults; the Supra entry gate runs for BTC/USD and for HSK/USD if listed (else inactive for WHSK, stated); `doctor` cross-checks |
+| Q4 | Owner signer for v0.1? | Ops | Deploy | Ledger on the second laptop, tested on 177 from a 1-HSK float at 10:30 (§19 step 0); fallback `cast wallet` encrypted keystore created and used only on that laptop; Vault-BTC moves to a Safe at ~17:00 (§19 step 9); Safe by default at v1.0. Guardian on a third device if available (§4.1) |
 | Q5 | ~~QuoterV2 on 177?~~ **Resolved Nov 2:** `0x603f…bFDD` paired with the HSKSwap factory; four other verified quoters point at other factories — do not use | Eng | — | — |
 | Q6 | Is the public HashKey Global API rate-limited for a 2-minute cycle (and for replay's kline pulls)? | Eng | Signals, E11 | Cache 10 s; back off; replay pages klines at ≤ 2 req/s |
-| Q7 | Does APRO return `answeredInRound == roundId` (HSK/USD and BTC/USD)? | Eng | §4.2 step 6 clause | Lead reads both on mainnet during the 04:00 freeze; the clause is included only if both do (one bytecode); recorded in `deployments/177.json` |
+| Q7 | Does APRO return `answeredInRound == roundId` (HSK/USD and BTC/USD)? | Eng | §4.2 step 6 clause | Lead reads both on mainnet at 10:15, before the 10:30 freeze; the clause is included only if both do (one source for both vaults); recorded in `deployments/177.json` |
 | Q8 | Funding source for the exact token `get_chain_config` returns | Ops | Payment funding | No-go at G-HSP |
 | Q9 | Does OKX sign for the HSP-returned network? | Eng | Payment signing | Fallback signer (§8.4) |
-| Q10 | HSP allowlist confirmation for `13.205.56.13` | Ops | HSP connection | Checked 04:00; not confirmed by 07:00 → Lane E contingency (§21.4); no-go at G-HSP 10:00 |
+| Q10 | HSP allowlist confirmation for `13.205.56.13` | Ops | HSP connection | Checked 10:30; not confirmed by 12:00 → Lane E contingency (§21.4); no-go at G-HSP 14:00 |
 | Q11 | Second RPC for 177 (thirdweb or other) passes `doctor`? | Eng | Demo reliability | Blockscout `/api/eth-rpc` as second read/head-check source; if nothing passes, single RPC with 429/1015 backoff and `doctor` downgrades the 2-head check to a warning |
 | Q12 | ~~How many builders?~~ **Resolved:** lead + five lane coding agents + ops-1 (signing) + ops-2 (recording/submission), each the other's backup (§21.4 Staffing) | Team | — | Lead covers either ops role if needed |
-| Q13 | Funding route for ~$220 USDT + HSK onto 177 (HashKey Global withdrawal network support vs OP bridge `0x4200…0010` delay) | Ops | Deploy, seeds | Ops hot wallet; confirmed by 04:00; smaller-seed fallback at 05:30 (§19 Funding) |
+| Q13 | Funding route for ~$220 USDT + HSK onto 177 (HashKey Global withdrawal network support vs OP bridge `0x4200…0010` delay) | Ops | Deploy, seeds | Ops hot wallet; confirmed by 11:00; smaller-seed fallback at 11:00 (§19 Funding) |
 | Q14 | ~~WBTC pool `observationCardinality`?~~ **Resolved Nov 2:** 240/240 (`onchain-verification.md`, WBTC section); no cardinality tx | Eng | — | `doctor` re-checks ≥ 64 |
-| Q15 | Does the WBTC gap (112.6 bps at 03:50) persist until the trader runs, and is it transient or a structural bridge discount? | Eng | E14 | Re-read at 09:00 for the BUIDL; replay persistence verdict (E11); the trader fires whenever it reopens and `check()` passes; otherwise §21.4 contingency and the spoken branch (T1.8 reported Partial) |
+| Q15 | Does the WBTC gap (112.6 bps at 03:50) persist until the trader runs, and is it transient or a structural bridge discount? | Eng | E14 | Re-read at trader start (~14:00) for the BUIDL; replay top-decile gaps as the pre-registered second path (T1.8); replay persistence verdict (E11); the trader fires whenever it reopens and `check()` passes; otherwise §21.4 contingency and the spoken branch (T1.8 reported Partial) |
 
 ---
 
 ## 26. Glossary
 
 **ATE** — Agentic Trading Environment. **Vault** — `PolicyVault` instance, one per market (Vault-HSK,
-Vault-BTC; same bytecode); pair, oracle, router and pool fixed at deployment. **Market** — one of
+Vault-BTC; same source and creation code, immutables differ); pair, oracle, router and pool fixed at deployment. **Market** — one of
 `hsk-dex:WHSK/USDT:3000`, `hsk-dex:WBTC/USDT:3000`. **Portfolio guard** — the off-chain layer that splits
 turnover among target assets and caps total exposure across vaults (§11.4). **Target assets** — the
 markets allowed to hold inventory (`targetAssets`; `[]` = cash). **Limits** — the vault's mutable numeric caps. **Agent key** — signer allowed only to
@@ -2750,7 +2867,7 @@ free for a full exit (§11.4 rule 3b).
 **Discretionary trade** — an LLM-originated autonomous trade without a candidate: ≤ 3 per UTC day, ≤ $10,
 thesis required, `origin=discretionary`, still under the guard and the vault (§11.4 rule 8).
 **`TxQueue`** — the daemon's single agent-key signer and nonce manager (§7.1). **Token scopes** — `agent`,
-`chat`, `ui`, `session`, `view`; the journal `actor` is derived from the scope (§10.1). **Exit path** — the vault's
+`chat`, `ui`, `session`, `view`, and `rogue` (*additive*, only with `--allow-rogue`, §10.1); the journal `actor` is derived from the scope (§10.1). **Exit path** — the vault's
 sell-only route when the deviation check fails, floored at `min(oracle, 300 s TWAP)` (§4.2 step 7b).
 **Exposure** — a vault's priceToken held, valued at its oracle. **Proposal** — a validated,
 single-use, 120-second intent record whose journal hash is the on-chain `proposalId`. **Journal** —

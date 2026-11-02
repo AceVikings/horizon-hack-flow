@@ -1,0 +1,41 @@
+{
+  "name": "@ate/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "description": "ATE domain types, policy math (mirrors PolicyVault), frozen strategy seam and vault ABI",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./abi": {
+      "types": "./dist/abi/policyVault.d.ts",
+      "import": "./dist/abi/policyVault.js"
+    },
+    "./fixtures": {
+      "types": "./dist/fixtures.d.ts",
+      "import": "./dist/fixtures.js"
+    },
+    "./abi/PolicyVault.abi.json": "./abi/PolicyVault.abi.json"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "abi"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "abi:emit": "tsx scripts/emit-abi.ts"
+  },
+  "dependencies": {
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "viem": "^2.21.0"
+  }
+}

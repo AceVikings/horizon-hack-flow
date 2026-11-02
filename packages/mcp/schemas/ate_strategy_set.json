@@ -1,0 +1,137 @@
+{
+  "name": "ate_strategy_set",
+  "description": "Adjust trading strategy. targetAssets selects which markets hold inventory (others sell down to cash; [] = all cash). Per-market fields apply to patch.market, or to every enabled market if market is omitted. Values outside on-chain policy are clamped and the response says so. Cannot change on-chain policy. Called with a chat/ui scope it sets the human anchors: tightening changes apply at once; loosening changes — anything that makes the agent larger or more active: raise stopLossBps, dailyLossLimitUsd, maxPositionUsd, maxDailyTurnoverUsd, maxPortfolioExposureUsd, tradeSizeUsd, the discretionary limits, or rebalanceTargetPct (to any value above the current one and above 0); lower entrySpreadBps, minNetEdgeBps, cycleSeconds, reentryCooldownSec or rebalanceBandPct; change takeProfitBps; enable a market or add a target asset; a riskProfile resolves to its field values and is judged field by field — return ATE_APPROVAL_REQUIRED with a rendered before/after diff and apply only after an ate-approve signature over it. A patch with any loosening field is loosening as a whole. Called with the agent scope only entrySpreadBps, minNetEdgeBps, tradeSizeUsd and cycleSeconds may change, each clamped to ×0.5–×1.5 of the human anchor, and the record is actor=agent.",
+  "inputSchema": {
+    "type": "object",
+    "required": [
+      "patch",
+      "rationale"
+    ],
+    "properties": {
+      "patch": {
+        "type": "object",
+        "properties": {
+          "targetAssets": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "WHSK",
+                "WBTC"
+              ]
+            },
+            "uniqueItems": true,
+            "description": "Portfolio-wide, human scopes only. Selected markets are enabled and share the turnover budget; de-selected markets get rebalanceTargetPct 0 (sell down within caps). [] = go to cash"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "market": {
+            "type": "string",
+            "enum": [
+              "hsk-dex:WHSK/USDT:3000",
+              "hsk-dex:WBTC/USDT:3000"
+            ]
+          },
+          "minNetEdgeBps": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2000
+          },
+          "rebalanceTargetPct": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "0 = go to cash (sell down within caps)"
+          },
+          "rebalanceBandPct": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50
+          },
+          "maxPositionUsd": {
+            "type": "string",
+            "pattern": "^[0-9]+(\\.[0-9]{1,2})?$"
+          },
+          "tradeSizeUsd": {
+            "type": "string",
+            "pattern": "^[0-9]+(\\.[0-9]{1,2})?$"
+          },
+          "cycleSeconds": {
+            "type": "integer",
+            "minimum": 30,
+            "maximum": 86400
+          },
+          "entrySpreadBps": {
+            "type": "integer",
+            "minimum": 10,
+            "maximum": 2000
+          },
+          "stopLossBps": {
+            "type": "integer",
+            "minimum": 50,
+            "maximum": 5000
+          },
+          "takeProfitBps": {
+            "type": "integer",
+            "minimum": 10,
+            "maximum": 5000
+          },
+          "dailyLossLimitUsd": {
+            "type": "string",
+            "pattern": "^[0-9]+(\\.[0-9]{1,2})?$"
+          },
+          "maxDailyTurnoverUsd": {
+            "type": "string",
+            "pattern": "^[0-9]+(\\.[0-9]{1,2})?$",
+            "description": "Portfolio off-chain entry budget per UTC day, split among enabled target assets; each market's share is clamped to ≤ its vault's maxEpochUsd − maxExposureUsd; guard exits are exempt"
+          },
+          "maxPortfolioExposureUsd": {
+            "type": "string",
+            "pattern": "^[0-9]+(\\.[0-9]{1,2})?$",
+            "description": "Portfolio off-chain exposure cap; clamped to ≤ the sum of the vaults' maxExposureUsd"
+          },
+          "reentryCooldownSec": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 86400
+          },
+          "discretionaryTradesPerDay": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3,
+            "description": "Human scopes only; 0 disables the discretionary lane"
+          },
+          "discretionaryUsd": {
+            "type": "string",
+            "pattern": "^[0-9]+(\\.[0-9]{1,2})?$",
+            "description": "Human scopes only; clamped to ≤ 10"
+          },
+          "riskProfile": {
+            "type": "string",
+            "enum": [
+              "conservative",
+              "balanced",
+              "aggressive"
+            ],
+            "description": "ADDITIVE (v0.9, optional). Human scopes only. Preset that expands to tradeSizeUsd, entrySpreadBps, minNetEdgeBps, stopLossBps and maxPositionUsd per §11.5; explicit fields in the same patch win; clamped to on-chain limits; loosening judged field by field"
+          }
+        },
+        "additionalProperties": false
+      },
+      "rationale": {
+        "type": "string",
+        "minLength": 16,
+        "maxLength": 1000
+      }
+    },
+    "additionalProperties": false
+  },
+  "annotations": {
+    "title": "Adjust strategy",
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": false
+  }
+}

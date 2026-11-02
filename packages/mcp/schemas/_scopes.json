@@ -1,0 +1,29 @@
+{
+  "agent": [
+    "ate_market_get",
+    "ate_candidates_get",
+    "ate_quote",
+    "ate_propose",
+    "ate_decide",
+    "ate_execute",
+    "ate_positions",
+    "ate_strategy_get",
+    "ate_strategy_set",
+    "ate_journal_read",
+    "ate_signal_buy",
+    "ate_pause"
+  ],
+  "chat": [
+    "ate_market_get",
+    "ate_candidates_get",
+    "ate_quote",
+    "ate_positions",
+    "ate_strategy_get",
+    "ate_strategy_set",
+    "ate_journal_read",
+    "ate_pause"
+  ],
+  "hspGated": [
+    "ate_signal_buy"
+  ]
+}

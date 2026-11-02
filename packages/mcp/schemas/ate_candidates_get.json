@@ -1,0 +1,24 @@
+{
+  "name": "ate_candidates_get",
+  "description": "List the trade candidates the daemon computed this cycle for one market or both (spread-revert open/close, rebalance, guard_exit, discretionary_exit), with edge, cost and the maximum size the strategy and portfolio guard allow. In autonomous mode every ate_propose references one of these by candidateId unless it is a bounded discretionary proposal. Candidates expire after candidateTtlSec (at least 120 seconds). Also lists entries the daemon suppressed (deviation, oracle_disagree).",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "market": {
+        "type": "string",
+        "enum": [
+          "hsk-dex:WHSK/USDT:3000",
+          "hsk-dex:WBTC/USDT:3000"
+        ]
+      }
+    },
+    "additionalProperties": false
+  },
+  "annotations": {
+    "title": "Trade candidates",
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  }
+}

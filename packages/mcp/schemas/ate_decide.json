@@ -1,0 +1,55 @@
+{
+  "name": "ate_decide",
+  "description": "Record a decision not to trade this cycle (no_trade), with the reason, your rationale and the candidate it rejects, if any. Use reason=llm_veto when you decline a candidate the daemon offered, no_signal when nothing is worth doing, awaiting_signal when waiting on a paid signal. Every cycle ends in exactly one ate_execute (after ate_propose) or one ate_decide.",
+  "inputSchema": {
+    "type": "object",
+    "required": [
+      "decision",
+      "market",
+      "reason",
+      "rationale"
+    ],
+    "properties": {
+      "decision": {
+        "type": "string",
+        "enum": [
+          "no_trade"
+        ]
+      },
+      "market": {
+        "type": "string",
+        "enum": [
+          "hsk-dex:WHSK/USDT:3000",
+          "hsk-dex:WBTC/USDT:3000"
+        ]
+      },
+      "candidateId": {
+        "type": "string",
+        "pattern": "^cand_[0-9a-f]{16}$"
+      },
+      "reason": {
+        "type": "string",
+        "enum": [
+          "no_signal",
+          "llm_veto",
+          "awaiting_signal",
+          "guard",
+          "timeout"
+        ]
+      },
+      "rationale": {
+        "type": "string",
+        "minLength": 16,
+        "maxLength": 1000
+      }
+    },
+    "additionalProperties": false
+  },
+  "annotations": {
+    "title": "Record no-trade decision",
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": false
+  }
+}

@@ -4,18 +4,22 @@
   "version": "0.1.0",
   "license": "Apache-2.0",
   "packageManager": "pnpm@9.15.0",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "test:contracts": "cd contracts && forge test",
-    "lint": "pnpm -r lint"
+    "lint": "pnpm -r lint",
+    "mcp:stub": "pnpm --filter @ate/mcp stub"
   },
   "devDependencies": {
     "typescript": "^5.6.3",
     "vitest": "^2.1.4",
     "tsup": "^8.3.5",
-    "@types/node": "^22.9.0"
+    "@types/node": "^22.9.0",
+    "tsx": "^4.19.2"
   }
 }

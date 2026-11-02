@@ -1,0 +1,69 @@
+{
+  "name": "ate_propose",
+  "description": "Validate an intended trade against on-chain policy and strategy limits without sending a transaction. Returns a proposalId valid for 120 seconds. The rationale is stored verbatim and its hash is emitted on-chain when executed.",
+  "inputSchema": {
+    "type": "object",
+    "required": [
+      "market",
+      "side",
+      "amountIn",
+      "rationale"
+    ],
+    "properties": {
+      "market": {
+        "type": "string",
+        "enum": [
+          "hsk-dex:WHSK/USDT:3000",
+          "hsk-dex:WBTC/USDT:3000"
+        ]
+      },
+      "side": {
+        "type": "string",
+        "enum": [
+          "buy",
+          "sell"
+        ]
+      },
+      "amountIn": {
+        "type": "string",
+        "pattern": "^[0-9]+$"
+      },
+      "candidateId": {
+        "type": "string",
+        "pattern": "^cand_[0-9a-f]{16}$",
+        "description": "Autonomous mode: the ate_candidates_get entry this proposal acts on (side must match; amountIn ≤ maxAmountIn; unexpired). Omit only with origin=discretionary"
+      },
+      "origin": {
+        "type": "string",
+        "enum": [
+          "candidate",
+          "discretionary"
+        ],
+        "default": "candidate"
+      },
+      "thesis": {
+        "type": "string",
+        "minLength": 40,
+        "maxLength": 1000,
+        "description": "Required iff origin=discretionary: why this trade, what would prove it wrong, exit plan"
+      },
+      "signalId": {
+        "type": "string",
+        "description": "Paid signal that informed this trade, if any (G-HSP)"
+      },
+      "rationale": {
+        "type": "string",
+        "minLength": 16,
+        "maxLength": 1000
+      }
+    },
+    "additionalProperties": false
+  },
+  "annotations": {
+    "title": "Propose trade",
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": false
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "name": "ate_quote",
+  "description": "Quote a swap. Returns simulated output, price impact, the vault's minimum acceptable output, and the policy verdict. Call before ate_propose. amountIn is in smallest units of tokenIn (buy: USDT 6dp; sell: WHSK 18dp or WBTC 8dp).",
+  "inputSchema": {
+    "type": "object",
+    "required": [
+      "market",
+      "side",
+      "amountIn"
+    ],
+    "properties": {
+      "market": {
+        "type": "string",
+        "enum": [
+          "hsk-dex:WHSK/USDT:3000",
+          "hsk-dex:WBTC/USDT:3000"
+        ]
+      },
+      "side": {
+        "type": "string",
+        "enum": [
+          "buy",
+          "sell"
+        ]
+      },
+      "amountIn": {
+        "type": "string",
+        "pattern": "^[0-9]+$"
+      }
+    },
+    "additionalProperties": false
+  },
+  "annotations": {
+    "title": "Quote",
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  }
+}

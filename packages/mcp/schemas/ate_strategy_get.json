@@ -1,0 +1,24 @@
+{
+  "name": "ate_strategy_get",
+  "description": "Read the current strategy: target assets, per-market size, frequency, entry spread, net-edge gate, stop-loss / take-profit, rebalance target and band, re-entry cooldown, portfolio turnover and exposure budgets, discretionary limits, and the human anchors agent tuning is clamped to.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "market": {
+        "type": "string",
+        "enum": [
+          "hsk-dex:WHSK/USDT:3000",
+          "hsk-dex:WBTC/USDT:3000"
+        ]
+      }
+    },
+    "additionalProperties": false
+  },
+  "annotations": {
+    "title": "Strategy",
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  }
+}

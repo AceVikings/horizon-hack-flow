@@ -1,0 +1,24 @@
+{
+  "name": "ate_execute",
+  "description": "Execute a previously proposed and approved trade. The proposal's rationale is the trade's rationale. Re-runs the strategy guard (rules 2-9), QuoterV2 and check(), rebuilds minAmountOut = max(floor, quote × 0.995) and deadline = now + 60 s, and rejects with ATE_SLIPPAGE if the fresh quote is > 50 bps worse than at propose, or ATE_STRATEGY_BLOCKED if the guard now refuses (e.g. a guard exit invalidated this buy). On-chain proposalId = the proposal's journal record hash.",
+  "inputSchema": {
+    "type": "object",
+    "required": [
+      "proposalId"
+    ],
+    "properties": {
+      "proposalId": {
+        "type": "string",
+        "pattern": "^prop_[0-9a-f]{16}$"
+      }
+    },
+    "additionalProperties": false
+  },
+  "annotations": {
+    "title": "Execute trade",
+    "readOnlyHint": false,
+    "destructiveHint": true,
+    "idempotentHint": false,
+    "openWorldHint": true
+  }
+}
