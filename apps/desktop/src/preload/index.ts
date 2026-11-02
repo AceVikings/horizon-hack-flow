@@ -21,6 +21,9 @@ const ate = Object.freeze({
   chat: Object.freeze({ send: (s: string, t: string) => call("chat.send", s, t), history: (s: string) => call("chat.history", s) }),
   payments: Object.freeze({ list: () => call("payments.list"), approve: (id: string, d: string) => call("payments.approve", id, d), deny: (id: string) => call("payments.deny", id) }),
   settings: Object.freeze({ get: () => call("settings.get"), set: (p: unknown) => call("settings.set", p) }),
+  trader: Object.freeze({ status: () => call("trader.status"), start: (o: unknown) => call("trader.start", o), stop: () => call("trader.stop") }),
+  approvals: Object.freeze({ list: () => call("approvals.list"), reject: (id: string) => call("approvals.reject", id) }),
+  proof: Object.freeze({ get: () => call("proof.get"), run: (o?: unknown) => call("proof.run", o), stop: () => call("proof.stop") }),
   events: Object.freeze({
     subscribe: (handler: (e: DaemonEvent) => void) => {
       const l = (_: unknown, e: DaemonEvent) => handler(e);

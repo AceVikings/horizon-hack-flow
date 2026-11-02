@@ -34,6 +34,8 @@ function handleEvent(e: DaemonEvent): void {
     }
     chatLog.set(e.data.sessionId, log);
   } else if (e.type === "chat.tool") {
+    // name-only summary (kept for `ate chat`); the MCP layer already sent the full call with args + result
+    if ((e.data as { summary?: boolean }).summary) return;
     const r = e.data.result as { error?: { code?: string; details?: unknown } } | undefined;
     if (r?.error?.code === "ATE_APPROVAL_REQUIRED") rememberPending(r.error.details);
     const log = chatLog.get(e.data.sessionId) ?? [];
@@ -114,6 +116,36 @@ async function invoke(method: IpcMethod, arg: any, arg2?: any): Promise<unknown>
       return approvePayment(String(arg), String(arg2 ?? ""));
     case "payments.deny":
       return denyPayment(String(arg));
+    // ---- lane D3 (additive): supervised trader, pending approvals, proof suite
+    case "trader.status":
+      return daemon.call("GET", "/trader");
+    case "trader.start": {
+      const a = (arg ?? {}) as Record<string, unknown>;
+      return daemon.call("POST", "/trader/start", {
+        mode: a.mode === "propose" ? "propose" : "autonomous",
+        engine: a.engine === "rules" ? "rules" : "llm",
+        ...(typeof a.model === "string" ? { model: a.model } : {}),
+        ...(typeof a.cycleSeconds === "number" ? { cycleSeconds: a.cycleSeconds } : {}),
+      });
+    }
+    case "trader.stop":
+      return daemon.call("POST", "/trader/stop", {});
+    case "approvals.list": {
+      const r = await daemon.call<{ pending: unknown[] }>("GET", "/strategy/pending");
+      if (!r.ok) return r;
+      for (const p of r.data.pending) rememberPending(p);
+      return { ok: true, data: r.data.pending };
+    }
+    case "approvals.reject":
+      return daemon.call("POST", "/strategy/reject", { changeId: String(arg) });
+    case "proof.get":
+      return daemon.call("GET", "/proof");
+    case "proof.run": {
+      const a = (arg ?? {}) as Record<string, unknown>;
+      return daemon.call("POST", "/proof/run", { ...(typeof a.market === "string" ? { market: a.market } : {}), ...(typeof a.waitPauseSec === "number" ? { waitPauseSec: a.waitPauseSec } : {}) });
+    }
+    case "proof.stop":
+      return daemon.call("POST", "/proof/stop", {});
     case "settings.get":
       return { ok: true, data: { ...settings, daemonPort: daemon.connection().port ?? null } };
     case "settings.set":
@@ -144,7 +176,7 @@ function createWindow(): void {
     },
   });
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https:\/\/hsk\.blockscout\.com\//.test(url)) void shell.openExternal(url);
+    if (/^https:\/\/(hsk\.blockscout\.com|testnet-explorer\.hskchain\.net)\//.test(url)) void shell.openExternal(url);
     return { action: "deny" };
   });
   win.webContents.on("will-navigate", (e, url) => {
