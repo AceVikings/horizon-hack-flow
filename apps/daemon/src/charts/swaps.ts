@@ -77,6 +77,8 @@ export function decodeSwap(log: { data: string; topics: string[]; blockNumber: s
 export class SwapIndex {
   private readonly o: Required<SwapIndexOptions>;
   private blockTime = new Map<number, number>();
+  /** Per-chain block range learned from "range too large" errors (load-balanced RPCs differ). */
+  private range = new Map<number, number>();
   private inflight = new Map<string, Promise<SyncResult>>();
 
   constructor(
@@ -85,7 +87,7 @@ export class SwapIndex {
   ) {
     this.o = {
       maxRange: opts.maxRange ?? 99_000,
-      maxCalls: opts.maxCalls ?? 24,
+      maxCalls: opts.maxCalls ?? 40,
       gapMs: opts.gapMs ?? 120,
       sleep: opts.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms))),
       now: opts.now ?? (() => Math.floor(Date.now() / 1000)),
@@ -132,18 +134,29 @@ export class SwapIndex {
     const row = this.db.prepare("SELECT lo, hi FROM chart_sync WHERE chain_id = ? AND pool = ?").get(ref.chainId, pool) as { lo: number; hi: number } | undefined;
     // ranges still to fetch: forward (hi, head] first (fresh data matters most), then backward [wantLo, lo)
     const todo: [number, number][] = [];
+    const R = this.range.get(ref.chainId) ?? this.o.maxRange;
     let lo = row?.lo ?? head.n + 1;
     let hi = row?.hi ?? head.n;
-    if (row) for (let a = hi + 1; a <= head.n; a += this.o.maxRange) todo.push([a, Math.min(head.n, a + this.o.maxRange - 1)]);
-    for (let b = lo - 1; b >= wantLo; b -= this.o.maxRange) todo.push([Math.max(wantLo, b - this.o.maxRange + 1), b]);
+    if (row) for (let a = hi + 1; a <= head.n; a += R) todo.push([a, Math.min(head.n, a + R - 1)]);
+    for (let b = lo - 1; b >= wantLo; b -= R) todo.push([Math.max(wantLo, b - R + 1), b]);
     const ins = this.db.prepare("INSERT OR IGNORE INTO chart_swaps (chain_id, pool, block, log_index, t, price, base, quote, side, tx, sender) VALUES (?,?,?,?,?,?,?,?,?,?,?)");
     let calls = 0;
     let added = 0;
-    for (const [a, b] of todo) {
-      if (calls >= this.o.maxCalls) break;
+    const getLogs = async (a: number, b: number): Promise<Parameters<typeof decodeSwap>[0][]> => {
       if (calls > 0) await this.o.sleep(this.o.gapMs);
       calls++;
-      const logs = (await rpc.request("eth_getLogs", [{ address: ref.pool, fromBlock: hexn(a), toBlock: hexn(b), topics: [SWAP_TOPIC] }])) as Parameters<typeof decodeSwap>[0][];
+      try {
+        return (await rpc.request("eth_getLogs", [{ address: ref.pool, fromBlock: hexn(a), toBlock: hexn(b), topics: [SWAP_TOPIC] }])) as Parameters<typeof decodeSwap>[0][];
+      } catch (e) {
+        if (!/range|too large|too many|limit/i.test(String((e as Error).message)) || b - a < 1000) throw e;
+        const mid = a + Math.floor((b - a) / 2);
+        this.range.set(ref.chainId, Math.max(1000, mid - a + 1));
+        return [...(await getLogs(a, mid)), ...(await getLogs(mid + 1, b))];
+      }
+    };
+    for (const [a, b] of todo) {
+      if (calls >= this.o.maxCalls) break;
+      const logs = await getLogs(a, b);
       this.db.transaction(() => {
         for (const l of logs) {
           const s = decodeSwap(l, ref, tsOf(Number(big(l.blockNumber))));
