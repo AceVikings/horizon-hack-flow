@@ -276,7 +276,7 @@ export function ErrorBox({ code, message, hint, action }: { code: string; messag
 }
 
 /** Segmented single-choice control. */
-export function Seg<const T extends string>({ value, options, onChange, label }: { value: T; options: { id: T; label: ReactNode }[]; onChange(v: T): void; label: string }) {
+export function Seg<T extends string>({ value, options, onChange, label }: { value: T; options: { id: NoInfer<T>; label: ReactNode }[]; onChange(v: NoInfer<T>): void; label: string }) {
   return (
     <div className="seg" role="radiogroup" aria-label={label}>
       {options.map((o) => (
