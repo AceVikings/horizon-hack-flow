@@ -34,7 +34,6 @@ export default function Welcome() {
         </div>
         <Logo size={64} />
         <div style={{ marginTop: "auto" }} />
-        <div className="stepno" style={{ color: "var(--sage)" }}>Bounded autonomy for AI traders · HashKey Chain</div>
         <h1>
           Let an AI trade.
           <br />
