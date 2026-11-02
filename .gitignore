@@ -1,0 +1,16 @@
+node_modules/
+dist/
+out/
+.env
+.env.*
+*.log
+.DS_Store
+contracts/out/
+contracts/cache/
+contracts/broadcast/*/dry-run/
+infra/aws/
+.context/
+.tokensave/
+*.db
+*.db-wal
+*.db-shm
