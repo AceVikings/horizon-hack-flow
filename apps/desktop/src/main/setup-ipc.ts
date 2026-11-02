@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { dialog, safeStorage, shell, systemPreferences, type BrowserWindow, type IpcMain } from "electron";
 import { uiAttachPayload, type ApprovalPayload } from "@ate/approve";
 import type { Res } from "../shared/bridge";
-import { SETUP_GET, SETUP_POST, type ApprovalStart, type DaemonState, type SetupIpc, type SetupPath } from "../shared/setup-bridge";
+import { APPROVAL_RE, SETUP_GET_RE, SETUP_POST_RE, type ApprovalStart, type DaemonState, type SetupIpc, type SetupPath } from "../shared/setup-bridge";
 import { signApproval } from "./approve";
 import type { DaemonClient } from "./daemon";
 import { DaemonSupervisor, ateHome } from "./lifecycle";
@@ -181,9 +181,9 @@ export function registerSetupIpc(o: { ipcMain: IpcMain; daemon: DaemonClient; ap
     const since = Math.floor(Date.now() / 1000) - 1;
     const r1 = await daemon.call<{ nonce?: string; expiresAt?: number; payload?: ApprovalPayload; codeIssued?: boolean; saved?: boolean }>("POST", path, body);
     if (!r1.ok) return r1 as Res<never>;
-    if (r1.data.saved) return { ok: true, data: { nonce: "", expiresAt: 0, applied: true, result: r1.data } }; // first key during setup
+    if (r1.data.saved || !r1.data.nonce) return { ok: true, data: { nonce: "", expiresAt: 0, applied: true, result: r1.data } }; // first key during setup
     const { nonce, expiresAt, payload } = r1.data as { nonce: string; expiresAt: number; payload: ApprovalPayload };
-    if (approveAvailable() && payload?.kind === "config") {
+    if (approveAvailable() && payload?.kind === "config" && nonce) {
       const s = await signApproval(payload);
       if (s.ok) {
         const r2 = await passthrough("POST", path, { nonce, approval: s.signature });
@@ -195,7 +195,7 @@ export function registerSetupIpc(o: { ipcMain: IpcMain; daemon: DaemonClient; ap
     return { ok: true, data: { nonce, expiresAt, code } };
   }
 
-  const handlers: Record<SetupIpc, (a: any, b: any) => Promise<unknown>> = {
+  const handlers: Partial<Record<SetupIpc, (a: any, b: any) => Promise<unknown>>> = {
     "setup.daemon": async () => {
       if (phase === "ready") await refreshStatus().catch(() => undefined);
       return state();
@@ -220,12 +220,12 @@ export function registerSetupIpc(o: { ipcMain: IpcMain; daemon: DaemonClient; ap
     },
     "setup.unlock": () => unlockAgent(),
     "setup.get": async (path: string, query?: Record<string, string>) => {
-      if (!(SETUP_GET as readonly string[]).includes(path)) return err("path not allowed");
+      if (!SETUP_GET_RE.test(String(path))) return err("path not allowed");
       const q = query && typeof query === "object" ? `?${new URLSearchParams(Object.entries(query).map(([k, v]) => [String(k), String(v)]))}` : "";
       return daemon.call("GET", path + q);
     },
     "setup.post": async (path: string, body: unknown) => {
-      if (!(SETUP_POST as readonly string[]).includes(path)) return err("path not allowed");
+      if (!SETUP_POST_RE.test(String(path))) return err("path not allowed");
       return passthrough("POST", path, body);
     },
     "setup.keygen": async (privateKey?: string) => {
@@ -244,9 +244,9 @@ export function registerSetupIpc(o: { ipcMain: IpcMain; daemon: DaemonClient; ap
       await refreshStatus();
       return r;
     },
-    "setup.approveStart": (path: string, body: unknown) => (path === "/setup/config" || path === "/setup/model/key" ? approveStart(path, body) : Promise.resolve(err("path not allowed"))),
+    "setup.approveStart": (path: string, body: unknown) => (APPROVAL_RE.test(String(path)) ? approveStart(path, body) : Promise.resolve(err("path not allowed"))),
     "setup.approveFinish": async (path: string, nonce: string, code?: unknown) => {
-      if (path !== "/setup/config" && path !== "/setup/model/key") return err("path not allowed");
+      if (!APPROVAL_RE.test(String(path))) return err("path not allowed");
       if (!CODE.test(String(code))) return err("enter the 8-digit code");
       return passthrough("POST", path, { nonce: String(nonce), approval: String(code) });
     },
@@ -260,6 +260,34 @@ export function registerSetupIpc(o: { ipcMain: IpcMain; daemon: DaemonClient; ap
       writeFileSync(r.filePath, JSON.stringify(data, null, 2));
       return { ok: true, data: { path: r.filePath } };
     },
+  };
+  /** User-run local proxy management API (CLIProxyAPI-style). Loopback or https only; the key stays in main. */
+  handlers["setup.proxy"] = async (q: { baseURL?: string; mgmtKey?: string; op?: string; provider?: string; state?: string }) => {
+    let u: URL;
+    try {
+      u = new URL(String(q?.baseURL ?? ""));
+    } catch {
+      return err("proxy base URL is not a URL");
+    }
+    const local = ["127.0.0.1", "localhost", "[::1]"].includes(u.hostname);
+    if (!(u.protocol === "https:" || (u.protocol === "http:" && local))) return err("proxy must be https or on this Mac");
+    if (!/^[A-Za-z0-9_-]{1,40}$/.test(String(q.provider ?? "x")) || !/^[A-Za-z0-9_.-]{0,200}$/.test(String(q.state ?? ""))) return err("bad parameters");
+    const base = `${u.origin}/v8/management`;
+    const path = q.op === "accounts" ? "/auth-files" : q.op === "auth-url" ? `/oauth/auth-url?provider=${q.provider}` : q.op === "status" ? `/oauth/status${q.state ? `?state=${q.state}` : ""}` : null;
+    if (!path) return err("bad op");
+    try {
+      const r = await fetch(base + path, { headers: { authorization: `Bearer ${String(q.mgmtKey ?? "")}` }, signal: AbortSignal.timeout(8000) });
+      const j = (await r.json().catch(() => ({}))) as Record<string, unknown>;
+      if (!r.ok) return err(`proxy answered HTTP ${r.status}`);
+      if (q.op === "auth-url") {
+        const url = String(j.url ?? j.auth_url ?? "");
+        if (/^https:\/\//.test(url)) await shell.openExternal(url);
+        else return err("the proxy returned no login link");
+      }
+      return { ok: true, data: j };
+    } catch (e) {
+      return err(`proxy unreachable: ${(e as Error).message}`);
+    }
   };
   for (const [ch, fn] of Object.entries(handlers)) {
     // approveFinish takes three arguments; every other handler two.

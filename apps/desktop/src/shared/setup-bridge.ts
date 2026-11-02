@@ -39,7 +39,12 @@ export type SetupPath =
   | "/setup/complete"
   | "/setup/config"
   | "/setup/model"
-  | "/setup/model/check";
+  | "/setup/model/check"
+  // lane D3's engine routes, reached from the Accounts page
+  | "/engine/providers"
+  | "/engine/select"
+  | `/engine/providers/${string}/test`;
+export type ApprovalPath = "/setup/config" | "/setup/model/key" | `/engine/providers/${string}/credential`;
 
 /** Two-step approvals (Settings save, API key replace/remove): Touch ID via ate-approve, else a one-time code. */
 export interface ApprovalStart {
@@ -66,17 +71,24 @@ export interface SetupBridge {
   /** Create (privateKey omitted) or import the agent key; main generates + seals the passphrase (Touch ID). */
   keygen(privateKey?: string): Promise<Res<{ address: string; store: string; keyId: string }>>;
   /** Settings save / API-key change: step 1 (main tries Touch ID first). */
-  approveStart(path: "/setup/config" | "/setup/model/key", body: unknown): Promise<Res<ApprovalStart>>;
+  approveStart(path: ApprovalPath, body: unknown): Promise<Res<ApprovalStart>>;
   /** Step 2 with the one-time code. */
-  approveFinish(path: "/setup/config" | "/setup/model/key", nonce: string, code: string): Promise<Res<unknown>>;
+  approveFinish(path: ApprovalPath, nonce: string, code: string): Promise<Res<unknown>>;
   /** Open an allowlisted external link (explorer, faucet). */
   open(url: string): Promise<void>;
   /** Save a JSON file (deploy bundle) via the native save dialog. */
   saveJson(name: string, data: unknown): Promise<Res<{ path: string }>>;
+  /**
+   * Local proxy (advanced, user-run, never bundled): its management API, called from main with the management key.
+   * op: "accounts" | "auth-url" (opens the provider's login page in the browser) | "status".
+   */
+  proxy(o: { baseURL: string; mgmtKey: string; op: "accounts" | "auth-url" | "status"; provider?: string; state?: string }): Promise<Res<unknown>>;
 }
 
-export const SETUP_IPC = ["setup.daemon", "setup.start", "setup.stop", "setup.submitCode", "setup.unlock", "setup.get", "setup.post", "setup.keygen", "setup.approveStart", "setup.approveFinish", "setup.open", "setup.saveJson"] as const;
+export const SETUP_IPC = ["setup.daemon", "setup.start", "setup.stop", "setup.submitCode", "setup.unlock", "setup.get", "setup.post", "setup.keygen", "setup.approveStart", "setup.approveFinish", "setup.open", "setup.saveJson", "setup.proxy"] as const;
 export type SetupIpc = (typeof SETUP_IPC)[number];
 
-export const SETUP_GET: readonly SetupPath[] = ["/setup/status", "/setup/networks", "/setup/vaults", "/setup/agent", "/setup/doctor", "/setup/limits", "/setup/fund", "/setup/handoff", "/setup/config", "/setup/model", "/setup/model/check"] as unknown as SetupPath[];
-export const SETUP_POST: readonly SetupPath[] = ["/setup/state", "/setup/network", "/setup/vaults", "/setup/handoff", "/setup/complete", "/setup/model"];
+const PROV = "(anthropic|openai|gemini|openrouter|ollama|proxy)";
+export const SETUP_GET_RE = /^\/setup\/(status|networks|vaults|agent|doctor|limits|fund|handoff|config|model|model\/check)$|^\/engine\/providers$/;
+export const SETUP_POST_RE = new RegExp(`^/setup/(state|network|vaults|handoff|complete|model)$|^/engine/select$|^/engine/providers/${PROV}/test$`);
+export const APPROVAL_RE = new RegExp(`^/setup/(config|model/key)$|^/engine/providers/${PROV}/credential$`);

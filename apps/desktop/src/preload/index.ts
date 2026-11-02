@@ -37,6 +37,7 @@ const ate = Object.freeze({
     approveFinish: (path: string, nonce: string, code: string) => sc("setup.approveFinish", path, nonce, code),
     open: (url: string) => sc("setup.open", url),
     saveJson: (name: string, data: unknown) => sc("setup.saveJson", name, data),
+    proxy: (o: unknown) => sc("setup.proxy", o),
   }),
   trader: Object.freeze({ status: () => call("trader.status"), start: (o: unknown) => call("trader.start", o), stop: () => call("trader.stop") }),
   approvals: Object.freeze({ list: () => call("approvals.list"), reject: (id: string) => call("approvals.reject", id) }),
