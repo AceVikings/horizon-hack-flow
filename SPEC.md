@@ -1,6 +1,6 @@
 # ATE — Agentic Trading Environment · *bounded autonomy for AI traders*
 
-**Status:** Draft for implementation · **Version:** 0.9.0 (spec; re-timed to the 09:50 IST implementation start — frozen interfaces unchanged, additions marked *additive*) · ships as **v0.1** (submission) → **v1.0** (GA)
+**Status:** Draft for implementation · **Version:** 0.9.1 (spec; oracle source moved from APRO to a Supra adapter, vault ABI/semantics/reason codes unchanged; re-timed to the 09:50 IST implementation start — frozen interfaces unchanged, additions marked *additive*) · ships as **v0.1** (submission) → **v1.0** (GA)
 **Owner:** ATE maintainers · **License:** Apache-2.0
 **Team:** Vikings · **Contact:** akash.jsmith@gmail.com
 **Event:** HSK Chain Horizon Hackathon · India (Mumbai Edition) · DoraHacks `hskchainindia`
@@ -19,7 +19,7 @@ to give an agent funds without trusting the agent.
 
 **Problem.** HashKey's AI-agent push needs a way to let agents hold funds without trusting them: one bad
 prompt or one stolen key can drain an agent's wallet. ATE is that layer — reusable by any agent team, and
-routed through HSKSwap, APRO and EAS.
+routed through HSKSwap, Supra's DORA oracle (APRO read as a cross-check) and EAS.
 
 ATE gives an AI agent **bounded autonomy** on HashKey Chain: the agent watches two HSKSwap markets
 (WHSK/USDT and WBTC/USDT), decides and trades on its own with no per-trade human approval — the footer
@@ -36,7 +36,7 @@ pool sat 30 bps below against ~36 bps — a trade it correctly skips (§0.2). It
 parts:
 
 1. **An autonomous trader** — a reference AI agent (`ate-trader`) that monitors the HSKSwap WHSK/USDT and
-   WBTC/USDT pools, the APRO HSK/USD and BTC/USD feeds and the HashKey Global HSKUSDT and BTCUSDT books
+   WBTC/USDT pools, the Supra HSK/USD and BTC/USD pairs (APRO feeds as a cross-check) and the HashKey Global HSKUSDT and BTCUSDT books
    (via HashKey's official `hashkey-public-market` skill). The daemon computes bound candidate trades per
    market (spread-revert open/close, rebalance and a standing `discretionary_exit`, guard-sized; §11.3);
    the LLM fetches them with `ate_candidates_get` and decides — act, skip, size down, exit early, or buy a
@@ -55,7 +55,7 @@ parts:
    (`agent` MCP scope: candidates, propose, execute), the *chat agent* (`chat` scope, minted per session:
    server-enforced allowlist, no `ate_execute`, no shell) and the *guard* (deterministic, in-daemon: the
    only actor that exits without asking an LLM). Only the daemon's single `TxQueue` signs on-chain, with an
-   agent key that can only `execute`/`pause`; the guardian and owner keys never touch the agent's machine
+   agent key that can only `execute`/`pause` on the vaults (it also submits permissionless Supra refreshes, §5.2); the guardian and owner keys never touch the agent's machine
    (§8.1).
 3. **An enforcement layer** — two `PolicyVault`s on HashKey Chain mainnet (same verified source and creation
    code, one per market; runtime bytecode differs only in the constructor immutables): per-trade and per-epoch USD caps, an exposure cap checked before and after every buy, an
@@ -74,10 +74,10 @@ parts:
 losses and journals every choice without you. You can do that because the contract, not the agent's good
 behaviour, sets the worst case of a bad trade. **The pitch card has three items:** the stolen key can
 never withdraw (I3); execution loss across both vaults is **≤ $51.50 per UTC day (~18% of the demo
-wallet), on every path, while APRO is live**; exposure ≤ $150 per vault at every buy. Footnote: price
+wallet), on every path, while the Supra feed is live**; exposure ≤ $150 per vault at every buy. Footnote: price
 risk on held exposure is managed by the stop-loss, not the contract. These hold whatever the agent is
 told or believes, and with its key stolen. Every other bound (rolling 24 h, normal path, oracle-lag
-exits, the APRO-wrong ceiling) is on the Q&A *numbers* card (§4.6, §22.1), not in the pitch. The demo proves the bound by attacking a vault
+exits, the oracle-wrong ceiling) is on the Q&A *numbers* card (§4.6, §22.1), not in the pitch. The demo proves the bound by attacking a vault
 live with the agent's own key (§22). Contract-enforced and fuzz-tested, not formally proven. The WHSK
 pool trades ~$513/day (Nov 2), so ATE sells safe unattended operation first and claims returns only where
 measured: WBTC spread trades run the default profile with no waivers and are the T1.8 evidence (E14);
@@ -103,8 +103,7 @@ all of it, and both v0.1 markets are instances (§4.1, §24). Other orientations
 (`kredo.fun`, linked from the HSK Chain portal) in v1.0.
 
 **Incubation plan.** *Target adopters:* the Maneki AI and Helm teams, and the HSP agent builders at this
-event — each gets `docs/INTEGRATE.md` and a one-command deploy (`forge script Deploy --sig 'run(address
-pool,address oracle)'`, §24). *30 days:* external audit of `PolicyVault` plus a public bug bounty;
+event — each gets `docs/INTEGRATE.md` and a one-command deploy (`forge script script/Deploy.s.sol:Deploy`, which deploys the Supra adapter first, §19, §24). *30 days:* external audit of `PolicyVault` plus a public bug bounty;
 Safe-by-default owner. *60 days:* Kredo `VenueAdapter`; ERC-8004 agent identity on `AgentRegistry`.
 *90 days:* other token orientations/decimals, on-chain portfolio limits, two design partners live on
 mainnet. **Ask of HashKey:** audit credits or a grant, HSP QA allowlist access, and adoption of the
@@ -135,12 +134,18 @@ see `.context/review/onchain-verification.md`. Market snapshots drift; they are 
 | Explorer | `https://hsk.blockscout.com` |
 | WHSK | `0xB210D2120d57b758EE163cFfb43e73728c471Cf1` (18) |
 | USDT | `0xF1B50eD67A9e2CC94Ad3c477779E2d4cBfFf9029` (6) |
-| WETH | `0xefd4bC9afD210517803f293ABABd701CaeeCdfd0` (18) — excluded: the HSKSwap WETH/USDT pool `0xb92b79ed6b370D5cFee2E14B1D0983C258304C16` exists, but APRO has no ETH/USD feed, and an unpriced asset cannot be risk-bounded |
+| WETH | `0xefd4bC9afD210517803f293ABABd701CaeeCdfd0` (18) — excluded: the HSKSwap WETH/USDT pool `0xb92b79ed6b370D5cFee2E14B1D0983C258304C16` exists, but APRO has no ETH/USD feed; Supra lists ETH/USD (pair 1, 2,304.19) but no ETH market was adapter-deployed, fork-smoked or risk-bounded, so it stays out of v0.1 (v1.0 candidate) |
 | WBTC | `0x6119ca49a79f5825c8b345f8d7ac36b272565b14` (8) — **second v0.1 market** |
 | USDC.e | `0x054ed45810DbBAb8B27668922D110669c9D88D0a` (6, ~$1.8k supply — do not rely on) |
-| APRO HSK/USD | `0x86CE42c1b714149Dc3A7b17169EF67b5F78A224b` (8 dec, push/threshold feed) |
+| APRO HSK/USD | `0x86CE42c1b714149Dc3A7b17169EF67b5F78A224b` (8 dec, push/threshold feed) — **readable only by EOAs or allow-listed contracts (next rows); display / `doctor` cross-check, not the vault's oracle** |
 | APRO BTC/USD | `0x204ED500ab56A2E19B051561258E3A45c850360F` (8 dec, push/threshold; 77,925.02, age 12.2 h at the 03:50 IST Nov 2 read) |
 | APRO USDT/USD | `0x823d7f90f7A3498DB6595886b6B5dC95E6B0B7f3` |
+| **APRO read access (verified on chain 177 and on a mainnet fork, Nov 2; `contracts/ABI-NOTES.md`)** | Both feeds are `EACAggregatorProxy`s with a `SimpleReadAccessController` (`checkEnabled = true`; controllers owned by `0x9876742000De2561586A59F33Cd2a4155AbAc7A7`; no `AddedAccess` ever emitted). `hasAccess(user) = accessList[user] \|\| !checkEnabled \|\| user == tx.origin`: an EOA (or `eth_call` from one) reads, a **contract cannot** (inside the vault `msg.sender` is the vault, `tx.origin` the agent → `"No access"`). A vault reading APRO gets `ERR_ORACLE_INVALID` (fork: `check()` returns 6) until APRO calls `addAccess(vault)`. `decimals()` is ungated, so a constructor would still pass. Consequence: the daemon reads APRO by direct `eth_call` from its EOA, never inside Multicall3 |
+| **Supra storage / pull (the vault's price source)** | Storage proxy `0x58e158c74DF7Ad6396C0dcbadc4878faC9e93d57`, `getSvalue(uint256)` — **no access control**. Pull contract `0x16f70cAD28dd621b0072B5A8a8c392970E87C3dD`, `verifyOracleProof(bytes)` — permissionless, idempotent (writes only newer rounds; rejects rounds > 3 s in the future) |
+| Supra pairs (Nov 2 reads) | **HSK/USD = 517** (0.087405, age 4.4 h at read); **BTC/USD = 0** (78,481.975, age 3.5 h); ETH/USD = 1 (2,304.19; not used in v0.1). Supra time is in ms; price decimals 18 on 177 |
+| `SupraAggregatorAdapter` (`contracts/src/oracles/`) | Stateless, ownerless, AggregatorV3-shaped view over one pair: `decimals() = 8`; price rescaled to 8 dp **rounding down**; `updatedAt = startedAt = time/1000`, **capped at `block.timestamp`**; `roundId = answeredInRound` (so the step-6 `answeredInRound` clause never fires on it); an unpopulated pair or a price that rounds to 0 returns zeros → `ERR_ORACLE_INVALID`. One adapter per market (HSK pair 517, BTC pair 0); each vault's immutable `oracle` is its adapter (addresses in `deployments/177.json`) |
+| Supra cadence (HashKey Chain) | Pushes every ~**6 h** or on a **0.5 %** move; anyone can refresh on demand with a proof from `POST https://rpc-mainnet-dora-2.supra.com/get_proof` `{"pair_indexes":[0,517],"chain_type":"evm"}` → `verifyOracleProof` (~330k gas for both pairs ≈ 0.17 HSK at 500 gwei, fork-measured); the daemon does this through `TxQueue` (journal kind `oracle_refresh`, §5.2) |
+| Fork smoke, Supra-backed vaults (block 29,623,000, **no APRO access granted**; `contracts/README.md`) | Both vaults pass buy, sell and the 7b exit path; each buy's output equals QuoterV2; gas ~168k per buy, ~120k per sell. The APRO-backed variant (`ORACLE_SOURCE=apro`) returns `check()` = 6 until `addAccess(vault)` |
 | Supra pull / storage | `0x16f70cAD28dd621b0072B5A8a8c392970E87C3dD` / `0x58e158c74DF7Ad6396C0dcbadc4878faC9e93d57` |
 | V3 factory (HSKSwap) | `0x972cA9D1662F5e029cD18327D29026532E84c742` |
 | WHSK/USDT pool (fee 3000) | `0x4ff515761864e7838b0adb8b5b2b8b7a068905dc` — token0 WHSK (18), token1 USDT (6); observation cardinality 240 |
@@ -148,8 +153,8 @@ see `.context/review/onchain-verification.md`. Market snapshots drift; they are 
 | WHSK pool depth (Nov 2) | 4,987,140.77 WHSK / 436,795.75 USDT ≈ $874k (was ≈ $442k on Oct 24) |
 | WBTC pool depth (Nov 2, 03:50 IST) | 0.6566 WBTC / 50,645 USDT ≈ $101k |
 | Observed spot volume | WHSK pool ~$513 / 31 swaps in 24h (Nov 2); ~$183 on Oct 24. WBTC pool: not yet measured (`ate replay` reports it, E11) |
-| WHSK pool vs APRO (Nov 2) | pool mid $0.087588 vs APRO $0.087721 → pool 15 bps below |
-| APRO cadence (HSK/USD, BTC/USD) | ~2% deviation trigger (observed 200–205 bps) + ~24h heartbeat (observed gaps 86,406–86,430 s; USDT/USD up to 86,490 s); see §5.2 |
+| WHSK pool vs APRO (Nov 2; cross-check reading) | pool mid $0.087588 vs APRO $0.087721 → pool 15 bps below |
+| APRO cadence (HSK/USD, BTC/USD; cross-check only) | ~2% deviation trigger (observed 200–205 bps) + ~24h heartbeat (observed gaps 86,406–86,430 s; USDT/USD up to 86,490 s); see §5.2 |
 | SwapRouter02 (verified) | `0x2c16f75b95Cf1390c328aB70e2CEE7f4b80bD8F3` — 7-field `exactInputSingle`, **no `deadline`** |
 | SwapRouter v1 (verified) | `0x56d15cF00b5D853D6eE4CbB1463E6DAD2899fBf5` — 8-field struct with `deadline`; same factory |
 | QuoterV2 (same factory) | `0x603f70466fDdbE3F238220B9a74FFF419a2BbFDD` |
@@ -193,18 +198,18 @@ Official brief (DoraHacks `hskchainindia/detail`, verified 2026-11-02), broken i
 |---|---|---|---|---|
 | T1.1 | Trades on a DEX — HSKSwap (app.hskswap.com) | **Met, verified** | §0.2, §6.2 | HSKSwap's own app config for HashKey mainnet (bundle read ~01:55 IST Nov 2, recorded in `onchain-verification.md`) lists factory `0x972c…c742`, SwapRouter02 `0x2c16…D8F3` and QuoterV2 `0x603f…bFDD` — the exact contracts the vault is bound to; the router and quoter are also verified on-chain to report that factory |
 | T1.2 | AI agent as the core engine | **Met** | §11.1, §7.4 | Every cycle the LLM pulls bound candidates for both markets (`ate_candidates_get`) plus CEX depth/trades from the `hashkey-public-market` skill, and decides act / skip / size down / exit early (standing `discretionary_exit`); it **originates** bounded discretionary trades (≤ 3/day, ≤ $10, required thesis, `origin=discretionary`) and tunes strategy within ±50% of the user's settings (`actor=agent`). The prompt makes it evaluate the discretionary lane and every candidate for veto/size-down each cycle and record why not (§11.1). Journal `engine=llm` with `candidateId` or `origin=discretionary` on every decision; DoD requires ≥ 1 candidate-bound trade, ≥ 1 discretionary trade and ≥ 1 veto/size-down; the **AI scoreboard** tile reports acts / vetoes (bps saved, E13) / discretionary trades (§15.1); EAS attestation per executed trade carries the rationale hash (E3) |
-| T1.3 | Market monitoring | **Met** | §5, §11.2 | Both pools, both APRO feeds and both HashKey Global books in every cycle's record |
-| T1.4 | On-chain data analysis | **Met** | §6.2, §11.2 | Pool `slot0`, TWAP, active liquidity, QuoterV2 impact, swap flow, APRO round per record |
+| T1.3 | Market monitoring | **Met** | §5, §11.2 | Both pools, both Supra pairs (plus the APRO cross-check) and both HashKey Global books in every cycle's record |
+| T1.4 | On-chain data analysis | **Met** | §6.2, §11.2 | Pool `slot0`, TWAP, active liquidity, QuoterV2 impact, swap flow, Supra round per record |
 | T1.5 | Trading signal identification | **Met** | §11.3 | `signal` block per decision, including `no_trade` decisions (`ate_decide`) |
 | T1.6 | Order execution | **Met** | §4.2, §6.2 | `TradeExecuted` txs on Blockscout via each vault → HSKSwap |
 | T1.7 | Without any manual intervention | **Met** | §7.3 `autonomous`, §9.5 | `approvedBy=policy` on executed trades; trader runs ≥ 1 h unattended (G6) and the footer counts measured uptime, cycles and trades. In `autonomous` mode **no step on the trade path is human-gated**. Human-gated steps exist only beside it: the optional HSP payment (two approvals, per the HSP guide), loosening strategy changes (Touch ID, §11.5) and trades in the opt-in `confirm` mode; no autonomous trade, exit or stop-loss ever waits on any of them (§9.5, §11.5) |
 | T1.8 | Capture arbitrage / price spreads in real time | **Met — one-legged spread capture, stated** | §11.3, §0.2 | `spread-revert` buys the pool toward the CEX price when the gap beats fee + impact + CEX half-spread, and its close leg sells those lots once the exit-executable mark beats their entry by ≥ `minNetEdgeBps`. **Snapshot 03:50 IST: WBTC pool 112.6 bps below CEX mid vs ~35 bps entry cost → a default-profile buy; realised-first, a fresh lot is ≈ −0.6% if sold now and ≈ +0.8% on paper at the CEX mark if the pool reverts, and the market may keep the discount; E14 is the primary evidence** (decision record with gap/cost/net edge, `TradeExecuted`, EAS UID). **Pre-registered second path:** if the trader-start re-read (~14:00) shows the WBTC gap below cost, E14's evidence is the replay's top-decile historical gaps, each with the default-profile decision and counterfactual net edge (E11), plus the live `no_trade`/suppression records — stated as such. Same cycle, WHSK: 30 bps vs ~36 bps → correctly `no_trade`. One-legged (no CEX execution): spread capture, not two-leg arbitrage. LLM cycle 120 s by default (`cycleSeconds`, minimum 30 s) on ~2 s blocks; the daemon re-scans candidates every `scanSeconds` (20 s, *additive*) and a newly opened entry candidate triggers an out-of-schedule LLM cycle (§11.1); candidates valid `candidateTtlSec` = max(120 s, 2 × p95 LLM latency) (§11.1). `ate replay --days 7` (E11, both markets) counts every opportunity taken or rejected over the last week and measures whether gaps persist or close (time-to-close, transient/persistent verdict) |
 | T1.9 | Sustained profitability | **Partial — stated honestly** | §11.3, §4.6 | Default profile (the WBTC market): every candidate entry clears net edge after costs (spread ≥ `minNetEdgeBps`, rebalance ≥ 0, both vs CEX mid); go-to-cash and guard/discretionary exits are exempt (they reduce risk); discretionary entries are judged by their thesis and reported separately; WHSK demo-profile trades waive the edge gate and are labelled `profile=demo`. Realised and CEX-marked P&L since the trader's start (~14:00) incl. fee drag, per market, is stated in the README, including no-trade cycles; WBTC lots are realised only when the pool reverts (the close leg pays the exit fee), and the README states next to the CEX-marked number that the WBTC discount may be structural (§11.3). E11 (in the BUIDL from its first edit): 7-day replay from pool `Swap` logs and HashKey Global klines — candidates fired, rejected on net edge, and counterfactual net edge in bps after fee + impact + half-spread, labelled counterfactual. One day and ~$100 of WBTC turnover cannot prove *sustained* profitability; the pitch leads with bounded autonomy |
 | T1.10 | Strict risk control | **Met — contract-enforced** | §4, §4.6 | Verified `PolicyVault`s: trade/epoch/exposure caps, oracle floor, deviation guard, pause; portfolio guard across both; rogue-agent reverts (E4) |
-| T1.11 | Stop-loss framework | **Met — contract-backed exit path, stated limits** | §4.2 step 7b, §11.4 | Stop-loss / take-profit per market and a portfolio daily-loss breaker in the guard with defined position, entry and mark (§11.4); when the oracle lags, exits use the vault's exit path floored at `min(APRO, 300 s TWAP)`. Stated limits: exits also wait while spot is more than slippage + fee below that floor price — a drop faster than the 300 s TWAP, up to ~5 min — and while the mark disagrees with the TWAP by more than `maxOracleDeviationBps` (anti-manipulation); and if the TWAP is more than `maxExitDiscountBps` (5%) below APRO, APRO is stale (> `maxOracleAge`) or invalid (step 6 precedes 7), the epoch budget is spent (the exit-reserve rule, §11.4 rule 3, keeps a full exit inside the epoch unless price rose since the last entry or the off-chain guard was bypassed), or the vault is paused (a pause freezes the remaining exposure; §11.4). Recorded stop-out whose card shows entry, exit-executable mark (fees included) and threshold (E6) |
+| T1.11 | Stop-loss framework | **Met — contract-backed exit path, stated limits** | §4.2 step 7b, §11.4 | Stop-loss / take-profit per market and a portfolio daily-loss breaker in the guard with defined position, entry and mark (§11.4); when the oracle lags, exits use the vault's exit path floored at `min(P, 300 s TWAP)` (`P` = the Supra-backed oracle price). Stated limits: exits also wait while spot is more than slippage + fee below that floor price — a drop faster than the 300 s TWAP, up to ~5 min — and while the mark disagrees with the TWAP by more than `maxOracleDeviationBps` (anti-manipulation); and if the TWAP is more than `maxExitDiscountBps` (5%) below the oracle price, the oracle is stale (> `maxOracleAge`) or invalid (step 6 precedes 7), the epoch budget is spent (the exit-reserve rule, §11.4 rule 3, keeps a full exit inside the epoch unless price rose since the last entry or the off-chain guard was bypassed), or the vault is paused (a pause freezes the remaining exposure; §11.4). Recorded stop-out whose card shows entry, exit-executable mark (fees included) and threshold (E6) |
 | T1.12 | NL interface: positions and P&L in real time | **Met** | §7.2 `ate_positions`, §11.5, §15.1 Chat | In-app Chat view (and `ate chat`): "How am I doing?" → `ate_positions` tool card with live balances, fills and P&L per vault and for the portfolio, shown live in the demo (E7) |
 | T1.13 | NL strategy adjustment: sizing, frequency, risk appetite | **Met** | §7.2 `ate_strategy_set`, §11.5 | Chat transcript → `strategy_change` journal records (`actor=human, via=chat`, derived from the `chat` token scope, never from the route) with rationale, clamped to on-chain limits; tightening applies at once, loosening (direction table, §11.5) needs a Touch ID `ate-approve` signature over the before/after diff; risk appetite in one phrase — "Be more aggressive / conservative" → `riskProfile` preset (*additive*, §11.5); every human change triggers an immediate out-of-schedule cycle (E6, E7) |
-| T1.14 | NL strategy adjustment: target assets | **Met** | §7.4 `targetAssets`, §11.4, §11.5 | Conversation selects between **WHSK, WBTC and cash**: "Only trade BTC" / "Go to cash on HSK, keep the BTC" → `ate_strategy_set { targetAssets: ["WBTC"] }` (de-selected markets sell down at once as guard exits, §11.4 rule 9; turnover re-allocated); "Go to cash" → `targetAssets: []`; "Target 20% HSK" → per-market allocation. Shown live in the demo with a real sell (E7). WETH is excluded because APRO has no ETH/USD feed (§0.2) |
+| T1.14 | NL strategy adjustment: target assets | **Met** | §7.4 `targetAssets`, §11.4, §11.5 | Conversation selects between **WHSK, WBTC and cash**: "Only trade BTC" / "Go to cash on HSK, keep the BTC" → `ate_strategy_set { targetAssets: ["WBTC"] }` (de-selected markets sell down at once as guard exits, §11.4 rule 9; turnover re-allocated); "Go to cash" → `targetAssets: []`; "Target 20% HSK" → per-market allocation. Shown live in the demo with a real sell (E7). WETH is out of v0.1 scope (§0.2) |
 | T1.15 | Human controllability in synergy with automation | **Met** | §4.5, §7.3, §11.5 | Kill switch (both vaults) from chat and from the guardian's device off the agent's machine; owner-only limit changes; optional `confirm` mode; reuse by a second, unrelated MCP client (Claude Code over stdio) shown on stage (§22.3) |
 
 **Gates:** HSK Chain mainnet contract deployed and verified (§19, E1) — must ship; built on HSK Chain;
@@ -215,16 +220,16 @@ original work in the window (commit history); in-person demo in Mumbai preferred
 | Product | Meaningful use | Evidence |
 |---|---|---|
 | HSKSwap | Each vault bound immutably to its factory, SwapRouter02 and pool (WHSK/USDT, WBTC/USDT); QuoterV2 for every quote; pool TWAP for deviation and exit floor; HSKSwap tx count and routed USD in the evidence footer, the close and `docs/INTEGRATE.md` (§15.1) | E1, E3, E14 |
-| APRO oracle | HSK/USD and BTC/USD enforced in-contract: slippage floor, staleness, deviation guard | E2, E4 |
+| Supra DORA oracle (storage `0x58e1…3d57` via one `SupraAggregatorAdapter` per vault; pull `0x16f7…C3dD` for on-demand refresh) | HSK/USD (pair 517) and BTC/USD (pair 0) **enforced in-contract**: slippage floor, staleness, deviation guard; the daemon refreshes pairs with signed pulls (`oracle_refresh`, §5.2) | E2, E4 |
 | EAS (predeploy `0x4200…0021`) | Schema registered at deploy; one attestation per executed trade (`proposalId`, `rationaleHash`, `txHash`, `notionalUsd`, `exitPath`, `engine`, `origin`); UID in the journal | E3, E10 |
 | Blockscout | Verified source of both vaults, decoded custom-error reverts, all evidence links | E1–E6, E14 |
 | `hashkey-skills` → `hashkey-public-market` | Official HashKey skill for HashKey Global market data (site `glb`, read-only): the daemon's CEX reader implements its endpoint map and runtime rules for HSKUSDT and BTCUSDT; the trader agent loads the skill to read depth/trades/klines (the Chat agent gets the same data through `ate_market_get`, §11.5); `ate replay` uses its klines | §5.1, E11 |
-| Supra (pull/storage `0x16f7…C3dD` / `0x58e1…3d57`) | **Off-chain entry gate plus cross-check:** the daemon emits no entry candidates for a market while Supra and APRO disagree by > 250 bps (`oracle_disagree`; exits unaffected); `ate doctor` and a UI badge show the gap (bps, ages, per market); never in the vault (§5.1) | E2 (doctor output), suppression records |
+| APRO (HSK/USD `0x86CE…224b`, BTC/USD `0x204E…360F`) | **Off-chain cross-check, not in the enforcement path** (the feeds refuse contract callers, §0.2): the daemon reads them by direct `eth_call`; it emits no entry candidates for a market while Supra and APRO disagree by > 250 bps (`oracle_disagree`; exits unaffected); `ate doctor` and a UI badge show the gap (bps, ages, per market); never read by the vault (§5.1). Optional: if APRO allow-lists a vault, `ORACLE_SOURCE=apro` deploys an APRO-backed vault (§25 Q13) | E2 (doctor output), suppression records |
 | HSK-Superpowers | Used for the Foundry workflow: test → Anvil fork smoke → 177 deploy → Blockscout verify (§3.3); every skill invocation and its output is logged in `docs/superpowers-log.md`; we contribute back an `agent-policy-vault` skill PR to `HashKeyChain/HSK-Superpowers` (draft by 17:30, §24) | E9, PR link |
 
 **Conditional (not claimed until evidenced):** HSP + OKX Agentic Wallet (G-HSP, §9, E8) — whatever
 G-HSP decides, `docs/hsp-readiness.md` and the recorded tool listing or organiser reply are committed by
-12:00 IST (§21.4); Supra trade-time pricing (v1.0); Safe — Vault-BTC's ownership moves to a Safe on 177
+12:00 IST (§21.4); APRO-backed vaults (only if APRO allow-lists a vault, §25 Q13); Safe — Vault-BTC's ownership moves to a Safe on 177
 after E5/E6 are recorded (~17:00, §19 step 9), claimed only once that transfer tx exists (Safe owner by
 default is v1.0).
 
@@ -297,7 +302,7 @@ withdraw, raise my own caps, and trade after the kill switch." Every attempt fai
 │  journal (single writer) · chat           │
 └───────────▲───────────────────────────────┘
             │ JSON-RPC (viem, Multicall3, ≥ 2 RPCs)
-     HashKey Chain 177 · PolicyVault ×2 (WHSK/USDT, WBTC/USDT) · HSKSwap pools · APRO HSK/USD, BTC/USD · EAS
+     HashKey Chain 177 · PolicyVault ×2 (WHSK/USDT, WBTC/USDT) · HSKSwap pools · Supra adapters (HSK/USD, BTC/USD) · EAS
 
  Second device (never the agent's machine): `ate-owner` — owner signer (Ledger, or cast-wallet encrypted
  keystore fallback) and, by default, the guardian key (`ate-owner pause --guardian --all`); the guardian
@@ -352,7 +357,7 @@ ate/
 │  ├─ payments/         HSP client, mandate builder, approval state machine, settlement journal
 │  ├─ chain/            viem clients, contract bindings, tx builder
 │  ├─ venues/           VenueAdapter interface + hsk-dex adapter
-│  ├─ oracle/           APRO reader, pool reader, HashKey Global reader (`hashkey-public-market`), health
+│  ├─ oracle/           Supra reader + pull refresher, APRO cross-check reader, pool reader, HashKey Global reader (`hashkey-public-market`), health
 │  ├─ strategy/         signal engine, sizing, stop-loss, circuit breaker
 │  ├─ mcp/              tool schemas + server
 │  ├─ journal/          append-only decision log, migrations (001 frozen at 10:30, §21.4); EAS
@@ -438,7 +443,8 @@ interface IAggregatorV3 {   // latestRoundData is called inside try/catch (§4.2
 //                Vault-HSK                          Vault-BTC
 //   quoteToken  USDT 0xF1B5…9029 (6 dp)            USDT 0xF1B5…9029 (6 dp)
 //   priceToken  WHSK 0xB210…1Cf1 (18 dp)           WBTC 0x6119…5b14 (8 dp)
-//   oracle      APRO HSK/USD 0x86CE…224b            APRO BTC/USD 0x204E…360F
+//   oracle      SupraAggregatorAdapter, pair 517    SupraAggregatorAdapter, pair 0
+//               (HSK/USD; over Supra storage 0x58e1…3d57; addresses in deployments/177.json; AggregatorV3, 8 dp)
 //   pool        WHSK/USDT 3000 0x4ff5…05dc          WBTC/USDT 3000 0xd9EA…449A
 //   router      SwapRouter02 0x2c16…D8F3 (7-field exactInputSingle, no deadline) — both
 //   factory     HSKSwap V3 0x972c…c742 — both; fee read once from pool.fee()
@@ -451,7 +457,7 @@ interface IAggregatorV3 {   // latestRoundData is called inside try/catch (§4.2
 //                                       holds for both pools: 0xB210… and 0x6119… sort below 0xF1B5…)
 //   priceDecimals ∈ {8, 18} && IERC20Metadata(quoteToken).decimals() == 6
 //   router.factory() == factory; static call to router.positionManager() succeeds (SwapRouter02-only, §6.2)
-//   oracle.decimals() == 8 (P is used as read, no rescaling or rounding)
+//   oracle.decimals() == 8 (P is used as read, no rescaling or rounding; the adapter's decimals() is constant 8)
 // v0.1 supports exactly this shape (8- or 18-dp token0 priced in a 6-dp USD-stable token1, 8-dp
 // AggregatorV3 feed); other orientations/decimals are v1.0 (§24).
 
@@ -541,10 +547,11 @@ the same first failing reason, the same `minOutFloor` and the same `exitPath` fl
 5. `tokenIn ∉ {quoteToken, priceToken}` → `ERR_PAIR_NOT_ALLOWED`; `tokenOut` is the other one
 6. Oracle read via `try oracle.latestRoundData()`; a revert → `ERR_ORACLE_INVALID`. `answer <= 0`,
    `updatedAt == 0` or `updatedAt > block.timestamp` → `ERR_ORACLE_INVALID`; `block.timestamp − updatedAt >
-   maxOracleAge` → `ERR_ORACLE_STALE`. The `answeredInRound < roundId` clause is included only if the
-   pre-deploy mainnet read shows APRO returns `answeredInRound == roundId` (APRO round IDs are
-   phase-packed; `ate doctor --chain` checks it, §19); otherwise it is omitted and the decision recorded
-   in `deployments/177.json`. `P` = `answer` (8 dp; the constructor asserts `oracle.decimals() == 8`).
+   maxOracleAge` → `ERR_ORACLE_STALE`. The `answeredInRound < roundId` clause is included (the Nov 2 mainnet
+   read showed both APRO feeds return `answeredInRound == roundId`, Q7); on the Supra adapter it never
+   fires (`answeredInRound = roundId`). `oracle` is a `SupraAggregatorAdapter` (§5.1): an unpopulated pair
+   returns zeros (`answer <= 0`, `updatedAt == 0`) → `ERR_ORACLE_INVALID`; its `updatedAt` is capped at
+   `block.timestamp`, so a proof up to 3 s ahead never trips the `updatedAt > block.timestamp` check. `P` = `answer` (8 dp; the constructor asserts `oracle.decimals() == 8`).
 7. **Deviation.** Spot `S` from `slot0`; TWAP `T` from `try pool.observe([300, 0])`: mean tick
    `t̄ = (tickCumulative[1] − tickCumulative[0]) / 300`, rounded toward −∞ (subtract 1 when the
    difference is negative and not divisible), `sqrtP = TickMath.getSqrtPriceAtTick(t̄)` (Uniswap v4-core
@@ -620,9 +627,9 @@ both shapes (§18.2).
 The TypeScript mirror in `packages/core` implements the same formulas with `bigint` and the same rounding;
 the Demo Day parity suite compares them (§18.2).
 
-USDT is valued at $1.00 (peg assumption, documented; APRO USDT/USD is read for display and a `doctor`
-warning above 50 bps depeg). WBTC is valued at APRO BTC/USD (bridge-peg assumption, documented; `doctor`
-warns when the WBTC pool sits > 250 bps from both APRO and the CEX mid, i.e. the pool, not the oracle,
+USDT is valued at $1.00 (peg assumption, documented; APRO USDT/USD is read by direct `eth_call` for display and a `doctor`
+warning above 50 bps depeg). WBTC is valued at Supra BTC/USD (bridge-peg assumption, documented; `doctor`
+warns when the WBTC pool sits > 250 bps from both the oracle and the CEX mid, i.e. the pool, not the oracle,
 disagrees with BTC).
 
 **Honest-path `minAmountOut`.** The daemon never submits the floor. At `ate_execute` time (not propose
@@ -634,8 +641,8 @@ quote-based value protects honest trades from back-running.
 **Slippage baseline.** The floor comes from the oracle (or, on the exit path, the pool's own 300 s TWAP),
 never from a passed-in quote, so an agent cannot widen its own tolerance by lying about the market.
 Because the oracle may lag (§5.2), step 7 bounds how far the pool may sit from it. When the pool drifts
-beyond the bound, **buys** are blocked with `ERR_ORACLE_DEVIATION` until APRO's next push (which a ~2% move
-triggers); **sells** remain possible through the exit path, so stop-loss and flatten are not trapped by
+beyond the bound, **buys** are blocked with `ERR_ORACLE_DEVIATION` until the oracle's next update (a Supra push on a 0.5% move or the 6 h heartbeat, or the daemon's
+on-demand pull refresh, §5.2); **sells** remain possible through the exit path, so stop-loss and flatten are not trapped by
 a lagging oracle (they still wait in the cases listed in §11.4 *Oracle lag*). Both are surfaced explicitly, never silently.
 
 **Epochs.** Fixed, aligned windows: `index = floor(t / epochDuration)`, `start = index × epochDuration`.
@@ -711,7 +718,7 @@ named tests — **I5** (each owner function called from agent, guardian and a ho
 `OK` `check()` followed by a successful `execute()` with equal `minOutFloor`/`exitPath`) — an `exposureUsd()`
 unit test (formula, rounding, oracle-revert), an exit-path test where `T > P`
 (floor at `P`) and one where `T < P` (floor at `T`) — **plus an Anvil-fork smoke of both vaults against
-the real HSKSwap factory, both pools, SwapRouter02 and both APRO feeds before the mainnet deploy**
+the real HSKSwap factory, both pools, SwapRouter02 and both Supra adapters before the mainnet deploy**
 (constructor asserts, `check()`, a $5 buy and sell per vault, a forced deviation that exercises 7b;
 §21.4). Demo Day gate: all invariants at `runs = 500, depth = 100`, 8 actors, both shapes, plus the fork
 suite.
@@ -740,10 +747,13 @@ independently and the off-chain portfolio guard (§11.4) can only tighten them.
 
 **1. Execution loss** (buying above or selling below fair value). Two terms: oracle vs fair value, and
 execution vs oracle. Execution vs oracle is ≤ slippage + fee on the normal path (I11). Oracle vs fair is
-the **APRO assumption**: both feeds push on a ~2% move (observed 200–205 bps), so we assume APRO is within
-250 bps of fair. The oracle-vs-fair term is therefore `A = max(maxOracleDeviationBps, 250)` — never below
-the APRO assumption, even if the owner tightens the deviation bound. (The pool is *not* assumed to be fair;
-under manipulation it is not — the bound rests on APRO.)
+the **oracle assumption**: the Supra pairs push every ~6 h or on a 0.5% (50 bps) move and anyone can
+pull-refresh on demand (§5.2), so we assume the Supra price is within 250 bps of fair. The 250 bps term
+covers the 0.5% push threshold with 200 bps of margin for push latency, committee/exchange-source
+differences and gaps between pushes; the numeric bound is unchanged from v0.9.0 (it was sized for APRO's
+~2% threshold). The oracle-vs-fair term is therefore `A = max(maxOracleDeviationBps, 250)` — never below
+the oracle assumption, even if the owner tightens the deviation bound. (The pool is *not* assumed to be
+fair; under manipulation it is not — the bound rests on the oracle, i.e. on Supra.)
 
 ```
 A                    = max(maxOracleDeviationBps, 250)
@@ -756,7 +766,7 @@ Defaults (§19 step 3, both vaults): `maxEpochUsd = $250`, deviation 250 bps (so
 for the portfolio over any rolling 24 h; 5.3% of capped turnover**, on the normal path.
 
 **Exit-path term (step 7b).** Exit sells are floored at `min(P, T)`, which may sit up to
-`maxExitDiscountBps` (default **500**) below APRO. The oracle-vs-fair term still applies on this path,
+`maxExitDiscountBps` (default **500**) below the oracle price `P`. The oracle-vs-fair term still applies on this path,
 so the worst-case loss of an exit sell versus fair value is `A + maxExitDiscountBps + maxSlippageBps +
 feeBps` = 1030 bps, and the **extra versus the normal path is exactly `maxExitDiscountBps`**:
 
@@ -786,11 +796,12 @@ loss on the held exposure is bounded by the stop-loss, not by the contract — a
 vault is paused (§11.4).
 
 **Assumptions — the bound does not hold if they fail:**
-- APRO is live and within 250 bps of fair value (HSK/USD for Vault-HSK, BTC/USD for Vault-BTC). If APRO
+- The Supra feed is live and within 250 bps of fair value (HSK/USD pair 517 for Vault-HSK, BTC/USD pair 0
+  for Vault-BTC; pushes every ~6 h or on a 0.5% move, plus on-demand pull refresh, §5.2). If the oracle
   reports a wrong but fresh price, execution loss per vault per UTC day is bounded by **≤ $250 of USDT
   plus the fair value of its priceToken holdings**, never more than the vault: within one epoch buys at a
-  wrong-high APRO can spend up to the oracle-valued notional cap (`maxEpochUsd`) of USDT, and sells at a
-  wrong-low APRO (pool held near it) can count holdings at the wrong `P`; both can happen if APRO swings.
+  wrong-high oracle can spend up to the oracle-valued notional cap (`maxEpochUsd`) of USDT, and sells at a
+  wrong-low oracle (pool held near it) can count holdings at the wrong `P`; both can happen if the oracle swings.
   Portfolio: ≤ $500 of USDT plus both vaults' priceToken holdings, never above the two vaults.
 - USDT holds its peg; WBTC holds its BTC peg.
 - Agent/guardian gas floats (25 HSK ≈ $2.20 and 2 HSK) are excluded.
@@ -803,12 +814,12 @@ same `A = max(maxOracleDeviationBps, 250)`.
 
 **Pitch card.** Spoken: **one number** — "the stolen key can never withdraw a cent, and the contract caps
 what bad trades can cost at $51.50 a day, about 18% of this demo wallet" (both vaults, all paths, while
-APRO is live). **The pitch card shows three items only:** "Key can never withdraw · ≤ $51.50 per UTC day
-of execution loss across both vaults, every path, while APRO is live (~18%) · exposure ≤ $150 per vault",
-with the footnote below. **The Q&A *numbers* card** (not the pitch) says, exactly this way: "While APRO
-is live: execution loss across both vaults ≤ $51.50 per UTC day on every path (≤ $103 over any rolling
+the Supra feed is live). **The pitch card shows three items only:** "Key can never withdraw · ≤ $51.50 per UTC day
+of execution loss across both vaults, every path, while the Supra feed is live (~18%) · exposure ≤ $150 per vault",
+with the footnote below. **The Q&A *numbers* card** (not the pitch) says, exactly this way: "While the Supra
+feed is live: execution loss across both vaults ≤ $51.50 per UTC day on every path (≤ $103 over any rolling
 24 h); ≤ $26.50 per UTC day on the normal path (≤ $53 rolling); oracle-lag exits add ≤ $7.50 per vault
-per episode, inside those totals. Per vault, half of each. If APRO is wrong: per vault ≤ $250 of USDT
+per episode, inside those totals. Per vault, half of each. If the oracle is wrong: per vault ≤ $250 of USDT
 plus its token holdings, never above the vault. Exposure ≤ $150 per vault at every buy; price risk on it
 is managed by the stop-loss, not the contract." The card itself (not only a footnote) carries the line
 **"Price risk on held exposure (≤ $150/vault): stop-loss, not contract."**
@@ -826,37 +837,49 @@ without scanning. Not required for v0.1: the daemon stores agent metadata locall
 
 | Source | Mode | Use |
 |---|---|---|
-| APRO HSK/USD (Vault-HSK), APRO BTC/USD (Vault-BTC) | push/threshold, on-chain | vault enforcement baseline, UI reference |
+| Supra HSK/USD pair 517 (Vault-HSK), Supra BTC/USD pair 0 (Vault-BTC), via each vault's `SupraAggregatorAdapter` over storage `0x58e1…3d57` | push every ~6 h or on a 0.5% move, plus daemon pull refresh; on-chain `getSvalue` (no access control), read in the per-cycle Multicall3 | **vault enforcement baseline** (the vault's immutable `oracle`), UI reference. The adapter is AggregatorV3-shaped: 8 dp, rounds down, ms→s, `updatedAt` capped at `block.timestamp`, unpopulated pair → zeros → `ERR_ORACLE_INVALID` (§0.2, §4.1) |
 | Pool `slot0` / `liquidity` (both pools) | on-chain read | instantaneous price, depth, deviation check |
 | Pool `observe()` 300 s TWAP (observation cardinality 240 on both pools, §0.2; `doctor` requires ≥ 64) | on-chain read | vault deviation check alongside spot and exit-path floor (§4.2 step 7); stop-loss mark cross-check (§11.4); UI line |
 | HashKey Global `ticker/24hr`, `bookTicker`, `depth`, `trades`, `kline` for HSKUSDT and BTCUSDT (public, no key) via the official `hashkey-public-market` skill (site `glb`) | HTTP | reference mid, half-spread and top-of-book depth for spread signals (§11.3); depth/trades for the LLM's judgement (§11.1); klines for `ate replay` (E11). The daemon reader follows the skill's endpoint map, symbol validation and timestamped-result rules; the trader agent loads the skill itself |
-| Supra (DORA) storage `0x58e1…3d57` | on-chain read (in the per-cycle Multicall3) | **v0.1 (must-ship): off-chain entry gate + cross-check.** Per market, every cycle: if Supra and APRO disagree by > `supra.maxDisagreeBps` (250), the daemon emits **no entry candidates** for that market (spread-revert open, rebalance buys, discretionary buys refused by the guard) and journals one suppression record per episode (`no_trade`, `engine=guard`, `context.suppressed.cause = "oracle_disagree"`, both prices and ages); exits, closes, guard exits and `discretionary_exit` are unaffected. A market Supra does not list (HSK, if no HSK pair), or a Supra read that fails or is > 1 h old, leaves the gate inactive for that market — stated in `doctor` and the badge (APRO and the vault still bind). `ate doctor` prints Supra BTC/USD and HSK/USD (else USDT/USD) next to APRO with the gap in bps and both ages; the Trade view shows a second-oracle badge. Never read by the vault or used for sizing. v1.0: signed pull for trade-time freshness |
+| APRO HSK/USD, BTC/USD (and USDT/USD for display) | push/threshold, on-chain; **EOA / allow-listed callers only (§0.2)**, so read by direct `eth_call` from the daemon EOA, never inside Multicall3 and never by the vault | **Off-chain entry gate + cross-check (not in the enforcement path).** Per market, every cycle: if Supra and APRO disagree by > `supra.maxDisagreeBps` (250), the daemon emits **no entry candidates** for that market (spread-revert open, rebalance buys, discretionary buys refused by the guard) and journals one suppression record per episode (`no_trade`, `engine=guard`, `context.suppressed.cause = "oracle_disagree"`, both prices and ages); exits, closes, guard exits and `discretionary_exit` are unaffected. An APRO read that fails (no access, RPC) or is > `maxOracleAge` old leaves the gate inactive for that market — stated in `doctor` and the badge (Supra and the vault still bind). `ate doctor` prints Supra and APRO side by side with the gap in bps and both ages; the Trade view shows a second-oracle badge. Never read by the vault or used for sizing. If APRO later allow-lists a vault address, an APRO-backed vault can be deployed (`ORACLE_SOURCE=apro`, same bytecode; §25 Q13) |
 
-### 5.2 Staleness policy
+### 5.2 Staleness and refresh policy
 
-APRO HSK/USD and BTC/USD are threshold feeds: they push on a ~2% move (observed updates cluster at
-200–205 bps) or on a ~24h heartbeat, so a quiet market produces old rounds (HSK/USD 18.7h observed Oct 24,
-2.2h on Nov 2; BTC/USD 12.2h at 03:50 IST Nov 2). Therefore:
+The vault's oracle is a Supra pair: it pushes on HashKey Chain every ~6 h or on a 0.5% move (observed ages at
+read: HSK/USD 4.4 h, BTC/USD 3.5 h), so a quiet market produces rounds hours old, and anyone can refresh a
+pair on demand with a signed proof. Therefore:
 
-- Both heartbeats land 6–30 s *after* 24h (86,406–86,430 s observed; up to 86,490 s on USDT/USD).
-  `maxOracleAge` default **90000 s** (86400 would reject trades for up to ~30 s every day), configurable
-  300–172800 s.
-- Because the feed may lag fair value by up to ~2% before it updates, `maxOracleDeviationBps` defaults to
-  **250** (above APRO's push threshold, so it trips only when APRO is lagging abnormally) and
-  `maxSlippageBps` to **250**. Tighter values cause legitimate rejections near APRO's update threshold;
-  the UI shows the margin to each bound.
+- `maxOracleAge` default **90000 s** (unchanged from v0.9.0; a ~6 h heartbeat makes it ample, and keeping
+  the value leaves limits, tests and the §4.6 numbers untouched), configurable 300–172800 s.
+- `maxOracleDeviationBps` defaults to **250** and `maxSlippageBps` to **250**. Supra's 0.5% push
+  threshold sits far inside the 250 bps bound, so legitimate trades are not rejected near an update; the UI
+  shows the margin to each bound. The numeric bounds are unchanged from v0.9.0 (§4.6).
 - Staleness alone is not trusted: the pool-deviation check (§4.2 step 7) bounds how wrong a stale price
   can be at trade time.
+- **Refresh (daemon, `oracle_refresh`).** `POST https://rpc-mainnet-dora-2.supra.com/get_proof` with
+  `{"pair_indexes":[0,517],"chain_type":"evm"}` (both pairs in one proof) → `verifyOracleProof(proof_bytes)` on
+  the pull contract `0x16f7…C3dD`, sent from the agent key through `TxQueue` (~330k gas for both pairs,
+  ≈ 0.17 HSK; permissionless and idempotent — it writes only rounds newer than stored and rejects rounds
+  > 3 s ahead). The daemon refreshes (a) before building or executing an entry when the market's Supra
+  age exceeds `refreshThresholdSec` (default **1800**, per market), (b) whenever `check()` returns
+  `ERR_ORACLE_STALE` on any side, including a guard exit, and (c) never on a timer alone. A refresh
+  enqueued for an execute takes that execute's priority and nonce order ahead of it (§7.1); the execute
+  then re-runs `check()`. Each refresh is journalled as kind `oracle_refresh` (tx hash, pairs, age before and
+  after, gas). If the proof endpoint or the tx fails, the market behaves as stale (§5.3); any third party may also
+  pull. The vault never depends on the daemon's refresh: it reads whatever the storage holds and applies
+  `maxOracleAge`.
 - The UI renders a **health badge** (`fresh` < 1 h, `aging` < `maxOracleAge`, `stale` ≥ `maxOracleAge`) plus a
   **deviation badge** (pool vs oracle, bps), and blocks execution client-side before the chain would revert.
 - Every proposal records the oracle snapshot (`answer`, `updatedAt`, `roundId`) and pool snapshot.
 
 ### 5.3 Health and failover
 
-`OracleService.getPrice(market)` returns a `PriceSnapshot`. If a market's APRO feed is unavailable or
-invalid the daemon puts **that market** in read-only mode and refuses to build its transactions; the other
-market keeps trading. **No silent fallback to DEX spot** — that would make
-the enforcement baseline manipulable. If a market's HashKey Global ticker is unavailable, its `spread-revert` and `rebalance`
+`OracleService.getPrice(market)` returns a `PriceSnapshot` from the market's Supra pair. If the pair is
+unavailable or invalid (adapter returns zeros, storage read fails) or stale beyond `maxOracleAge` and the
+refresh in §5.2 fails, the daemon puts **that market** in read-only mode and refuses to build its
+transactions; the other market keeps trading. **No silent fallback to DEX spot** — that would make
+the enforcement baseline manipulable — and **no fallback to APRO**, which the vault cannot read. A failed
+APRO cross-check read only deactivates the entry gate for that market (§5.1). If a market's HashKey Global ticker is unavailable, its `spread-revert` and `rebalance`
 emit no candidates (the edge gate cannot be computed); go-to-cash sell-downs (guard, §11.4 rule 9),
 stop-loss, take-profit, `discretionary_exit` and the circuit breaker keep running on the pool TWAP alone.
 
@@ -893,8 +916,9 @@ export interface VenueAdapter {
   granting balance and allowance — a plain `eth_call` from an EOA reverts. Local math is used only for the
   instant estimate while the call is in flight.
 - **Batching:** the public RPC and Blockscout rate-limit bursts. Per-cycle reads for **both** markets
-  (two pools, two APRO feeds, two vaults) go through Multicall3 (`0xcA11…CA11`) in one call; never fan
-  out parallel `eth_call`s.
+  (two pools, two Supra pairs, two vaults) go through Multicall3 (`0xcA11…CA11`) in one call; never fan
+  out parallel `eth_call`s. The two APRO cross-check reads are the exception: APRO refuses contract callers, so they
+  are direct `eth_call`s from the daemon EOA (two extra calls per cycle, outside the batch).
 - **Pre-flight:** before broadcasting, `eth_call` `PolicyVault.execute` from the agent address at the
   latest block. This is exact and includes policy; a revert here is reported with its decoded reason and
   the tx is not sent (except in the rogue-agent demo, §22, which deliberately broadcasts with a fixed gas
@@ -934,11 +958,11 @@ V3 v1.0: compute from `sqrtPriceX96` and active `liquidity()` within the current
   `ATE_TOOL_NOT_ALLOWED`); `agent` tokens see the full trading set. The journal `actor` is derived from
   the scope (`agent` → `agent/mcp`, `chat` → `human/chat`), never from the route or the request body.
 - **Single signer (`TxQueue`).** Every agent-key transaction for both vaults — LLM executes, guard exits,
-  discretionary trades, EAS attests, `pause`, and `ate rogue` broadcasts — goes through one in-daemon
+  discretionary trades, Supra `oracle_refresh` pulls, EAS attests, `pause`, and `ate rogue` broadcasts — goes through one in-daemon
   queue that owns the nonce (local counter resynced from `eth_getTransactionCount(pending)` on start and
   on any nonce error). **At most one agent-key tx is in flight** (depth-1 pipeline; ~2 s blocks make this
   cheap), so priority — `pause` > guard exits > executes > attests — applies at every nonce, not only to
-  unsigned txs. A tx unmined after 20 s is **replaced at the same nonce** (re-signed by the queue; the
+  unsigned txs (an `oracle_refresh` enqueued for an execute or guard exit runs ahead of it at that priority; a stand-alone refresh ranks with attests). A tx unmined after 20 s is **replaced at the same nonce** (re-signed by the queue; the
   only re-signing path); a `pause` or guard exit that arrives while an execute or attest is pending
   **replaces it at its nonce** (the displaced execute is re-queued only if its proposal is still valid;
   the attest re-queues). **Replacement fee rule:** every replacement sets `maxFeePerGas` and
@@ -1529,7 +1553,7 @@ one out-of-schedule cycle within `scanSeconds` + 30 s.
 |---|---|
 | Reads market state; computes bound candidates from §11.3 with edge, cost and `maxAmountIn`, plus a standing `discretionary_exit` | Chooses act / skip / size down on each candidate, or exits early via `discretionary_exit`, binding its proposal to the `candidateId` |
 | Enforces the discretionary lane's count, size and thesis rules (§11.4 rule 8) | **Originates** up to 3 discretionary trades/day (≤ $10 each) on its own thesis — e.g. "CEX book thinning on the ask for 3 cycles while pool flow is net buy; small long, exit if CEX mid < entry" |
-| Enforces the strategy guard (§11.4) and on-chain pre-flight | Reads what the daemon does not score — CEX book shape and recent trades (skill), APRO round age, bot flow in recent pool `Swap`s, epoch/turnover remaining, its own recent outcomes — and vetoes or shrinks with a reason (e.g. "CEX bid/ask is 40 bps wide; the spread is likely stale") |
+| Enforces the strategy guard (§11.4) and on-chain pre-flight | Reads what the daemon does not score — CEX book shape and recent trades (skill), Supra round age, bot flow in recent pool `Swap`s, epoch/turnover remaining, its own recent outcomes — and vetoes or shrinks with a reason (e.g. "CEX bid/ask is 40 bps wide; the spread is likely stale") |
 | Fires stop-loss, take-profit and circuit breaker without asking | Decides whether a premium signal is worth buying (§9.5, only if G-HSP) |
 | Journals everything; attests executed trades on EAS; scores every veto/size-down after 30 min (bps saved) | Tunes `entrySpreadBps`, `minNetEdgeBps`, `tradeSizeUsd`, `cycleSeconds` within ×0.5–×1.5 of the user's settings (`actor=agent`); explains decisions |
 
@@ -1553,8 +1577,8 @@ resilience; its decisions are labelled `engine=rules` and are **not** used as Tr
 
 ### 11.2 Monitoring and analysis (per cycle)
 
-One Multicall3 read for both markets: each pool's `slot0`, active liquidity and 300 s TWAP, both APRO
-rounds, both vaults' balances and epochs. Plus QuoterV2 impact and the exit-executable mark per market
+One Multicall3 read for both markets: each pool's `slot0`, active liquidity and 300 s TWAP, both Supra
+rounds (APRO cross-check by direct `eth_call`), both vaults' balances and epochs. Plus QuoterV2 impact and the exit-executable mark per market
 (QuoterV2 sell quote for the full position), HashKey Global HSKUSDT and BTCUSDT bid/ask and top-of-book
 depth (via the `hashkey-public-market` endpoint map), recent `Swap` events on both pools, open positions
 and P&L per vault and for the portfolio.
@@ -1600,8 +1624,8 @@ is reported two ways per lot: **marked at the CEX mid** (the captured gap, ≈ +
 and **exit-executable** (what selling now would realise, ≈ −60 bps on a fresh lot). The close leg turns
 the first into realised P&L only if the pool reverts toward the CEX; both numbers are reported, never
 blended. **Structural-discount risk (stated):** the WBTC pool holds ~94% of WBTC supply and sits ~100 bps
-below APRO, so its discount may be a persistent bridge/liquidity discount; then the close leg may never
-fire, and after an upward APRO push the baseline uses enough of the 250 bps deviation budget that
+below the oracle price, so its discount may be a persistent bridge/liquidity discount; then the close leg may never
+fire, and after an upward oracle update the baseline uses enough of the 250 bps deviation budget that
 Vault-BTC buys are deviation-blocked exactly when the CEX gap is widest (the `check()` pre-filter shows
 this as `suppressed`, never as a reverted tx). The README states this next to the CEX-marked P&L.
 
@@ -1684,7 +1708,7 @@ Soft layer (strategy + portfolio guard in the daemon, **at propose and again at 
    - *Position* = all priceToken held by that vault.
    - *Entry* = weighted-average effective fill price of the position, fees included (USDT paid ÷ tokens
      received per buy; sells reduce quantity at the current average, realising P&L). Seed WHSK deposited
-     by the owner enters at the APRO price at the deposit block. **Position P&L, the stop-loss and the
+     by the owner enters at the oracle (Supra) price at the deposit block. **Position P&L, the stop-loss and the
      README use average cost only.** Spread-revert lots are a sub-ledger (`lots`, §12) used only for the
      close trigger: every sell, whatever its generator, consumes open spread-revert lots FIFO first, then
      other inventory; a lot's realised P&L is reported alongside position P&L, never summed with it.
@@ -1699,8 +1723,8 @@ Soft layer (strategy + portfolio guard in the daemon, **at propose and again at 
      `min(P, 300 s TWAP)`. Exits **also wait** while spot is more than slippage + fee below that floor
      price — a drop faster than the 300 s TWAP, up to ~5 min — and while the mark disagrees with the TWAP
      by more than `maxOracleDeviationBps` (anti-manipulation); and if the TWAP is > `maxExitDiscountBps`
-     below APRO (`ERR_EXIT_PRICE`), the epoch budget is spent (`ERR_EPOCH_CAP`, until 00:00 UTC), or APRO
-     is stale/invalid (step 6). The exposure cap (at the last buy) bounds what rides through any of these.
+     below the oracle price (`ERR_EXIT_PRICE`), the epoch budget is spent (`ERR_EPOCH_CAP`, until 00:00 UTC), or the oracle
+     is stale/invalid (step 6; the daemon first tries a Supra refresh, §5.2). The exposure cap (at the last buy) bounds what rides through any of these.
    - *Pause:* while a vault is paused nothing executes on it, **including guard exits** — a pause freezes
      the remaining exposure until the owner unpauses. The breaker therefore tries to flatten before it
      pauses (rule 6), and the Chat "Stop everything" reply states this and offers "go to cash" first.
@@ -1712,7 +1736,7 @@ Soft layer (strategy + portfolio guard in the daemon, **at propose and again at 
 6. **Daily loss circuit breaker (portfolio):** realised + unrealised P&L across both vaults for the UTC
    day ≤ `−dailyLossLimitUsd` → **flatten first** (guard-exit both positions within the trade caps) for
    **at most 2 cycles or 5 min, whichever comes first**, then `pause()` both vaults with the agent key
-   **regardless** (flatten blocked by `ERR_EPOCH_CAP`, stale/invalid APRO or `ERR_EXIT_PRICE` cannot keep
+   **regardless** (flatten blocked by `ERR_EPOCH_CAP`, stale/invalid oracle or `ERR_EXIT_PRICE` cannot keep
    the vaults unpaused), journalling any unflattened exposure, then notify the user (Chat view,
    `/events`). Test (§18.2): exits blocked → pause after the bound.
 7. **Frequency:** at most one entry per market per `cycleSeconds`, **and** (*additive*, v0.9) at least
@@ -2085,15 +2109,19 @@ scope cut: the Electron app with all six v0.1 views still ships (§21.1 item 9).
       "markets": [
         { "id": "hsk-dex:WHSK/USDT:3000", "base": "WHSK", "baseDecimals": 18, "quote": "USDT", "fee": 3000,
           "pool": "0x4ff515761864e7838b0adb8b5b2b8b7a068905dc",
-          "oracle": "0x86CE42c1b714149Dc3A7b17169EF67b5F78A224b", "cexSymbol": "HSKUSDT" },
+          "oracle": "0x… (SupraAggregatorAdapter, deployments/177.json)", "supraPair": 517, "refreshThresholdSec": 1800,
+          "apro": "0x86CE42c1b714149Dc3A7b17169EF67b5F78A224b",   // cross-check only (§5.1)
+          "cexSymbol": "HSKUSDT" },
         { "id": "hsk-dex:WBTC/USDT:3000", "base": "WBTC", "baseDecimals": 8, "quote": "USDT", "fee": 3000,
           "pool": "0xd9EA2cE468957Ba49cCC38C4758Ed6ecD561449A",
-          "oracle": "0x204ED500ab56A2E19B051561258E3A45c850360F", "cexSymbol": "BTCUSDT" }
+          "oracle": "0x… (SupraAggregatorAdapter, deployments/177.json)", "supraPair": 0, "refreshThresholdSec": 1800,
+          "apro": "0x204ED500ab56A2E19B051561258E3A45c850360F",   // cross-check only (§5.1)
+          "cexSymbol": "BTCUSDT" }
       ]
     }
   },
   "oracle": {
-    "apro": { "maxAgeSec": 90000 },     // feed addresses are per market above
+    "maxAgeSec": 90000,                  // Supra age bound; adapter, pair and APRO cross-check address are per market above
     "cex":  { "provider": "hashkey-public-market", "site": "glb",
               "baseUrl": "https://api-glb.hashkey.com", "skillCommit": "<pinned>" }
   },
@@ -2137,11 +2165,17 @@ scope cut: the Electron app with all six v0.1 views still ships (§21.1 item 9).
   },
   "daemon": { "autoLockMinutes": 15, "port": 0, "gasAlarmHsk": "2", "attestFloorHsk": "1",
               "approvalFallback": "off" },   // "off" | "armed" (ADDITIVE v0.9: codes off until enabled on the daemon TTY, no restart) | "tty"; §10.1; refused once ate-approve passes
-  "supra":  { "storage": "0x58e158c74DF7Ad6396C0dcbadc4878faC9e93d57", "use": "entry-gate+crosscheck",
-              "maxDisagreeBps": 250, "maxAgeSec": 3600 },   // §5.1; inactive for unlisted/stale pairs
+  "supra":  { "storage": "0x58e158c74DF7Ad6396C0dcbadc4878faC9e93d57", "pull": "0x16f70cAD28dd621b0072B5A8a8c392970E87C3dD",
+              "proofUrl": "https://rpc-mainnet-dora-2.supra.com/get_proof", "chainType": "evm",
+              "maxDisagreeBps": 250 },   // §5.1/§5.2; maxDisagreeBps gates entries against the APRO cross-check
   "ui": { "theme": "dark", "reducedMotion": false }
 }
 ```
+
+**Changed in v0.9.1:** each market's `oracle` is now its `SupraAggregatorAdapter` (not the APRO feed), with new
+`supraPair`, `refreshThresholdSec` (default 1800) and the APRO address moved to `apro` (cross-check only);
+`oracle.apro.maxAgeSec` became `oracle.maxAgeSec`; `supra` gained `pull`, `proofUrl`, `chainType` and lost
+`use` and `maxAgeSec`. A v0.9.0 config whose `oracle` is an APRO address fails the immutables check below.
 
 **Additive keys (v0.9):** `strategy.portfolio.scanSeconds` (default 20), per-market
 `minEntryIntervalSec` (default 0; WBTC 1800) and the `daemon.approvalFallback` value `"armed"` are
@@ -2150,7 +2184,8 @@ Precedence: CLI flag > env (`ATE_*`) > config file > defaults. Secrets never liv
 RPC is a fallback candidate and must pass `ate doctor` (chain ID, head freshness) before use.
 For each entry in `vaults`, `venues.hskdex.router`, `factory` and the matching market's `pool`, `oracle`,
 `base` token and `baseDecimals` must equal that vault's immutables (§4.1) — a mismatch is a
-`ConfigError`; `routerKind` accepts only `swaprouter02`; `maxAgeSec` is capped at each vault's
+`ConfigError` (the market's `oracle` is the adapter; `ate doctor` also checks `adapter.supraStorage()` ==
+`supra.storage` and `adapter.pairIndex()` == `supraPair`); `routerKind` accepts only `swaprouter02`; `oracle.maxAgeSec` is capped at each vault's
 `maxOracleAge`. `--profile WHSK=demo` overrides the WHSK market's profile only (§11.3); the WBTC market
 cannot be given the demo profile in v0.1. Each market's turnover share is clamped to ≤ its vault's
 `maxEpochUsd − maxExposureUsd` at load and on every `ate_strategy_set`.
@@ -2166,8 +2201,8 @@ cannot be given the demo profile in v0.1. Each market's turnover share is clampe
 | T1 | Agent compromised / prompt-injected | Execution loss, exposure on both vaults | Bounded per vault by §4.6 (portfolio = sum); immutable pair/pool/oracle/router; exposure cap per vault; proceeds stay in each vault |
 | T2 | Agent lies about market to widen slippage | Overpay | Floor computed in-contract from oracle; agent input ignored |
 | T3 | Shell-capable agent reads daemon agent token/keychain | Trades within both vaults' limits (ignoring the off-chain portfolio guard), pause, gas burn, agent-clamped strategy edits (journalled `actor=agent`), junk attestations | Daemon holds no owner or guardian key; agent key can only `execute`/`pause`; `ui` token never on disk and minted only via spawn pipe or a Touch-ID-signed `/ui/attach`; `chat` tokens per session, allowlist enforced server-side, `actor` derived from scope; approvals need a Secure Enclave signature whose key blob only `ate-approve` can read (keychain ACL), with a payload-derived Touch ID prompt (§10.1) |
-| T4 | Stale oracle exploited (sandwich / colluding pool) | Overpay | Spot + TWAP deviation check; loss per trade ≤ deviation + slippage + fee while APRO is live (§4.6 assumptions) |
-| T4b | TWAP held down to abuse the exit path | Sell below fair | Sells only; 300 s TWAP; floor at `min(APRO, TWAP)` minus slippage + fee; TWAP ≥ APRO − `maxExitDiscountBps` (500); bounded in §4.6: ≤ $7.50 extra per vault per episode, ≤ $25.75 per vault and ≤ $51.50 for the portfolio per UTC day across all paths ($103 rolling 24 h). Thin arbitrage (cheaper still on the ~$101k WBTC pool) makes the attack cheap, so the bound, not its cost, is the defence |
+| T4 | Stale oracle exploited (sandwich / colluding pool) | Overpay | Spot + TWAP deviation check; loss per trade ≤ deviation + slippage + fee while the Supra feed is live (§4.6 assumptions) |
+| T4b | TWAP held down to abuse the exit path | Sell below fair | Sells only; 300 s TWAP; floor at `min(P, TWAP)` minus slippage + fee; TWAP ≥ `P` − `maxExitDiscountBps` (500); bounded in §4.6: ≤ $7.50 extra per vault per episode, ≤ $25.75 per vault and ≤ $51.50 for the portfolio per UTC day across all paths ($103 rolling 24 h). Thin arbitrage (cheaper still on the ~$101k WBTC pool) makes the attack cheap, so the bound, not its cost, is the defence |
 | T5 | Agent or tricked owner routes into attacker-seeded pool / oracle / router | Drain | Pool, oracle and router immutable; no pool parameter; owner ops on the second device with typed args |
 | T6 | Renderer XSS | Unauthorized actions | Renderer has no daemon token; owner ops impossible; CSP; no `innerHTML` |
 | T7 | Malicious / rate-limited RPC (429, Cloudflare 1015 bans) | Wrong quote, stuck tx, demo outage | ≥ 2 RPCs with head/chain-ID cross-check, Multicall3 batching, backoff, pre-flight `eth_call`; owner CLI uses its own RPC list |
@@ -2183,9 +2218,13 @@ cannot be given the demo profile in v0.1. Each market's turnover share is clampe
 | T17 | Prompt injection via chat text, CEX data or journal content (confused deputy: agent-written rationale read by the chat agent) | Agent changes strategy or target assets, pauses, or spends its discretionary lane | Chat runner started with a tool **allowlist** (`mcp__ate__*` only; no built-ins, no skills — tested) and the MCP server enforces the `chat`-scope allowlist (no shell, no file access, no `ate_execute`); agent-authored text wrapped in `<untrusted_agent_text>`; **loosening changes need an `ate-approve` signature over the rendered diff** (§11.5); trader tuning clamped ×0.5–×1.5 of human anchors; discretionary lane ≤ 3 × $10/day; strategy clamped to on-chain limits; every change journalled. Worst case without a Touch ID: a pause, go-to-cash or a *tighter* / less active agent, inside §4.6 — accurate because every field that makes the agent larger or more active is loosening (§11.5 direction table, one test per field and direction) |
 | T18 | Sandwich / back-run of honest trades | Worse fills | Honest `minAmountOut = max(floor, quote × 0.995)` re-quoted at execute (§4.2); ≤ ~50 bps + fee per honest trade; $5–$100 clips too small to pay a sandwich |
 | T19 | Nonce collisions or a stuck tx between executes, exits, attests and pause on either vault | Stuck or dropped exit or pause | Single `TxQueue`, depth-1 (one agent-key tx in flight), priority (pause > exits > executes > attests) at every nonce; same-nonce replacement after 20 s at `max(original × 1.25, suggested)` fees; a pause or guard exit replaces a pending execute/attest at its nonce, and is re-signed at the next nonce if the displaced tx mines first (§7.1) |
-| T20 | WBTC loses its BTC peg, or the WBTC pool's TWAP is unavailable (low observation cardinality) | Mis-valued exposure; buys and exits on Vault-BTC blocked | Peg is a stated §4.6 assumption, `doctor` warns when the pool disagrees with both APRO and the CEX; cardinality is 240 (read Nov 2) and `doctor` re-checks ≥ 64 before deploy and the demo (§19); `check()` pre-filter withholds deviation-blocked buys (§11.3); exposure ≤ $150 on that vault |
+| T20 | WBTC loses its BTC peg, or the WBTC pool's TWAP is unavailable (low observation cardinality) | Mis-valued exposure; buys and exits on Vault-BTC blocked | Peg is a stated §4.6 assumption, `doctor` warns when the pool disagrees with both the oracle and the CEX; cardinality is 240 (read Nov 2) and `doctor` re-checks ≥ 64 before deploy and the demo (§19); `check()` pre-filter withholds deviation-blocked buys (§11.3); exposure ≤ $150 on that vault |
 | T21 | A buy proposed before a stop-loss executes after it, or concurrent proposals jointly exceed turnover / discretionary counts | Re-entry into a stopped-out position; budget overrun | Guard re-run at execute; reservations at propose; guard exits and the breaker invalidate open buys (§7.3, §11.4) |
 | T22 | Entries and re-buys spend the epoch budget a stop-out needs | Stop-loss blocked by `ERR_EPOCH_CAP` | Exit-reserve rule 3b at propose and execute (§11.4); breaker pauses after its bounded flatten (rule 6) |
+| T23 | Supra feed wrong, delayed or compromised (committee, Supra-administered storage proxy) | Mis-priced floor; trades and exits at a wrong `P` | The pricing trust root since v0.9.1 (APRO is no longer in the path). Bounded by the §4.6 oracle assumption and its oracle-is-wrong ceiling (per vault ≤ $250 of USDT plus holdings); spot and TWAP deviation guard; the adapter is immutable, ownerless and read-only; the Supra–APRO cross-check withholds entries at > 250 bps; owner/guardian pause |
+| T24 | Supra round stale or refresh impossible (proof endpoint down, agent out of gas, pair unpopulated) | Buys and exits revert `ERR_ORACLE_STALE` / `ERR_ORACLE_INVALID` | Daemon pull-refresh before entries past `refreshThresholdSec` and on any stale revert (§5.2); anyone can pull; the market goes read-only rather than falling back to DEX spot; stop-loss exits wait while the oracle is stale or invalid (stated limit, T1.11, §11.4); `gas.low` alarm; `doctor` prints ages |
+| T25 | Hostile, replayed or future-dated proof submitted by a third party | None on price | `verifyOracleProof` checks the committee signature and Merkle proof, writes only rounds newer than stored (older or equal: silent no-op) and rejects rounds > 3 s ahead; the adapter caps `updatedAt` at `block.timestamp` |
+| T26 | APRO never grants contract access, or later revokes it | None: APRO is not in the enforcement path | The cross-check degrades to inactive per market, stated in `doctor` and the badge; APRO-backed vaults only if access is granted (`ORACLE_SOURCE=apro`, §25 Q13)
 
 ### 17.2 Non-negotiables
 
@@ -2219,7 +2258,7 @@ frame-ancestors 'none';
 | Metric | Budget |
 |---|---|
 | Quote round-trip (RPC 100 ms) | < 400 ms |
-| Trader cycle, both markets (excluding LLM latency) | < 2 s (one Multicall3 read carrying slot0/TWAP/APRO/Supra/vault state, `check()` pre-filters and ≥ 4 QuoterV2 calls — entry-size quote and full-position exit mark per market — + two CEX `bookTicker` reads) |
+| Trader cycle, both markets (excluding LLM latency) | < 2 s (one Multicall3 read carrying slot0/TWAP/Supra/vault state, plus two direct APRO `eth_call`s, `check()` pre-filters and ≥ 4 QuoterV2 calls — entry-size quote and full-position exit mark per market — + two CEX `bookTicker` reads) |
 | LLM run | killed at 90 s (§11.1); candidate TTL = max(120 s, 2 × p95) |
 | Journal query (10k rows) | < 50 ms |
 | Cold start to interactive | < 2.5 s (v1.0 gate) |
@@ -2245,7 +2284,7 @@ attestations deferred).
 | Contract unit | Foundry | every reason code 1–15 hit, both directions, exit path 7b with `T > P` and `T < P`; **both priceToken shapes (18-dp, 8-dp)**; constructor rejects wrong orientation/decimals; I5 owner-only per function × non-owner actors; `exposureUsd()` formula/rounding/oracle-revert | 100% branch |
 | `check()`/`execute()` parity | Foundry | every reason code: view code == custom error; same `minOutFloor`, `exitPath`; both shapes | — |
 | Contract invariants | Foundry `invariant_` on local mocks | I1–I4, I6, I7 (handler assertion), I8, I9, I11–I13; `runs = 64, depth = 32`, 6 actors; both shapes (I5 unit, I10 parity) | all; `runs = 500, depth = 100`, 8 actors, both shapes, plus fork |
-| Fork smoke (pre-deploy) | `forge script` + `forge test --fork-url` on Anvil fork of 177 (pinned block, cached) | **both vaults**: constructor asserts pass against the real factory, both pools, router and both APRO feeds; `check()` OK; $5 buy + sell; forced deviation → 7b exit sell; `observe([300, 0])` succeeds on both pools; APRO `answeredInRound` read | in CI |
+| Fork smoke (pre-deploy) | `forge script` + `forge test --fork-url` on Anvil fork of 177 (pinned block, cached) | **both vaults**: constructor asserts pass against the real factory, both pools, router and both Supra adapters (**no APRO access granted**); `check()` OK; $5 buy + sell (output equals QuoterV2; ~168k gas buy, ~120k sell); forced deviation → 7b exit sell; `observe([300, 0])` succeeds on both pools; a real DORA proof through `verifyOracleProof`; the APRO-backed variant shows `check()` = 6 until `addAccess(vault)` | in CI |
 | Policy math TS ↔ Sol | vitest + forge | — (Demo Day: 200 cases, both shapes) | 500 |
 | Adapter | vitest on Anvil fork of 177 | one quote vs fork execution (in the fork smoke) | Demo Day: within 1 bps over 50 sizes; in CI |
 | Journal | vitest | `UPDATE`/`DELETE` abort; chain recomputes; `proposalId` == record hash; every id derivable from its hash; a second record with the same `prev_hash` is rejected (`UNIQUE`); concurrent writers serialise via `BEGIN IMMEDIATE` | — |
@@ -2266,14 +2305,13 @@ attestations deferred).
 
 ## 19. Deployment runbook (mainnet 177)
 
-Pre-flight (`ate doctor --chain`), **per market**: chain ID 177; ≥ 2 RPC heads agree; APRO age <
-`maxOracleAge` (prints the age; re-run before the demo); APRO `answeredInRound == roundId` (decides the
-step-6 clause); pool spot and TWAP vs oracle < `maxOracleDeviationBps` (if not, a normal-path smoke trade
+Pre-flight (`ate doctor --chain`), **per market**: chain ID 177; ≥ 2 RPC heads agree; adapter reads (`adapter.supraStorage()` and `pairIndex()` match config; `latestRoundData()` non-zero) and Supra age <
+`maxOracleAge` (prints the age; if older than `refreshThresholdSec`, runs one `oracle_refresh`; re-run before the demo); APRO feeds readable by direct `eth_call` (cross-check only; `answeredInRound == roundId` already recorded, Q7); pool spot and TWAP vs oracle < `maxOracleDeviationBps` (if not, a normal-path smoke trade
 will revert — record it and re-check later); router `factory()` matches; pool `fee()` == 3000,
-`token0()` == priceToken, `token1()` == USDT; priceToken `decimals()` ∈ {8, 18}; APRO `decimals()` == 8;
+`token0()` == priceToken, `token1()` == USDT; priceToken `decimals()` ∈ {8, 18}; adapter `decimals()` == 8;
 **pool `observationCardinality` ≥ 64 and `observe([300, 0])` succeeds** (both pools read 240 on Nov 2;
 no cardinality transaction is planned); QuoterV2 impact at $5 / $25 / $100; Supra vs APRO printed (bps,
-ages, whether the entry gate is active per market); agent gas ≥ 2 HSK (else alarm).
+ages, whether the entry gate is active per market; APRO unreadable → gate inactive, not a failure); agent gas ≥ 2 HSK (else alarm).
 
 Step 0 runs at 10:30 IST; steps 1–5, 8 and 9 run from the second device (owner); steps 6–7 run on the agent's
 machine with the daemon unlocked. Step 1 starts only after the Anvil-fork smoke of both vaults (§18.2) is
@@ -2296,14 +2334,20 @@ the pitch card is regenerated from them.
    keystore) **on the second laptop only**. Only after step 0 passes (Ledger or fallback) does ops move
    gas and seed from the hot wallet to the owner. Create the guardian keystore on the third device if
    available, else on the second laptop (§4.1). Never on the agent machine.
-1. Deploy **twice from the same source and creation code** (runtime bytecode differs only in the
-   immutables): `forge script Deploy --sig 'run(address,address)' <pool> <oracle> --rpc-url $HSK_RPC
-   --ledger --broadcast` (or `--account owner`; the script reads `token0`/`token1`/`factory` from the
-   pool and fixes SwapRouter02, so the full constructor args are `(USDT, WHSK, APRO HSK/USD 0x86CE…224b, SwapRouter02
-   0x2c16…D8F3, pool 0x4ff5…05dc, factory 0x972c…c742)` for Vault-HSK and `(USDT, WBTC 0x6119…5b14, APRO
-   BTC/USD 0x204E…360F, SwapRouter02 0x2c16…D8F3, pool 0xd9EA…449A, factory 0x972c…c742)` for Vault-BTC;
-   never a plaintext `--private-key`). The same one-command form is the `docs/INTEGRATE.md` example.
-2. Record both addresses in `deployments/177.json`; verify each on Blockscout with its own
+1. **Deploy the oracle adapters first, then the vaults**, from the same script (`forge script
+   script/Deploy.s.sol:Deploy --rpc-url hsk --ledger --sender <owner> --broadcast`, or `--account owner`; env
+   `AGENT`, `GUARDIAN`, `MARKETS=hsk|btc|both`; never a plaintext `--private-key`). Per market the script
+   deploys a `SupraAggregatorAdapter(storage 0x58e1…3d57, pair, description)` — HSK pair 517, BTC pair 0 — and
+   then the vault with `oracle = adapter`; the vault bytecode is the same source and creation code, runtime
+   bytecode differs only in the immutables. Full constructor args: `(USDT, WHSK, <HSK adapter>, SwapRouter02
+   0x2c16…D8F3, pool 0x4ff5…05dc, factory 0x972c…c742)` for Vault-HSK and `(USDT, WBTC 0x6119…5b14, <BTC
+   adapter>, SwapRouter02 0x2c16…D8F3, pool 0xd9EA…449A, factory 0x972c…c742)` for Vault-BTC. Before step 3,
+   read each adapter (`latestRoundData()` non-zero, `updatedAt` sane); if the pair is older than
+   `refreshThresholdSec`, run one `oracle_refresh` so the first `check()` is not `ERR_ORACLE_STALE`. No APRO
+   allow-listing is needed. `ORACLE_SOURCE=apro` deploys an APRO-backed vault instead, only if APRO has
+   allow-listed the vault address (§25 Q13). The same one-command form is the `docs/INTEGRATE.md` example.
+2. Record both vault **and both adapter** addresses in `deployments/177.json`; verify each adapter
+   (`SupraAggregatorAdapter.sol:SupraAggregatorAdapter`) and each vault on Blockscout with its own
    `forge verify-contract --constructor-args …` (immutables differ, so Blockscout may label the second a
    similar match); register the EAS schema (§13) once on SchemaRegistry
    `0x4200…0020` and record its UID.
@@ -2313,7 +2357,7 @@ the pitch card is regenerated from them.
 4. On each vault `setAgent(<agent>)` (the same agent address), `setGuardian(<guardian>)`; send **25 HSK**
    gas to the agent and 2 HSK to the guardian (§4.2 Gas float); ops tops the agent up whenever the
    `gas.low` alarm fires.
-5. Seed **Vault-HSK** with ~$120 USDT and ~$60 of WHSK (seed WHSK basis = APRO price at that block,
+5. Seed **Vault-HSK** with ~$120 USDT and ~$60 of WHSK (seed WHSK basis = the oracle (Supra) price at that block,
    §11.4) and **Vault-BTC** with ~$100 USDT (no WBTC seed: its first position is the spread-revert buy).
    Disconnect the owner signer.
 6. Smoke (agent's machine), per vault: `check()` → `OK`; `ate smoke --market <id> --usd 5` runs one
@@ -2421,9 +2465,9 @@ funding, organizer contact, recording.
 
 | # | Item | Lane |
 |---|---|---|
-| 1 | `PolicyVault` (generic 8/18-dp priceToken, exit path 7b with `min(P, T)` floor, post-swap exposure check) fork-smoked against both pools, **deployed twice (Vault-HSK, Vault-BTC) and verified** on 177, limits set on both, EAS schema registered, smoke evidence recorded; one-command `Deploy --sig 'run(address,address)'` script | A |
+| 1 | `PolicyVault` (generic 8/18-dp priceToken, exit path 7b with `min(P, T)` floor, post-swap exposure check) fork-smoked against both pools, **deployed twice (Vault-HSK, Vault-BTC) and verified** on 177, limits set on both, EAS schema registered, smoke evidence recorded; one-command `Deploy` script (adapter first, then vault) and `SupraAggregatorAdapter` with its tests | A |
 | 2 | Foundry suite at the submission gate (§4.4): unit, parity, core invariants on local mocks for both shapes, fork smoke of both vaults | A |
-| 3 | Daemon: keystore (agent), config (two markets, *additive* keys §16), chain client (Multicall3, ≥ 2 RPCs), single depth-1 `TxQueue` with same-nonce replacement (§7.1) and the `rogue`-scoped raw route (§10.1), gas alarm, oracle + pool + CEX readers for both markets (`hashkey-public-market`), candidates incl. spread-revert open/close, `discretionary_exit`, `check()` pre-filter, `scanSeconds` re-scan (§11.1) and `smoke`, QuoterV2 quote + vault pre-flight, strategy-seam stub (rules 1–3) behind the frozen `strategy.ts` (Lane C's full guard, §11.4 rules 1–9 incl. 3b, reservations, replaces it), single-writer append-only hash-chained SQLite journal (§12–§13), veto `outcome` scoring (E13), `/status` uptime + HSKSwap routed counters, `/cycle`; `ate doctor` incl. the **Supra entry gate + cross-check**, pool cardinality and epoch headroom; `ate smoke`; npm publication of `@ate/venues` and `@ate/mcp` by 17:30 | B |
+| 3 | Daemon: keystore (agent), config (two markets, *additive* keys §16), chain client (Multicall3, ≥ 2 RPCs), single depth-1 `TxQueue` with same-nonce replacement (§7.1) and the `rogue`-scoped raw route (§10.1), gas alarm, Supra oracle reader + pull refresher (`oracle_refresh`) + APRO cross-check reader + pool + CEX readers for both markets (`hashkey-public-market`), candidates incl. spread-revert open/close, `discretionary_exit`, `check()` pre-filter, `scanSeconds` re-scan (§11.1) and `smoke`, QuoterV2 quote + vault pre-flight, strategy-seam stub (rules 1–3) behind the frozen `strategy.ts` (Lane C's full guard, §11.4 rules 1–9 incl. 3b, reservations, replaces it), single-writer append-only hash-chained SQLite journal (§12–§13), veto `outcome` scoring (E13), `/status` uptime + HSKSwap routed counters, `/cycle`; `ate doctor` incl. the **Supra entry gate + cross-check**, pool cardinality and epoch headroom; `ate smoke`; npm publication of `@ate/venues` and `@ate/mcp` by 17:30 | B |
 | 4 | MCP server with the §7.2 trading tools (both markets, `targetAssets`, *additive* `riskProfile`), scope-enforced tool sets (`agent` / `chat`), `actor` from scope, stdio proxy | B |
 | 5 | Reference trader running autonomously from ~14:00 (cycle rules §11.1: no overlap, 90 s kill, measured candidate TTL; WHSK demo profile allowed, labelled by profile and generator; WBTC default profile with `minEntryIntervalSec` 1800): ≥ 1 candidate-bound LLM trade, ≥ 1 discretionary LLM trade, ≥ 1 veto/size-down and ≥ 1 `no_trade` on mainnet; the WBTC spread-revert trade when the gap is open (E14) | C |
 | 6 | Chat (§11.5): prompt, allowlisted runner with the `chat` token, loosening direction table, `riskProfile`, rules fallback, `ate chat` (C); Chat view (D) | C, D |
@@ -2443,8 +2487,8 @@ Kredo `VenueAdapter` interface stub test.
 Demo Day: rehearse §22 (3 min and 90 s), refresh evidence, full invariant run (`runs = 500, depth =
 100`, 8 actors, both shapes, fork), TS ↔ Sol math parity (200 cases), quote vs fork execution within 1
 bps, finish should-ship items, HSP live if access arrived late.
-v1.0 GA: knowledge bases, `AgentRegistry`, daily EAS journal anchoring, Supra trade-time pricing, other
-token orientations/decimals, more markets (WETH once an ETH/USD feed exists), one agent key per vault,
+v1.0 GA: knowledge bases, `AgentRegistry`, daily EAS journal anchoring, atomic pull-and-trade freshness (proof submitted in the same transaction), other
+token orientations/decimals, more markets (WETH: Supra already lists ETH/USD, pair 1), one agent key per vault,
 on-chain portfolio limits, Kredo adapter, Safe owner by default, Chart view, Tauri shell, signed
 releases, backtesting, SSM tunnel under a separate macOS user (§3.4).
 
@@ -2492,15 +2536,15 @@ designated pair for another lane.
 | Lane | Owner | Owns | Deliverables (acceptance) |
 |---|---|---|---|
 | A — contracts | Agent A (worktree `lane-a`); ops-1 signs | `contracts/`, `apps/owner-cli/`, `agents/rogue/`, `apps/cli/src/commands/a/`, `docs/superpowers-log.md`, `docs/INTEGRATE.md` | `PolicyVault` per §4 (generic decimals, exit path with `min(P, T)` floor, post-swap check); mocks for both shapes; unit/parity/invariants green (§4.4); Anvil-fork smoke of both vaults green; deploy ×2 + verify + EAS schema via the HSK-Superpowers workflow with the one-command `run(pool, oracle)` script, logged; `ate-owner` (set-limits `--vault`, unpause `--all`, pause --guardian `--all`); `ate rogue` (sole owner) with `check()` assertions, `--stage` per §22.3, runnable from a Claude Code stdio session; `vault-v0.1.0` tag; `docs/INTEGRATE.md`; draft `agent-policy-vault` skill PR; from 14:00, `apps/approve/` if `ate-approve` is red; E1, E2, E4, E5, E9 |
-| B — daemon + MCP | Agent B (`lane-b`; freeze agent 09:50–10:30) | `apps/daemon/` (except `src/approval/`), `packages/{core,wallet,chain,venues,oracle,mcp,journal}` (after the freeze; except `journal/src/attest/`), `apps/cli/src/commands/b/` (`doctor`, `unlock`) | Keystore, two-market config (+ additive keys), Multicall3 chain client with RPC failover, depth-1 `TxQueue` with same-nonce replacement and the `rogue` raw route, gas alarm, APRO/pool/CEX readers for both markets, `scanSeconds` re-scan, Supra cross-check (pair indices read 11:00), QuoterV2, pre-flight, single-writer journal with triggers, `UNIQUE(prev_hash)` and id-from-hash, all §7.2 tools with scope-enforced tool sets and execute-time guard re-run, stdio proxy, `/events`, `/status`, `/chat`, `/cycle`; `strategy.ts` pass-through stub; `check()` pre-filter + Supra entry gate; `ate smoke`; first mainnet trade (smoke) by ~13:30; npm publish of `@ate/venues` + `@ate/mcp` by 17:30; E3 |
+| B — daemon + MCP | Agent B (`lane-b`; freeze agent 09:50–10:30) | `apps/daemon/` (except `src/approval/`), `packages/{core,wallet,chain,venues,oracle,mcp,journal}` (after the freeze; except `journal/src/attest/`), `apps/cli/src/commands/b/` (`doctor`, `unlock`) | Keystore, two-market config (+ additive keys), Multicall3 chain client with RPC failover, depth-1 `TxQueue` with same-nonce replacement and the `rogue` raw route, gas alarm, Supra reader + pull refresher / APRO cross-check / pool / CEX readers for both markets, `scanSeconds` re-scan, Supra oracle reader + `oracle_refresh` (pairs 517/0) and APRO cross-check, QuoterV2, pre-flight, single-writer journal with triggers, `UNIQUE(prev_hash)` and id-from-hash, all §7.2 tools with scope-enforced tool sets and execute-time guard re-run, stdio proxy, `/events`, `/status`, `/chat`, `/cycle`; `strategy.ts` pass-through stub; `check()` pre-filter + Supra entry gate; `ate smoke`; first mainnet trade (smoke) by ~13:30; npm publish of `@ate/venues` + `@ate/mcp` by 17:30; E3 |
 | C — trader + strategy | Agent C (`lane-c`) | `packages/strategy/`, `agents/trader/`, `agents/chat/`, `apps/cli/src/commands/c/` | Per-market generators (spread-revert open/close, rebalance with edge gate, `discretionary_exit`) + strategy and portfolio guard rules 1–9 incl. exit reserve 3b, `minEntryIntervalSec`, immediate target-asset sell-down and bounded breaker, with reservations, invalidation and the FIFO lot sub-ledger, behind `strategy.ts` (replaces B's stub by 13:30, latest 14:15), veto `outcome` scoring, trader prompt + runner (cycle rules §11.1, discretionary lane, agent tuning, per-market profile), chat prompt + allowlisted runner + loosening table + `riskProfile` + rules fallback, `ate chat`, `ate replay --days 7` (both markets, top-decile gaps); E6, E7, E11, E13, E14 |
 | D — UI | Agent D (`lane-d`) | `apps/desktop/`, `packages/ui/`, `/view` | Electron shell that attaches via `/ui/attach`; Chat, Decisions, Trade (market selector), Agents (AI scoreboard), Positions (per vault + portfolio), Payments views; evidence footer with uptime counter; `/view` fallback; `docs/JUDGE.md` and the Decisions-view E2E (unless reassigned to E at 12:00) |
 | E — payments + approvals | Agent E (`lane-e`) | `apps/worker/`, `packages/payments/`, `apps/approve/`, `apps/daemon/src/approval/`, `packages/journal/src/attest/`, `docs/hsp-readiness.md` | `ate-signal`, `ate-pay` state machine on recorded HSP responses (§9.4 incl. 30043, denial, uncertain submit), `ate-approve` Swift helper with keychain-ACL key storage (incl. UI-attach payloads); **daemon approval endpoints `/ui/attach`, `/chat/session`, `/strategy/approve`, the `armed` TTY degradation, and the EAS attester**; `docs/hsp-readiness.md` + recorded listing or organiser reply by 12:00; HSP tool listing once allowlisted; if go, live QA payment and E8 |
 
 | Time | Lead + ops-1 / ops-2 | A — contracts | B — daemon + MCP | C — trader + strategy | D — UI | E — payments + approvals |
 |---|---|---|---|---|---|---|
-| 09:50–10:30 | Lead: lane briefs out at 09:50; reads APRO `answeredInRound`/`decimals()` on both feeds at 10:15 (decides the step-6 clause before the freeze); **reviews and commits the freeze + MCP stub by 10:30**, then the v0.9 re-brief of B and E. Ops-1: **fund the ops hot wallet** (§19 Funding; arrival by 11:00). Ops-2: **deadline in writing** (by 11:00) and **G-HSP check in person or on the organisers' channel with Operations** | `PolicyVault` (generic decimals) + mocks (both shapes) | **Freeze agent:** generates every freeze artifact | Generators + guard rules from the spec and fixtures | Electron shell scaffold | `ate-signal` + `ate-pay` on recorded responses; `ate-approve` |
-| 10:30–11:45 | Lead: integration branch; reviews only cross-lane PRs. **10:30 ops-1: Ledger 0-value tx on 177** (§19 step 0), then funds the owner; guardian keystore (third device if available). **11:00: funding check** → smaller-seed fallback if < $220 USDT (§19); ops-2 commits `docs/deadline.md` | Unit/parity/invariants; **Anvil-fork smoke, both vaults** | Config, keystore, chain, `TxQueue` (+ `rogue` route), readers (skill endpoint map, both markets, `scanSeconds`), QuoterV2, journal + triggers; 11:00 Supra pair indices | Guard rules 1–9 incl. 3b and `minEntryIntervalSec`; trader + chat prompts; runner **against the MCP stub**; **`ate replay --days 7` from 11:00 (needs no vault)** | Chat + Decisions + Trade views on stub; `/view` | Payments tests; EAS attester; `/ui/attach`, `/chat/session`, `/strategy/approve` + `armed` TTY mode; if allowlisted: 8-tool listing, `get_chain_config` |
+| 09:50–10:30 | Lead: lane briefs out at 09:50; confirms Supra pairs 517 and 0 are populated and the adapters read non-zero at 10:15 (the step-6 clause is already included, ABI-NOTES 6); **reviews and commits the freeze + MCP stub by 10:30**, then the v0.9 re-brief of B and E. Ops-1: **fund the ops hot wallet** (§19 Funding; arrival by 11:00). Ops-2: **deadline in writing** (by 11:00) and **G-HSP check in person or on the organisers' channel with Operations** | `PolicyVault` (generic decimals) + mocks (both shapes) | **Freeze agent:** generates every freeze artifact | Generators + guard rules from the spec and fixtures | Electron shell scaffold | `ate-signal` + `ate-pay` on recorded responses; `ate-approve` |
+| 10:30–11:45 | Lead: integration branch; reviews only cross-lane PRs. **10:30 ops-1: Ledger 0-value tx on 177** (§19 step 0), then funds the owner; guardian keystore (third device if available). **11:00: funding check** → smaller-seed fallback if < $220 USDT (§19); ops-2 commits `docs/deadline.md` | Unit/parity/invariants; **Anvil-fork smoke, both vaults** | Config, keystore, chain, `TxQueue` (+ `rogue` route), readers (skill endpoint map, both markets, `scanSeconds`), QuoterV2, journal + triggers; 11:00 Supra pair/adapter re-check and one `oracle_refresh` dry run | Guard rules 1–9 incl. 3b and `minEntryIntervalSec`; trader + chat prompts; runner **against the MCP stub**; **`ate replay --days 7` from 11:00 (needs no vault)** | Chat + Decisions + Trade views on stub; `/view` | Payments tests; EAS attester; `/ui/attach`, `/chat/session`, `/strategy/approve` + `armed` TTY mode; if allowlisted: 8-tool listing, `get_chain_config` |
 | **11:45** | **Checkpoint: bytecode frozen and fork smoke green, or the lead escalates** (Lane E's agent pairs on Lane A; see contingencies) | Deploy-script dry-run on the fork (`run(pool, oracle)`); `ate-owner` ready | MCP tools (scope tool sets, market enum, `riskProfile`), pre-flight | Runner + discretionary lane against the stub; replay running | Agents + Positions views on stub | `docs/hsp-readiness.md` |
 | **12:00–12:45** | **12:00: G-HSP re-check** (contingency trigger); `docs/hsp-readiness.md` + recorded listing or organiser reply committed either way. Ops-1 signs **deploy ×2, verify ×2, EAS schema, limits ×2, seeds (§19 1–5), target 12:30**. **As soon as the first vault is verified, ops-2 creates and submits the BUIDL** (§21) | **Deploy + verify both vaults on 177**; superpowers log | Execute path via `TxQueue` on the fork | Replay → `docs/replay-7d.md`; chat runner (`chat` token, allowlist, loosening table) + rules fallback | Chat view wired | EAS attester on the fork; Payments view wiring with D; (contingency: Decisions-view E2E scaffold) |
 | **12:45** | **Checkpoint: not deployed → lead + ops unblock before anything else.** Lane-B overload check (contingencies) | Smoke prep both vaults | Execute path green on the fork? | — | — | — |
@@ -2591,7 +2635,7 @@ After the pitch the owner unpauses both vaults from the second device (§19 step
 **Q&A cards (prepared answers):**
 - *The numbers* — the §4.6 Q&A numbers card verbatim: $51.50 is ≤ $103 over any rolling 24 h; ≤ $26.50
   per UTC day on the normal path (≤ $53 rolling); oracle-lag exits add ≤ $7.50 per vault per episode,
-  inside those totals; per vault, half of each; APRO-wrong case: per vault ≤ $250 of USDT plus its token
+  inside those totals; per vault, half of each; oracle-wrong case: per vault ≤ $250 of USDT plus its token
   holdings, never above the vault.
 - *Why not a Safe module or session key* — §0 Positioning, incl. the Zodiac Roles-style comparison and the
   "first on HashKey Chain, to our knowledge" searches in `docs/JUDGE.md`.
@@ -2600,9 +2644,9 @@ After the pitch the owner unpauses both vaults from the second device (§19 step
   README states per-market realised P&L since the trader's start incl. fee drag; E11 replay,
   counterfactual, with its transient/persistent verdict. If the replay shows no edge after fees: "the market gave us no edge after fees this
   week, and the agent correctly did nothing".
-- *What if the oracle lags in a crash* — exit path 7b floored at `min(APRO, TWAP)`: ≤ $7.50 extra per
+- *What if the oracle lags in a crash* — exit path 7b floored at `min(P, TWAP)`: ≤ $7.50 extra per
   vault per episode, inside the $51.50; exits still wait on a drop faster than the 300 s TWAP (up to ~5
-  min), if the TWAP is > 5% below APRO, APRO is stale, the epoch budget is spent, or the vault is paused.
+  min), if the TWAP is > 5% below the oracle price, the oracle is stale (the daemon first tries a Supra refresh), the epoch budget is spent, or the vault is paused.
 - *What does the AI actually decide* — the on-stage veto/thesis record, then the AI scoreboard: candidate
   choice across two markets, vetoes with bps saved (sign stated), ≤ 3 × $10 discretionary trades/day,
   tuning within ±50%; the guard alone fires stop-losses.
@@ -2614,7 +2658,7 @@ After the pitch the owner unpauses both vaults from the second device (§19 step
   Kredo adapter and ERC-8004 identity; two design partners live (§0 *Incubation plan*)."
 - *Which pools can it guard?* — any HSKSwap pool whose `token0` is an 8- or 18-dp token against a 6-dp
   USD stable with an 8-dp AggregatorV3 feed; the constructor checks it; WHSK and WBTC are two instances.
-  WETH is excluded only because APRO has no ETH/USD feed.
+  WETH is out of v0.1 scope: APRO has no ETH/USD feed, and although Supra lists one (pair 1) no ETH market was deployed or fork-smoked.
 - *HSP* — "The payment leg is built and tested on recorded responses (`docs/hsp-readiness.md`); live use
   needs the QA allowlist; it never sits on the trade path." (If G-HSP is go, E8 instead.)
 - *Who controls the keys* — §8.1 (guardian independence stated honestly); *MEV on honest trades* — §4.6:
@@ -2636,7 +2680,7 @@ the smoke trade + EAS UID (labelled `smoke`, `engine=rules`), the ~14:30 edit th
 | # | Claim | Evidence |
 |---|---|---|
 | E1 | Contracts deployed and verified on mainnet | Both vault addresses + Blockscout verified-source links (same source and creation code; immutables differ); fork-smoke log; Vault-BTC → Safe ownership transfer + acceptance txs (§19 step 9) |
-| E2 | Limits as stated; oracle health | `LimitsUpdated` txs + `limits()` reads; immutables (pair, oracle, router, pool, `priceDecimals`) on each contract page; `ate doctor` output incl. APRO ages, pool cardinality and the Supra cross-check |
+| E2 | Limits as stated; oracle health | `LimitsUpdated` txs + `limits()` reads; immutables (pair, oracle, router, pool, `priceDecimals`) on each contract page; `ate doctor` output incl. Supra and APRO ages, pool cardinality and the Supra–APRO cross-check; the adapter addresses and pairs (`supraStorage()`, `pairIndex()`) on Blockscout |
 | E3 | Autonomous LLM-decided trades | For one candidate-bound trade (the E14 WBTC trade) and one `origin=discretionary` trade: `TradeExecuted` tx; `proposalId` == journal record hash; journal record with `engine=llm`, market, `candidateId` or thesis, generator, `profile`, `approvedBy=policy`, matching `rationaleHash`; **EAS attestation UID** resolving to the same `proposalId`, `rationaleHash`, `txHash`, `origin` |
 | E4 | Rogue attacks rejected on-chain | One reverted tx per §22.3 on-chain attack, decoded custom error, sent from the Claude Code stdio session (the second client); the exposure attack is dated 05:35 IST Nov 3 if the 15:15 headroom read deferred it |
 | E5 | Kill switch | Guardian `Paused` txs on both vaults + subsequent `ERR_PAUSED` revert + owner `Unpaused` txs from the second device + the trader's next journal row |
@@ -2648,7 +2692,7 @@ the smoke trade + EAS UID (labelled `smoke`, `engine=rules`), the ~14:30 edit th
 | E11 | Spread opportunities and profitability, measured (counterfactual) | `docs/replay-7d.md` from `ate replay --days 7`, per market: pool volume, cycles, candidates fired / rejected on net edge, net-edge distribution, counterfactual net edge, **gap persistence** (signed-gap distribution, share of cycles with gap > cost, median time-to-close, `transient` / `persistent` verdict), **top-decile gaps** with the default-profile decision and counterfactual net edge (the T1.8 second path) — labelled counterfactual; headline in the BUIDL's first edit (~13:30) |
 | E12 | Real cycle, unedited (must-ship) | 60 s excerpt, unedited, from the continuous screen recording started at trader start (14:00–15:30), ideally a WBTC spread-revert, with timestamps and a live Blockscout tab, as a separate file linked from `docs/JUDGE.md`; the demo video (≤ 3 min) contains a 25–30 s unedited excerpt of it with a timestamp overlay |
 | E13 | What the LLM adds | AI scoreboard: count of LLM acts, vetoes/size-downs with the counterfactual bps and USD saved at +30 min (negative allowed), from `outcome` records; discretionary trades with their theses and realised P&L |
-| E14 | **Live spread capture (primary T1.8 evidence)** | The WBTC `spread-revert` decision record (pool price, CEX bid/ask, APRO, `edgeBps`, `costBps`, `netEdgeBps`, `profile=default`), its `TradeExecuted` tx on Vault-BTC and EAS UID; per-lot P&L marked at CEX (captured on paper) and exit-executable, realised only via the close leg if the pool reverted; the structural-discount caveat. **Pre-registered second path** (if the trader-start re-read shows the gap below cost, or buys were `suppressed`): the 03:50 and ~14:00 snapshots, the `no_trade`/suppression records, and the replay's top-decile historical gaps with the default-profile decision and counterfactual net edge plus the persistence verdict, stated as such |
+| E14 | **Live spread capture (primary T1.8 evidence)** | The WBTC `spread-revert` decision record (pool price, CEX bid/ask, oracle, `edgeBps`, `costBps`, `netEdgeBps`, `profile=default`), its `TradeExecuted` tx on Vault-BTC and EAS UID; per-lot P&L marked at CEX (captured on paper) and exit-executable, realised only via the close leg if the pool reverted; the structural-discount caveat. **Pre-registered second path** (if the trader-start re-read shows the gap below cost, or buys were `suppressed`): the 03:50 and ~14:00 snapshots, the `no_trade`/suppression records, and the replay's top-decile historical gaps with the default-profile decision and counterfactual net edge plus the persistence verdict, stated as such |
 
 Every row is labelled by `profile`, market and generator/`origin` where that applies.
 
@@ -2766,7 +2810,7 @@ not repeated there.
       Decisions fallback
 - [ ] `docs/replay-7d.md` produced by `ate replay --days 7` for both markets (E11, incl. top-decile
       gaps), headline in the BUIDL's first edit
-- [ ] `ate doctor` prints the Supra cross-check vs APRO (and whether the entry gate is active per market),
+- [ ] `ate doctor` prints Supra and its APRO cross-check (and whether the entry gate is active per market), adapter/pair checks, Supra age and the last `oracle_refresh`,
       both pools' observation cardinality and the agent gas level; the gas alarm fires below 2 HSK; Supra
       disagreement > 250 bps and `check()`-deviation buys are withheld and journalled as suppressions (tests)
 - [ ] Daemon holds no owner or guardian key (test: no such key material in the daemon process or its
@@ -2813,9 +2857,7 @@ restricted to configured hosts.
   released under Apache-2.0 with a one-page integration guide, so other HashKey agent teams can put
   their agents behind a vault without adopting the desktop app. **By 17:30 on Nov 2:** the public repo is
   tagged `vault-v0.1.0`, the Foundry package installs from that tag (`forge install <repo>@vault-v0.1.0`),
-  and `docs/INTEGRATE.md` gives a one-command deploy for any qualifying pool — `forge script Deploy --sig
-  'run(address,address)' <pool> <oracle> --rpc-url $HSK_RPC --ledger --broadcast` (the script reads
-  `token0`/`token1`/`factory` from the pool and asserts the §4.1 shape) — with the two live deployments as
+  and `docs/INTEGRATE.md` gives a one-command deploy for any qualifying pool — `forge script script/Deploy.s.sol:Deploy --rpc-url $HSK_RPC --ledger --broadcast` (env `AGENT`, `GUARDIAN`, `MARKETS`; it deploys a `SupraAggregatorAdapter` per market first; for another pool, deploy an adapter for its Supra pair and pass it as the vault's `oracle` constructor arg; the vault asserts the §4.1 shape) — with the two live deployments as
   worked examples. **Scope of reuse in v0.1:** the vault supports an 8- or 18-dp
   `priceToken` as pool `token0` priced against a 6-dp USD-stable `quoteToken` (`token1`) with an 8-dp
   AggregatorV3 feed — the constructor reads and asserts this shape (§4.1); WHSK/USDT and WBTC/USDT are
@@ -2833,17 +2875,18 @@ restricted to configured hosts.
 | # | Question | Owner | Blocks | Default if unresolved |
 |---|---|---|---|---|
 | Q1 | ~~Canonical router~~ **Resolved Nov 2:** verified SwapRouter02 `0x2c16…D8F3`. The "active router" `0x1127…B790` is a private bot contract, not a router; it calls SwapRouter v1 `0x56d1…fBf5` | Eng | — | SwapRouter02 |
-| Q2 | ~~APRO ETH/USD feed for WETH notional?~~ **Resolved Nov 2:** none exists; the HSKSwap WETH/USDT pool `0xb92b…4C16` is excluded (unpriced). WBTC/USDT is the second market (APRO BTC/USD) | Eng | — | WETH excluded |
-| Q3 | Supra pull cost/complexity for trade-time pricing; which HSK pair index the storage contract serves | Eng | v1.0 pricing; v0.1 entry-gate coverage | **Lane B reads the storage contract's HSK/USD and BTC/USD pair indices at 11:00 and records them in `deployments/177.json`**; APRO + deviation check in the vaults; the Supra entry gate runs for BTC/USD and for HSK/USD if listed (else inactive for WHSK, stated); `doctor` cross-checks |
+| Q2 | ~~APRO ETH/USD feed for WETH notional?~~ **Resolved Nov 2:** none exists; the HSKSwap WETH/USDT pool `0xb92b…4C16` is out of v0.1 scope (Supra lists ETH/USD as pair 1, but no ETH market is adapter-deployed or fork-smoked). WBTC/USDT is the second market (Supra BTC/USD, pair 0) | Eng | — | WETH excluded |
+| Q3 | ~~Supra pull cost/complexity; which pair indices the storage contract serves~~ **Resolved Nov 2:** HSK/USD = 517, BTC/USD = 0 (ETH/USD = 1); a combined pull is ~330k gas; Supra is now the vault's price source (adapters), so pull refresh is v0.1 (§5.2) | Eng | — | Record pairs and adapters in `deployments/177.json` |
 | Q4 | Owner signer for v0.1? | Ops | Deploy | Ledger on the second laptop, tested on 177 from a 1-HSK float at 10:30 (§19 step 0); fallback `cast wallet` encrypted keystore created and used only on that laptop; Vault-BTC moves to a Safe at ~17:00 (§19 step 9); Safe by default at v1.0. Guardian on a third device if available (§4.1) |
 | Q5 | ~~QuoterV2 on 177?~~ **Resolved Nov 2:** `0x603f…bFDD` paired with the HSKSwap factory; four other verified quoters point at other factories — do not use | Eng | — | — |
 | Q6 | Is the public HashKey Global API rate-limited for a 2-minute cycle (and for replay's kline pulls)? | Eng | Signals, E11 | Cache 10 s; back off; replay pages klines at ≤ 2 req/s |
-| Q7 | Does APRO return `answeredInRound == roundId` (HSK/USD and BTC/USD)? | Eng | §4.2 step 6 clause | Lead reads both on mainnet at 10:15, before the 10:30 freeze; the clause is included only if both do (one source for both vaults); recorded in `deployments/177.json` |
+| Q7 | ~~Does APRO return `answeredInRound == roundId`?~~ **Resolved Nov 2:** yes on both feeds, so the step-6 clause is included; the Supra adapter returns `answeredInRound = roundId`, so it never fires there | Eng | — | Clause included (`contracts/ABI-NOTES.md` 6) |
 | Q8 | Funding source for the exact token `get_chain_config` returns | Ops | Payment funding | No-go at G-HSP |
 | Q9 | Does OKX sign for the HSP-returned network? | Eng | Payment signing | Fallback signer (§8.4) |
 | Q10 | HSP allowlist confirmation for `13.205.56.13` | Ops | HSP connection | Checked 10:30; not confirmed by 12:00 → Lane E contingency (§21.4); no-go at G-HSP 14:00 |
 | Q11 | Second RPC for 177 (thirdweb or other) passes `doctor`? | Eng | Demo reliability | Blockscout `/api/eth-rpc` as second read/head-check source; if nothing passes, single RPC with 429/1015 backoff and `doctor` downgrades the 2-head check to a warning |
 | Q12 | ~~How many builders?~~ **Resolved:** lead + five lane coding agents + ops-1 (signing) + ops-2 (recording/submission), each the other's backup (§21.4 Staffing) | Team | — | Lead covers either ops role if needed |
+| Q13 | **Optional:** ask APRO (controller owner `0x9876…c7A7`) to `addAccess(vault)` for each vault so an APRO-backed vault can be deployed? | Ops | Nothing (APRO is a cross-check) | Not requested for v0.1; vaults stay on the Supra adapters; if granted later, `ORACLE_SOURCE=apro` deploys new vaults (immutables, so a new deployment), §0.2 |
 | Q13 | Funding route for ~$220 USDT + HSK onto 177 (HashKey Global withdrawal network support vs OP bridge `0x4200…0010` delay) | Ops | Deploy, seeds | Ops hot wallet; confirmed by 11:00; smaller-seed fallback at 11:00 (§19 Funding) |
 | Q14 | ~~WBTC pool `observationCardinality`?~~ **Resolved Nov 2:** 240/240 (`onchain-verification.md`, WBTC section); no cardinality tx | Eng | — | `doctor` re-checks ≥ 64 |
 | Q15 | Does the WBTC gap (112.6 bps at 03:50) persist until the trader runs, and is it transient or a structural bridge discount? | Eng | E14 | Re-read at trader start (~14:00) for the BUIDL; replay top-decile gaps as the pre-registered second path (T1.8); replay persistence verdict (E11); the trader fires whenever it reopens and `check()` passes; otherwise §21.4 contingency and the spoken branch (T1.8 reported Partial) |
@@ -2852,7 +2895,7 @@ restricted to configured hosts.
 
 ## 26. Glossary
 
-**ATE** — Agentic Trading Environment. **Vault** — `PolicyVault` instance, one per market (Vault-HSK,
+**ATE** — Agentic Trading Environment. **Oracle** — the vault's immutable AggregatorV3-like price source: since v0.9.1 a `SupraAggregatorAdapter` over one Supra pair (HSK/USD 517, BTC/USD 0). **SupraAggregatorAdapter** — stateless, ownerless view over Supra's storage proxy (8 dp, rounds down, ms→s, `updatedAt` capped at `block.timestamp`, unpopulated → zeros → `ERR_ORACLE_INVALID`). **DORA / pull refresh** — Supra's oracle network and the permissionless `verifyOracleProof(bytes)` path the daemon uses to refresh a pair on demand (`oracle_refresh`, §5.2). **APRO** — the other HashKey feed provider; its feeds serve only EOAs / allow-listed contracts, so ATE reads them off-chain as a cross-check, not in the vault (§0.2, §5.1). **Vault** — `PolicyVault` instance, one per market (Vault-HSK,
 Vault-BTC; same source and creation code, immutables differ); pair, oracle, router and pool fixed at deployment. **Market** — one of
 `hsk-dex:WHSK/USDT:3000`, `hsk-dex:WBTC/USDT:3000`. **Portfolio guard** — the off-chain layer that splits
 turnover among target assets and caps total exposure across vaults (§11.4). **Target assets** — the
