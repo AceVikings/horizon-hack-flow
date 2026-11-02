@@ -522,3 +522,5 @@ input.inp, select.inp { font: 500 13px/1 var(--body); color: var(--c); width: 10
 .rail .logo { line-height: 0; }
 .tstat span { display: block; }
 .dim { opacity: .5; }
+.insp a, .insp .lnk { color: var(--y); text-decoration-color: rgba(255,225,124,.4); }
+.col > .seg { align-self: flex-start; }
