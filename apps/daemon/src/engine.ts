@@ -446,6 +446,10 @@ export class AiEngine {
   available(): boolean {
     return this.configured(this.cfg.provider);
   }
+  /** The user picked an AI provider (or the env pins one): chat then never answers free-form questions with rules help. */
+  get chosen(): boolean {
+    return this.providerChosen || isProviderId(this.env.ATE_AI_PROVIDER);
+  }
 
   private anthropicClient(id: ProviderId): LoopClient & Anthropic {
     const key = id === "anthropic" ? null : this.keys.resolve(id);

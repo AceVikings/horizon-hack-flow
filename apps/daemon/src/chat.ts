@@ -25,7 +25,7 @@ export interface ChatRoutesOptions {
   emit: (e: { type: string; at: number; data: unknown }) => void;
   log?: (m: string) => void;
   /** Override the chat turn (tests). */
-  runTurn?: (o: { sessionId: string; claudeSession: string; firstTurn: boolean; text: string; chatToken: string; turnId: string }) => Promise<{ reply: string; engine: "llm" | "rules"; tool?: string; streamed?: boolean; unstreamed?: string; model?: string }>;
+  runTurn?: (o: { sessionId: string; claudeSession: string; firstTurn: boolean; text: string; chatToken: string; turnId: string }) => Promise<{ reply: string; engine: "llm" | "rules"; tool?: string; streamed?: boolean; unstreamed?: string; model?: string; cliSession?: boolean }>;
   /** In-app agent engine (Anthropic SDK). When it has credentials and engine = "sdk", chat turns run on it. */
   ai?: AiEngine;
   /** Pinned ate-approve key path (defaults to Lane E's). */
@@ -52,27 +52,50 @@ export function chatMcpSpec(home: string, chatToken: string) {
   return { command: process.execPath, args: [existsSync(bin) ? bin : fileURLToPath(new URL("../dist/bin.js", import.meta.url)), "mcp", "serve"], env: { ATE_HOME: home, ATE_MCP_TOKEN: chatToken, ...(process.versions.electron ? { ELECTRON_RUN_AS_NODE: "1" } : {}) } };
 }
 
+/** The plain error Ask shows (with Try again) when the AI engine is set up but did not answer. */
+export const aiNoAnswer = (reason: string) => `The AI didn't answer (${reason.replace(/\s+/g, " ").trim().slice(0, 240) || "no reply"}). Try again.`;
+export class ChatAiError extends Error {}
+
+type TurnResult = { reply: string; engine: "llm" | "rules"; tool?: string; streamed?: boolean; unstreamed?: string; model?: string; cliSession?: boolean };
+
 async function defaultRunTurn(
   co: ChatRoutesOptions,
   o: { sessionId: string; turnId: string; claudeSession: string; firstTurn: boolean; text: string; chatToken: string },
-): Promise<{ reply: string; engine: "llm" | "rules"; tool?: string; streamed?: boolean; unstreamed?: string; model?: string }> {
+): Promise<TurnResult> {
   const home = co.home;
   const name = "@ate/chat";
   const chat = (await import(name)) as typeof import("@ate/chat");
-  // In-app engine first (Anthropic SDK, chat scope + allowlist, streamed text and tool cards)
-  if (process.env.ATE_CHAT_ENGINE !== "rules" && co.ai && co.ai.config.engine === "sdk" && co.ai.available()) {
-    return runSdkChatTurn({ ai: co.ai, service: co.service, promptFile: chat.CHAT_PROMPT_PATH, emit: co.emit }, { sessionId: o.sessionId, turnId: o.turnId, text: o.text });
+  const rulesOnly = process.env.ATE_CHAT_ENGINE === "rules" || !co.ai;
+  // the Claude Code CLI engine only runs Anthropic models (a provider switch leaves engine = "claude-code" behind)
+  const viaCli = !rulesOnly && co.ai!.config.engine === "claude-code" && co.ai!.config.provider === "anthropic";
+  // In-app engine first (Anthropic SDK / OpenAI / opencode, chat scope + allowlist, streamed text and tool cards)
+  if (!rulesOnly && !viaCli && co.ai!.available()) {
+    try {
+      return await runSdkChatTurn({ ai: co.ai!, service: co.service, promptFile: chat.CHAT_PROMPT_PATH, emit: co.emit }, { sessionId: o.sessionId, turnId: o.turnId, text: o.text });
+    } catch (e) {
+      throw new ChatAiError(aiNoAnswer(describeAiError(e).message));
+    }
   }
   const traderName = "@ate/trader";
   const trader = (await import(traderName)) as typeof import("@ate/trader");
   const mcp = chatMcpSpec(home, o.chatToken);
-  // optional fallback: the Claude Code CLI engine
-  if (process.env.ATE_CHAT_ENGINE !== "rules" && co.ai?.config.engine === "claude-code") {
-    const r = await chat.runChatTurn({ claudeBin: findClaudeBin() ?? "claude", sessionId: o.claudeSession, firstTurn: o.firstTurn, text: o.text, mcp });
-    if (r.ok) return { reply: r.reply, engine: "llm" };
+  // optional: the Claude Code CLI engine, resumed per chat session
+  if (viaCli) {
+    const turn = (firstTurn: boolean) => chat.runChatTurn({ claudeBin: findClaudeBin() ?? "claude", sessionId: o.claudeSession, firstTurn, text: o.text, mcp });
+    let r = await turn(o.firstTurn);
+    // the CLI holds no conversation under this id yet (earlier turns ran on another engine): start it;
+    // or a failed first turn already created it: resume it
+    if (!r.ok && !o.firstTurn && /no conversation found/i.test(r.reply)) r = await turn(true);
+    else if (!r.ok && o.firstTurn && /already in use/i.test(r.reply)) r = await turn(false);
+    if (r.ok) return { reply: r.reply, engine: "llm", cliSession: true };
+    co.log?.(`chat: Claude Code turn failed: ${r.reply.slice(0, 200)}`);
+    throw new ChatAiError(aiNoAnswer(r.reply ? `Claude Code: ${r.reply}` : "Claude Code exited without a reply"));
   }
+  // rules: its known intents only when an AI engine is chosen but not reachable; everything when there is no AI
+  const aiChosen = !rulesOnly && co.ai!.chosen;
   let tools: Awaited<ReturnType<typeof trader.connectAte>> | null = null;
   try {
+    if (aiChosen && chat.parseIntent(o.text).kind === "unknown") throw new ChatAiError(aiNoAnswer(`${co.ai!.config.provider} is not reachable right now`));
     const rules = chat.createRulesChat(async () => (tools ??= await trader.connectAte(mcp)));
     const r = await rules.handle(o.text);
     return { reply: r.reply, engine: "rules", ...(r.tool ? { tool: r.tool } : {}) };
@@ -130,14 +153,23 @@ export function registerChatRoutes(o: ChatRoutesOptions) {
       activeChatTurns.set(sessionId, turnId);
       void run({ sessionId, turnId, claudeSession: s.claudeSession, firstTurn: s.first, text, chatToken: s.chatToken })
         .then((r) => {
-          if (r.engine === "llm") s.first = false;
+          // only a Claude Code CLI turn creates the CLI conversation that later turns `--resume`
+          if (r.cliSession) s.first = false;
           o.service.o.db.prepare("INSERT INTO chat_messages (id, session_id, role, content, tool_name, at) VALUES (?, ?, 'assistant', ?, ?, ?)").run(`${turnId}_a`, sessionId, r.reply, r.tool ?? null, t0());
           // (the MCP layer already emitted a full chat.tool for each call; this name-only one is kept for `ate chat`)
           if (r.tool) o.emit({ type: "chat.tool", at: t0(), data: { sessionId, turnId, tool: r.tool, summary: true } });
           // streamed turns already sent their text as deltas: the closing delta carries only what was not streamed
           o.emit({ type: "chat.delta", at: t0(), data: { sessionId, turnId, role: "agent", text: r.streamed ? (r.unstreamed ?? "") : r.reply, engine: r.engine, ...(r.model ? { model: r.model } : {}), done: true } });
         })
-        .catch((e) => o.emit({ type: "chat.delta", at: t0(), data: { sessionId, turnId, role: "agent", text: `Chat failed: ${describeAiError(e).message}`, error: true, done: true } }))
+        .catch((e) => {
+          const text = e instanceof ChatAiError ? e.message : aiNoAnswer(describeAiError(e).message);
+          try {
+            o.service.o.db.prepare("INSERT INTO chat_messages (id, session_id, role, content, tool_name, at) VALUES (?, ?, 'assistant', ?, NULL, ?)").run(`${turnId}_a`, sessionId, text, t0());
+          } catch {
+            /* already recorded */
+          }
+          o.emit({ type: "chat.delta", at: t0(), data: { sessionId, turnId, role: "agent", text, error: true, done: true } });
+        })
         .finally(() => {
           s.busy = false;
           if (activeChatTurns.get(sessionId) === turnId) activeChatTurns.delete(sessionId);
