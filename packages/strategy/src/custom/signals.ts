@@ -33,13 +33,16 @@ export class SignalBook {
   constructor(
     readonly bars: readonly Bar[],
     readonly barSec: number,
-    readonly src: "pool" | "cex" = "pool",
+    readonly src: "pool" | "oracle" | "cex" | "onchain" = "pool",
   ) {
-    // the exchange series falls back to the pool where HashKey Global has no price
-    this.closes = src === "pool" ? bars.map((b) => b.pool) : bars.map((b) => b.cex ?? b.pool);
+    // on-chain series: "onchain" = the pool price where the pool traded in the bar, else the oracle price (the pool
+    // trades rarely, so its bars alone are mostly flat); "oracle" = the oracle price only
+    this.closes =
+      src === "pool" ? bars.map((b) => b.pool) : src === "oracle" ? bars.map((b) => b.oracle ?? b.pool) : src === "cex" ? bars.map((b) => b.cex ?? b.pool) : onchain(bars);
   }
-  private cex(): SignalBook {
-    return (this.cexBook ??= new SignalBook(this.bars, this.barSec, "cex"));
+  private cex(src: "oracle" | "cex" | "onchain"): SignalBook {
+    if (!this.cexBook || this.cexBook.src !== src) this.cexBook = new SignalBook(this.bars, this.barSec, src);
+    return this.cexBook;
   }
 
   private memo(key: string, f: () => Series): Series {
@@ -227,8 +230,11 @@ export class SignalBook {
   value(c: Condition, i: number, pos: PositionFacts = { pnlPct: null }): number | null {
     const b = this.bars[i];
     if (!b) return null;
-    // price-action signals read HashKey Global by default (the pool trades rarely); fills stay on the pool
-    if (this.src === "pool" && PRICE_ACTION.has(c.signal) && (c.source ?? "cex") === "cex") return this.cex().value(c, i, pos);
+    // price-action signals read on-chain prices: the pool where it traded, the oracle in between (default)
+    if (this.src === "pool" && PRICE_ACTION.has(c.signal)) {
+      const want = c.source === "oracle" ? "oracle" : c.source === "cex" ? "cex" : "onchain";
+      return this.cex(want).value(c, i, pos);
+    }
     const p = this.filled()[i] ?? null;
     const dist = (ref: number | null) => (p === null || ref === null || ref <= 0 ? null : ((p - ref) / ref) * 100);
     switch (c.signal) {
@@ -319,6 +325,21 @@ export class SignalBook {
     }
     return n;
   }
+}
+
+/** Pool close where the pool traded in the bar, else the oracle price scaled to the last pool/oracle ratio. */
+function onchain(bars: readonly Bar[]): (number | null)[] {
+  let ratio = 1;
+  let lastPool: number | null = null;
+  return bars.map((b, i) => {
+    const traded = b.pool !== null && b.vol > 0;
+    if (traded && b.oracle) ratio = b.pool! / b.oracle;
+    if (traded || (b.pool !== null && i === 0)) {
+      lastPool = b.pool;
+      return b.pool;
+    }
+    return b.oracle !== null ? b.oracle * ratio : lastPool;
+  });
 }
 
 const PRICE_ACTION = new Set<string>(["change", "ema", "sma", "vwap", "rsi", "bollinger", "ma_cross", "resistance", "support", "volatility", "trend"]);

@@ -162,7 +162,7 @@ function holdResult(o: SimInput, sim: Simulator): { pnlUsd: number; returnPct: n
  * Global by more than the entry gap and by more than the costs + the minimum edge, sell when the lot is up by the
  * minimum edge (spread-revert close), the preset's stop-loss, its size and its daily budget.
  */
-export function presetSpec(p: RiskProfile | { tradeSizeUsd: string; entrySpreadBps: number; minNetEdgeBps: number; stopLossBps: number }, o: { assets: ("HSK" | "BTC")[]; feeBps: number; halfSpreadBps: number; impactBps: number; dailyBudgetUsd: number; cooldownMin: number; name?: string }): StrategySpec {
+export function presetSpec(p: RiskProfile | { tradeSizeUsd: string; entrySpreadBps: number; minNetEdgeBps: number; stopLossBps: number }, o: { assets: ("HSK" | "BTC")[]; feeBps: number; halfSpreadBps: number; impactBps: number; dailyBudgetUsd: number; cooldownMin: number; name?: string; reference?: "oracle" | "cex" }): StrategySpec {
   const r = typeof p === "string" ? RISK_PROFILES[p] : p;
   const size = Number(r.tradeSizeUsd);
   const gapBps = Math.max(r.entrySpreadBps, o.feeBps + o.halfSpreadBps + o.impactBps + r.minNetEdgeBps);
@@ -171,7 +171,7 @@ export function presetSpec(p: RiskProfile | { tradeSizeUsd: string; entrySpreadB
     kind: "rules",
     markets: o.assets,
     barMinutes: 5,
-    entry: { when: "all", conditions: [{ signal: "gap_cex", op: "below", value: -round(gapBps / 100, 4) }] },
+    entry: { when: "all", conditions: [{ signal: o.reference === "cex" ? "gap_cex" : "gap_oracle", op: "below", value: -round(gapBps / 100, 4) }] },
     exit: { conditions: [{ signal: "pnl", op: "above", value: Math.max(0.01, r.minNetEdgeBps / 100) }], stopLossPct: r.stopLossBps / 100 },
     sizing: { mode: "usd", value: size },
     limits: { maxTradesPerDay: Math.min(48, Math.max(1, Math.floor(o.dailyBudgetUsd / Math.max(1, size)))), cooldownMin: o.cooldownMin },

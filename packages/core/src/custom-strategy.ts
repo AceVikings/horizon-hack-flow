@@ -40,8 +40,9 @@ export const ConditionSchema = z
     period: z.number().int().min(2).max(200).optional(),
     /** Slow MA bars for ma_cross. */
     period2: z.number().int().min(2).max(400).optional(),
-    /** Price the indicator reads: "cex" = HashKey Global (default, liquid), "pool" = the HSKSwap pool. Gaps and P&L ignore it. */
-    source: z.enum(["cex", "pool"]).optional(),
+    /** Price the indicator reads: "pool" = the HSKSwap pool (default; the oracle price fills bars without a swap),
+     *  "oracle" = the on-chain oracle. "cex" is kept for old specs only. Gaps and P&L ignore it. */
+    source: z.enum(["pool", "oracle", "cex"]).optional(),
     /** ma_cross: "ema" (default) or "sma". */
     ma: z.enum(["ema", "sma"]).optional(),
     /** Minutes for `change`. */

@@ -13,9 +13,9 @@
   },
   "preset": {
     "name": "Balanced",
-    "pnlUsd": -0.36,
-    "returnPct": -0.24,
-    "trades": 47
+    "pnlUsd": -5.73,
+    "returnPct": -3.82,
+    "trades": 59
   },
   "summary": "Over 7 days: +0.24%, 35 trades, worst dip −1.6%",
   "firstTrades": [

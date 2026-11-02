@@ -15,7 +15,7 @@ const TEMPLATE: StrategySpec = {
   kind: "rules",
   markets: ["BTC"],
   barMinutes: 5,
-  entry: { when: "all", conditions: [{ signal: "gap_cex", op: "below", value: -1 }] },
+  entry: { when: "all", conditions: [{ signal: "gap_oracle", op: "below", value: -1 }] },
   exit: { when: "any", conditions: [], takeProfitPct: 0.8, stopLossPct: 2 },
   sizing: { mode: "usd", value: 10 },
   limits: { maxTradesPerDay: 4, cooldownMin: 30 },
@@ -132,7 +132,7 @@ export default function Strategy({ params }: ViewProps) {
           <label className="lbl" htmlFor="words">
             {id ? "Change it in your words" : "In your words"}
           </label>
-          <textarea id="words" className="inp" style={{ height: 88, width: "100%", padding: 12, marginTop: 8, font: "500 15px/1.4 var(--body)", resize: "vertical" }} placeholder="Buy BTC when the pool is more than 1% under HashKey Global, sell at +0.8% or −2%" value={words} onChange={(e) => setWords(e.target.value)} />
+          <textarea id="words" className="inp" style={{ height: 88, width: "100%", padding: 12, marginTop: 8, font: "500 15px/1.4 var(--body)", resize: "vertical" }} placeholder="Buy BTC when the pool is more than 1% under the oracle price and RSI is below 35, sell at +0.8% or −2%" value={words} onChange={(e) => setWords(e.target.value)} />
           <div className="row g10 mt12">
             <Btn kind="pri" disabled={!words.trim() || busy === "draft"} onClick={() => void draft()}>
               {busy === "draft" ? "Writing it…" : "Write it for me"}

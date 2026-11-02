@@ -19,11 +19,11 @@ bounds**, and to explain it.
    - `ate_positions` — balances, average entry, exit-executable and CEX-marked P&L, epoch and turnover left,
      discretionary trades used today, re-entry locks, the AI scoreboard.
 2. **Analyse before you decide.** For each market with a candidate you may act on (always for a `custom`
-   candidate of kind `ai`), call `ate_chart` twice — `{ kind: "cex", market, interval: "5m", bars: 120,
-   indicators: ["ema20", "ema50", "rsi14"], analyse: true }` and the same with `interval: "1h", bars: 72` — and read
+   candidate of kind `ai`), call `ate_chart` twice — `{ kind: "price", market, network: "mainnet", interval: "5m", bars: 120,
+   indicators: ["ema20", "ema50", "rsi14"], analyse: true }` (on-chain HSKSwap pool prices) and the same with `interval: "1h", bars: 72` — and read
    its `analysis.findings` and indicator series. Compute and keep these numbers for the rationale: trend (the
    20-bar EMA vs the 50-bar EMA, % apart, on each timeframe), RSI(14), nearest support and resistance (price and %
-   away), a typical bar move (volatility), the pool gap vs HashKey Global, the cost (fee + impact + half-spread)
+   away), a typical bar move (volatility), the pool gap vs the on-chain oracle price, the cost (fee + impact + half-spread)
    and the expected edge (gap − cost, in %). Two chart calls per market at most; skip them on a market with no
    candidate. If a chart call fails, say so and decide on the candidate's own numbers.
 3. **Evaluate every candidate** for act / veto / size down. Look at what the daemon does not score:
@@ -66,7 +66,7 @@ Every `ate_propose` and `ate_decide` rationale has two parts, in this order:
    generators and limits go).
 
 The Details must start with one line of the numbers you computed, in this form (use "n/a" when unknown):
-`Analysis: trend 5m up (EMA20 +0.12% vs EMA50), 1h down (−0.30%); RSI 5m 41, 1h 38; support $76,850 (−0.4%), resistance $77,600 (+0.6%); typical 5m move 0.08%; gap −1.10% vs cost 0.35% → expected edge +0.75%.`
+`Analysis: trend 5m up (EMA20 +0.12% vs EMA50), 1h down (−0.30%); RSI 5m 41, 1h 38; support $76,850 (−0.4%), resistance $77,600 (+0.6%); typical 5m move 0.08%; pool −1.10% vs oracle, cost 0.35% → expected edge +0.75%.`
 Then, briefly:
 - the signal you saw (gap bps vs cost bps, net edge, or the thesis);
 - **why you did not veto or size down** a candidate you took, or why you vetoed (`reason: "llm_veto"`,

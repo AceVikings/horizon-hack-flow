@@ -64,7 +64,7 @@ export function simTools(sim: Simulator) {
               const bars = sim.visibleBars(m);
               const last = bars[bars.length - 1];
               const h = sim.history(m)!;
-              const gap = last?.pool && last.cex ? round(((last.pool - last.cex) / last.cex) * 100, 3) : null;
+              const gap = last?.pool && last.oracle ? round(((last.pool - last.oracle) / last.oracle) * 100, 3) : null;
               return {
                 market: m,
                 label: label(m),
@@ -156,24 +156,24 @@ export function simTools(sim: Simulator) {
 /** Tool names the practice backend answers. */
 export const PRACTICE_TOOLS = ["ate_market_get", "ate_candidates_get", "ate_positions", "ate_chart", "ate_propose", "ate_execute", "ate_decide"] as const;
 
-/** Trend, RSI, support/resistance, volatility and gap vs cost from the visible bars (HashKey Global, else pool). */
+/** Trend, RSI, support/resistance, volatility and gap vs cost from the visible on-chain bars (pool, oracle between swaps). */
 export function practiceAnalysis(sim: Simulator, m: MarketId, intervalSec: number) {
   const k = Math.max(1, Math.round(intervalSec / sim.barSec));
   const vis = sim.visibleBars(m);
   // resample to the asked interval: the last bar of each group (no look-ahead: only visible bars)
   const bars = vis.filter((_, j) => (vis.length - 1 - j) % k === 0);
-  const book = new SignalBook(bars, sim.barSec * k, "cex");
+  const book = new SignalBook(bars, sim.barSec * k, "onchain");
   const i = bars.length - 1;
   const v = (c: Parameters<SignalBook["value"]>[0]) => {
     const x = i >= 0 ? book.value(c, i) : null;
     return x === null ? null : round(x, 3);
   };
   const last = bars[i];
-  const price = last ? (last.cex ?? last.pool) : null;
+  const price = last ? (last.pool ?? last.oracle) : null;
   const hi = v({ signal: "resistance", op: "above", value: 0, period: 48 });
   const lo = v({ signal: "support", op: "below", value: 0, period: 48 });
   const ema = v({ signal: "ma_cross", op: "above", value: 0, period: 20, period2: 50 });
-  const gap = last?.pool && last.cex ? round(((last.pool - last.cex) / last.cex) * 100, 3) : null;
+  const gap = last?.pool && last.oracle ? round(((last.pool - last.oracle) / last.oracle) * 100, 3) : null;
   const h = sim.history(m)!;
   const costPct = round((h.feeBps + sim.impactBps(m, 25) + h.halfSpreadBps) / 100, 3);
   const findings = [
@@ -182,7 +182,7 @@ export function practiceAnalysis(sim: Simulator, m: MarketId, intervalSec: numbe
     hi === null || price === null ? "Resistance: n/a." : `Resistance near $${round(price / (1 + hi / 100), 2)} (${round(-hi, 2)}% above).`,
     lo === null || price === null ? "Support: n/a." : `Support near $${round(price / (1 + lo / 100), 2)} (${round(-lo, 2)}% below).`,
     `A typical bar moves about ${v({ signal: "volatility", op: "below", value: 0, period: 24 }) ?? "n/a"}%.`,
-    gap === null ? "Gap: n/a." : `The pool is ${Math.abs(gap)}% ${gap < 0 ? "below" : "above"} HashKey Global; one-way cost about ${costPct}%.`,
+    gap === null ? "Gap: n/a." : `The pool is ${Math.abs(gap)}% ${gap < 0 ? "below" : "above"} the oracle price; one-way cost about ${costPct}%.`,
   ];
   return {
     practice: true,

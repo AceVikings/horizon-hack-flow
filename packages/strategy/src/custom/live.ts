@@ -55,8 +55,11 @@ export class LiveHistory {
     const pool: { t: number; v: number; vol?: number }[] = [];
     const cex: { t: number; v: number }[] = [];
     const oracle: { t: number; v: number }[] = [];
+    let prev: number | null = null;
     for (const p of xs) {
-      if (p.pool !== null) pool.push({ t: p.t, v: p.pool, vol: p.vol ?? 0 });
+      // scans do not see swap volume: a changed pool price means the pool traded
+      if (p.pool !== null) pool.push({ t: p.t, v: p.pool, vol: p.vol ?? (prev !== null && p.pool !== prev ? 1 : 0) });
+      if (p.pool !== null) prev = p.pool;
       if (p.cex !== null) cex.push({ t: p.t, v: p.cex });
       if (p.oracle !== null) oracle.push({ t: p.t, v: p.oracle });
     }

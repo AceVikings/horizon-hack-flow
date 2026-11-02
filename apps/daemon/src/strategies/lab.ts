@@ -73,8 +73,8 @@ Schema (flow.strategy/v1):
   "instructions"?: string (only for kind "ai": the user's judgement rules for the AI, in their words) }
 Condition = { "signal", "op": "above" | "below" | "between", "value": number, "value2"?: number, "period"?: bars, "windowMin"?: minutes }
 Signals (values in %):
-- gap_cex: (pool − HashKey Global) / HashKey Global. "pool more than 1% under HashKey Global" = { "signal":"gap_cex","op":"below","value":-1 }
-- gap_oracle: same against the oracle price
+- gap_oracle: (pool − on-chain oracle price) / oracle price. "pool more than 1% under the oracle price" = { "signal":"gap_oracle","op":"below","value":-1 }. Use this for any "under/over the price/oracle/reference" wording.
+- gap_cex: the same against an off-chain exchange price — only when the user names HashKey Global explicitly.
 - change: price change over windowMin. "fell 2% in the last hour" = { "signal":"change","op":"below","value":-2,"windowMin":60 }
 - ema | sma | vwap: price distance from the average over period bars. "above the 50-bar EMA" = { "signal":"ema","op":"above","value":0,"period":50 }
 - rsi: 0–100 over period bars (default 14)
@@ -89,6 +89,7 @@ Signals (values in %):
 - volume: pool volume of the last period bars vs usual (100 = normal). Busy = { "op":"above","value":150 }
 - momentum / 24h move: use change with windowMin 1440. RSI oversold = { "signal":"rsi","op":"below","value":30 }; overbought (sell) = { "op":"above","value":70 }
 Ops: "above" | "below" | "between" | "crosses_above" | "crosses_below" (crosses_* is true only on the bar it happens). There is no funding-rate signal on spot; say so in the name if asked and use momentum instead.
+All price signals use on-chain data (HSKSwap pool prices, the oracle price between swaps).
 Rules: Flow only buys the token and sells it back (no shorting). Every strategy must say when to sell. Use "ai" kind only when the user asks for judgement the rules cannot express (news, "use your judgement", "skip when …" in words). Defaults when unsaid: sizing $10, maxTradesPerDay 4, cooldownMin 30, stopLossPct 2. Never invent numbers the user gave differently.`;
 
 interface PracticeRun {
@@ -402,7 +403,7 @@ export class StrategyLab {
       const [m, c, p] = await Promise.all([call("ate_market_get", {}), call("ate_candidates_get", {}), call("ate_positions", {})]);
       // the analysis the live trader does with ate_chart (5 m and 1 h), computed from the practice bars
       const cmk = [...new Set(((c.data as { candidates: { market: string }[] }).candidates ?? []).map((x) => x.market))];
-      const charts = await Promise.all(cmk.flatMap((mk) => ["5m", "1h"].map((iv) => call("ate_chart", { kind: "cex", market: mk, interval: iv, analyse: true }).then((r) => ({ market: mk, interval: iv, ...(r.data as object) })))));
+      const charts = await Promise.all(cmk.flatMap((mk) => ["5m", "1h"].map((iv) => call("ate_chart", { kind: "price", market: mk, interval: iv, analyse: true }).then((r) => ({ market: mk, interval: iv, ...(r.data as object) })))));
       const conv = this.o.ai.conversation("trader");
       this.o.ai.pushUser(
         conv,
