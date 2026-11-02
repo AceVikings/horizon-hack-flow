@@ -156,3 +156,20 @@ describe("training", () => {
     expect(typeof res.warning === "string" || res.warning === null).toBe(true);
   });
 });
+
+describe("practice analysis", () => {
+  it("answers ate_chart from visible bars only, with the numbers the prompt asks for", async () => {
+    const sim = new Simulator(input(3));
+    for (let k = 0; k < 400; k++) {
+      sim.open();
+      sim.close();
+    }
+    sim.open();
+    const r = await simTools(sim).call("ate_chart", { kind: "cex", market: BTC, interval: "5m", analyse: true });
+    const d = r.data as { at: number; numbers: Record<string, number | null>; analysis: { findings: string[] } };
+    expect(d.at).toBe(sim.now);
+    expect(d.numbers.rsi14).not.toBeNull();
+    expect(d.numbers.gapPct).not.toBeNull();
+    expect(d.analysis.findings.join(" ")).toMatch(/Trend: (up|down|sideways)/);
+  });
+});

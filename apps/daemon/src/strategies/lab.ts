@@ -400,10 +400,13 @@ export class StrategyLab {
     // opencode calls Flow's live MCP itself, so practice gives it the state in the prompt and takes one JSON decision
     return async ({ cycle, at, call, signal }) => {
       const [m, c, p] = await Promise.all([call("ate_market_get", {}), call("ate_candidates_get", {}), call("ate_positions", {})]);
+      // the analysis the live trader does with ate_chart (5 m and 1 h), computed from the practice bars
+      const cmk = [...new Set(((c.data as { candidates: { market: string }[] }).candidates ?? []).map((x) => x.market))];
+      const charts = await Promise.all(cmk.flatMap((mk) => ["5m", "1h"].map((iv) => call("ate_chart", { kind: "cex", market: mk, interval: iv, analyse: true }).then((r) => ({ market: mk, interval: iv, ...(r.data as object) })))));
       const conv = this.o.ai.conversation("trader");
       this.o.ai.pushUser(
         conv,
-        `Cycle ${cycle} at ${new Date(at * 1000).toISOString()} (practice, tools are off: the state is below).\nate_market_get: ${JSON.stringify(m.data)}\nate_candidates_get: ${JSON.stringify(c.data)}\nate_positions: ${JSON.stringify(p.data)}\n\nAnswer with ONE JSON object only: {"decisions":[{"candidateId": string, "action": "take" | "veto" | "skip", "amountIn"?: string (≤ maxAmountIn), "rationale": "Summary: …\\nDetails: …"}]}`,
+        `Cycle ${cycle} at ${new Date(at * 1000).toISOString()} (practice, tools are off: the state is below).\nate_market_get: ${JSON.stringify(m.data)}\nate_candidates_get: ${JSON.stringify(c.data)}\nate_positions: ${JSON.stringify(p.data)}\nate_chart (analysis): ${JSON.stringify(charts)}\n\nStart each rationale's Details with the Analysis line (trend, RSI, support/resistance, volatility, gap vs cost, expected edge). Answer with ONE JSON object only: {"decisions":[{"candidateId": string, "action": "take" | "veto" | "skip", "amountIn"?: string (≤ maxAmountIn), "rationale": "Summary: …\\nDetails: …"}]}`,
       );
       const r = await this.o.ai.run("trader", conv, { effort: "low", system, toolNames: [], noExtraTools: true, signal, maxTurns: 1, maxTokens: 2000, call: async () => ({ content: "tools are off", isError: true }) as never });
       const j = extractJson(r.text) as { decisions?: { candidateId: string; action: string; amountIn?: string; rationale?: string }[] } | null;

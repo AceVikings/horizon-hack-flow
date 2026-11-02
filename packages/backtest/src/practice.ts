@@ -6,6 +6,7 @@
 
 import { MARKETS, type MarketId } from "@ate/core";
 import { resultOf, type BacktestResult } from "./backtest.js";
+import { SignalBook } from "@ate/strategy";
 import { Simulator, type SimInput } from "./sim.js";
 
 export interface ToolCallOut {
@@ -78,6 +79,11 @@ export function simTools(sim: Simulator) {
             }),
           },
         };
+      case "ate_chart": {
+        // practice answer to the live analysis call: the same numbers, computed from the bars up to the virtual now
+        const m = (typeof a.market === "string" && sim.markets.includes(a.market as MarketId) ? a.market : sim.markets[0]) as MarketId;
+        return { ok: true, data: practiceAnalysis(sim, m, a.interval === "1h" ? 3600 : a.interval === "1d" ? 86_400 : a.interval === "1m" ? 60 : 300) };
+      }
       case "ate_candidates_get": {
         const ms = pick(a.market);
         const cands = sim
@@ -148,7 +154,46 @@ export function simTools(sim: Simulator) {
 }
 
 /** Tool names the practice backend answers. */
-export const PRACTICE_TOOLS = ["ate_market_get", "ate_candidates_get", "ate_positions", "ate_propose", "ate_execute", "ate_decide"] as const;
+export const PRACTICE_TOOLS = ["ate_market_get", "ate_candidates_get", "ate_positions", "ate_chart", "ate_propose", "ate_execute", "ate_decide"] as const;
+
+/** Trend, RSI, support/resistance, volatility and gap vs cost from the visible bars (HashKey Global, else pool). */
+export function practiceAnalysis(sim: Simulator, m: MarketId, intervalSec: number) {
+  const k = Math.max(1, Math.round(intervalSec / sim.barSec));
+  const vis = sim.visibleBars(m);
+  // resample to the asked interval: the last bar of each group (no look-ahead: only visible bars)
+  const bars = vis.filter((_, j) => (vis.length - 1 - j) % k === 0);
+  const book = new SignalBook(bars, sim.barSec * k, "cex");
+  const i = bars.length - 1;
+  const v = (c: Parameters<SignalBook["value"]>[0]) => {
+    const x = i >= 0 ? book.value(c, i) : null;
+    return x === null ? null : round(x, 3);
+  };
+  const last = bars[i];
+  const price = last ? (last.cex ?? last.pool) : null;
+  const hi = v({ signal: "resistance", op: "above", value: 0, period: 48 });
+  const lo = v({ signal: "support", op: "below", value: 0, period: 48 });
+  const ema = v({ signal: "ma_cross", op: "above", value: 0, period: 20, period2: 50 });
+  const gap = last?.pool && last.cex ? round(((last.pool - last.cex) / last.cex) * 100, 3) : null;
+  const h = sim.history(m)!;
+  const costPct = round((h.feeBps + sim.impactBps(m, 25) + h.halfSpreadBps) / 100, 3);
+  const findings = [
+    ema === null ? "Trend: not enough history." : `Trend: ${Math.abs(ema) < 0.05 ? "sideways" : ema > 0 ? "up" : "down"} — the 20-bar average is ${ema}% from the 50-bar average.`,
+    `Momentum (RSI ${v({ signal: "rsi", op: "below", value: 0, period: 14 }) ?? "n/a"}).`,
+    hi === null || price === null ? "Resistance: n/a." : `Resistance near $${round(price / (1 + hi / 100), 2)} (${round(-hi, 2)}% above).`,
+    lo === null || price === null ? "Support: n/a." : `Support near $${round(price / (1 + lo / 100), 2)} (${round(-lo, 2)}% below).`,
+    `A typical bar moves about ${v({ signal: "volatility", op: "below", value: 0, period: 24 }) ?? "n/a"}%.`,
+    gap === null ? "Gap: n/a." : `The pool is ${Math.abs(gap)}% ${gap < 0 ? "below" : "above"} HashKey Global; one-way cost about ${costPct}%.`,
+  ];
+  return {
+    practice: true,
+    market: m,
+    interval: `${intervalSec / 60} min`,
+    at: sim.now,
+    price,
+    analysis: { summary: `${label(m)} over the last ${bars.length} bars (practice data up to ${new Date(sim.now * 1000).toISOString()}).`, findings, disclaimer: "Information, not advice." },
+    numbers: { trendPct: ema, rsi14: v({ signal: "rsi", op: "below", value: 0, period: 14 }), resistancePct: hi === null ? null : round(-hi, 3), supportPct: lo === null ? null : round(-lo, 3), volatilityPct: v({ signal: "volatility", op: "below", value: 0, period: 24 }), change24hPct: v({ signal: "change", op: "below", value: 0, windowMin: 1440 }), gapPct: gap, costPct },
+  };
+}
 
 export class PracticeSession {
   readonly sim: Simulator;
