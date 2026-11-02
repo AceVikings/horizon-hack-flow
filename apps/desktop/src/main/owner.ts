@@ -4,7 +4,7 @@
 // of its bearer token; the daemon never sees either. Risk-raising ops come back as a payload that ate-approve signs
 // after Touch ID; the owner service verifies that signature itself against the pinned approval key.
 import { spawn, execFileSync, type ChildProcess } from "node:child_process";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
@@ -16,12 +16,14 @@ import { signApproval } from "./approve";
 import { ateHome, BACKEND, backendCwd, backendEnv, findNode } from "./lifecycle";
 
 const KC_SERVICE = "flow/owner-key-secret";
+/** One keychain item per app home, so a second home (tests, demos) never overwrites another home's owner secret. */
+const kcAccount = (home: string) => `flow-owner:${createHash("sha256").update(resolve(home)).digest("hex").slice(0, 16)}`;
 const err = (message: string, code = "ATE_INTERNAL"): Res<never> => ({ ok: false, error: { code: code as never, message } });
 
 function readSecret(home: string): string | null {
   if (process.platform === "darwin") {
     try {
-      return execFileSync("/usr/bin/security", ["find-generic-password", "-a", "flow-owner", "-s", KC_SERVICE, "-w"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim() || null;
+      return execFileSync("/usr/bin/security", ["find-generic-password", "-a", kcAccount(home), "-s", KC_SERVICE, "-w"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim() || null;
     } catch {
       return null;
     }
@@ -32,7 +34,7 @@ function readSecret(home: string): string | null {
 
 function writeSecret(home: string, s: string): void {
   if (process.platform === "darwin") {
-    execFileSync("/usr/bin/security", ["add-generic-password", "-U", "-a", "flow-owner", "-s", KC_SERVICE, "-w", s], { stdio: "ignore" });
+    execFileSync("/usr/bin/security", ["add-generic-password", "-U", "-a", kcAccount(home), "-s", KC_SERVICE, "-w", s], { stdio: "ignore" });
     return;
   }
   mkdirSync(join(home, "owner"), { recursive: true, mode: 0o700 });
