@@ -17,7 +17,7 @@ import { DaemonSupervisor, ateHome, findStrategyCode } from "./lifecycle";
 const err = <T>(message: string, code = "ATE_INTERNAL"): Res<T> => ({ ok: false, error: { code: code as never, message } });
 const PK = /^0x[0-9a-fA-F]{64}$/;
 const CODE = /^[0-9]{8}$/;
-const OPEN_OK = /^https:\/\/(testnet-explorer\.hskchain\.net|hsk\.blockscout\.com|faucet\.hsk\.xyz|flowverse\.cloud|console\.anthropic\.com|github\.com\/router-for-me)\//;
+const OPEN_OK = /^https:\/\/(testnet-explorer\.hskchain\.net|hsk\.blockscout\.com|faucet\.hsk\.xyz|flowverse\.cloud|console\.anthropic\.com|github\.com\/router-for-me|claude\.ai|(?:[a-z0-9-]+\.)?anthropic\.com|auth\.openai\.com|chatgpt\.com|accounts\.google\.com|(?:[a-z0-9-]+\.)?x\.ai|(?:[a-z0-9-]+\.)?kimi\.com|(?:[a-z0-9-]+\.)?moonshot\.(?:ai|cn))\//;
 /** Re-attaches after an app-initiated restart reuse the user's confirmation for this long (the code still flows). */
 const CONFIRM_TTL_MS = 15 * 60_000;
 
@@ -311,13 +311,18 @@ export function registerSetupIpc(o: { ipcMain: IpcMain; daemon: DaemonClient; ap
       return { ok: true, data: { bin, flags, platform: process.platform, install: "https://github.com/router-for-me/CLIProxyAPI" } };
     }
     if (op === "login") {
-      if (!bin || !SAFE_PATH.test(bin)) return err("CLIProxyAPI not found");
+      // Flow's managed CLIProxyAPI (lane D3 sidecar): binary, config and login flags come from the daemon, never from
+      // the renderer, so the login lands in Flow's proxy (`-config <configPath>`).
+      const st = await daemon.call<{ bin: string | null; configPath: string; loginFlags: string[] }>("GET", "/engine/subscription");
+      if (!st.ok) return st;
+      const { bin: sbin, configPath, loginFlags: flags } = st.data;
+      if (!sbin || !SAFE_PATH.test(sbin) || !SAFE_PATH.test(configPath)) return err("the sign-in helper is not installed");
       const flag = String(q.flag ?? "");
-      if (!loginFlags(bin).includes(flag)) return err("that sign-in option is not offered by your CLIProxyAPI");
-      const command = `'${bin}' ${flag}`;
+      if (!flags.includes(flag) || !/^-{1,2}[a-z][a-z0-9-]*$/.test(flag)) return err("that sign-in option is not offered by the helper");
+      const command = `'${sbin}' -config '${configPath}' ${flag}`;
       if (process.platform !== "darwin") return { ok: true, data: { opened: false, command } };
       const script = join(tmpdir(), `flow-proxy-login-${randomBytes(4).toString("hex")}.command`);
-      writeFileSync(script, `#!/bin/sh\n# Opened by Flow: sign in to your CLIProxyAPI. Flow never sees this login.\nexec ${command}\n`, { mode: 0o700 });
+      writeFileSync(script, `#!/bin/sh\n# Opened by Flow: sign in to your subscription. Flow never sees this login.\nexec ${command}\n`, { mode: 0o700 });
       execFileSync("/usr/bin/open", ["-a", "Terminal", script]);
       return { ok: true, data: { opened: true, command } };
     }

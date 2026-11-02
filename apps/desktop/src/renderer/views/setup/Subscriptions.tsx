@@ -1,115 +1,155 @@
-// "Sign in with your subscription" (Setup's AI step and the top of Accounts). Sign-in runs through the user's
-// CLIProxyAPI: on the desktop Flow opens Terminal on the matching login command; in cloud mode it uses the proxy's
-// management OAuth link in the browser. If the helper is missing, one button asks the daemon to install the official
-// release (lane D3 endpoint). Flow then points the agent at the proxy and shows the models it reports.
+// "Sign in with your subscription" (Setup's AI step and the top of Accounts), over lane D3's managed CLIProxyAPI
+// sidecar (`window.ate.subscription`, FREEZE-NOTES §D3.8). Primary: in-app sign-in (the provider's login page in the
+// browser, polled through the daemon). Secondary: "Sign in in Terminal" runs `<bin> -config <configPath> <flag>`
+// from main with values the daemon reports, so the login lands in Flow's proxy. Missing helper: one Install button.
 import { useCallback, useEffect, useState } from "react";
+import type { SubscriptionStatus } from "@shared/bridge";
+import { useApp } from "../../src/app";
 import { Btn } from "../../src/ui";
 import { ErrLine, Spinner, StatusText, useSetup } from "./common";
 
-const PROXY_URL = "http://127.0.0.1:8317";
 export const TERMS_LINE = "Subscriptions are used through CLIProxyAPI and are subject to each provider's terms.";
 
-const SUBS = [
-  { id: "claude", label: "Claude", flags: ["--claude-login"], oauth: "claude", match: /claude/i },
-  { id: "codex", label: "ChatGPT / Codex", flags: ["--codex-login"], oauth: "codex", match: /gpt|codex|^o\d/i },
-  { id: "gemini", label: "Gemini", flags: ["--login", "--antigravity-login"], oauth: "antigravity", match: /gemini/i },
-  { id: "grok", label: "Grok", flags: ["--xai-login", "--grok-login"], oauth: "xai", match: /grok/i },
-  { id: "kimi", label: "Kimi", flags: ["--kimi-login"], oauth: "kimi", match: /kimi|moonshot/i },
-] as const;
-
-interface Cli {
-  bin: string | null;
-  flags: string[];
-  platform: string;
-}
-interface ModelList {
-  running: boolean;
-  models: { id: string }[];
-}
+type LoginProvider = "claude" | "codex" | "antigravity" | "kimi" | "xai";
+const SUBS: { id: LoginProvider; label: string; flag: RegExp; match: RegExp }[] = [
+  { id: "claude", label: "Claude", flag: /^-+claude-login$/, match: /claude/i },
+  { id: "codex", label: "ChatGPT / Codex", flag: /^-+codex-login$/, match: /gpt|codex|^o\d/i },
+  { id: "antigravity", label: "Gemini", flag: /^-+antigravity-login$|^-+login$/, match: /gemini/i },
+  { id: "xai", label: "Grok", flag: /^-+(xai|grok)-login$/, match: /grok/i },
+  { id: "kimi", label: "Kimi", flag: /^-+kimi-login$/, match: /kimi|moonshot/i },
+];
 
 export function SubscriptionSignIn({ onConnected }: { onConnected?(ok: boolean): void }) {
+  const { ate } = useApp();
   const s = useSetup();
-  const [cli, setCli] = useState<Cli | null>(null);
-  const [models, setModels] = useState<ModelList | null>(null);
+  const sub = ate.subscription;
+  const [st, setSt] = useState<SubscriptionStatus | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<{ message: string } | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
   const refresh = useCallback(async () => {
-    const r = await s.proxyCli({ op: "detect" });
-    setCli(r.ok ? r.data : { bin: null, flags: [], platform: "web" });
-    const m = await s.proxyCli({ op: "models", baseURL: PROXY_URL });
-    if (m.ok) setModels(m.data);
-  }, [s]);
+    if (!sub) return;
+    const r = await sub.status();
+    if (r.ok) setSt(r.data);
+    else setError(r.error);
+  }, [sub]);
   useEffect(() => void refresh(), [refresh]);
-  const connected = !!models?.running && models.models.length > 0;
+  const connected = !!st?.healthy && st.models.length > 0;
   useEffect(() => onConnected?.(connected), [connected, onConnected]);
+
+  if (!sub) return <p className="sm fg2" style={{ marginTop: 8 }}>Subscription sign-in isn't available in this build.</p>;
+  if (!st) return error ? <ErrLine error={error} /> : <Spinner label="Checking sign-in…" />;
 
   const install = async () => {
     setBusy("Installing the sign-in helper…");
     setError(null);
-    const r = await s.post("/engine/proxy/install" as never, {});
-    setBusy(null);
-    if (!r.ok) return setError({ message: r.error.message.includes("not found") ? "Installing the helper isn't available in this build yet." : r.error.message });
-    await refresh();
-  };
-  const signIn = async (sub: (typeof SUBS)[number]) => {
-    setError(null);
-    setMsg(null);
-    const flag = sub.flags.find((f) => cli?.flags.includes(f));
-    if (cli?.bin && flag && cli.platform === "darwin") {
-      const r = await s.proxyCli({ op: "login", flag });
-      if (!r.ok) return setError(r.error);
-      setMsg(`Terminal opened. Finish signing in to ${sub.label} there, then come back.`);
-    } else {
-      // cloud mode (or no Terminal): the proxy's own OAuth page in the browser
-      const r = await s.proxy({ baseURL: PROXY_URL, mgmtKey: "", op: "auth-url", provider: sub.oauth });
-      if (!r.ok) return setError(r.error);
-      setMsg(`Finish signing in to ${sub.label} in your browser.`);
+    const r = await sub.op("install");
+    if (r.ok) {
+      setBusy(null);
+      return setSt(r.data);
     }
-    for (let i = 0; i < 40; i++) {
-      await new Promise((res) => setTimeout(res, 4000));
-      const m = await s.proxyCli({ op: "models", baseURL: PROXY_URL });
-      if (m.ok) setModels(m.data);
-      if (m.ok && m.data.models.some((x: { id: string }) => sub.match.test(x.id))) {
-        setMsg(`${sub.label} connected.`);
-        return useForAgent(m.data.models.find((x: { id: string }) => sub.match.test(x.id))!.id);
+    // the download can outlast the request: keep checking for up to 3 minutes before reporting the error
+    for (let i = 0; i < 60; i++) {
+      await new Promise((res) => setTimeout(res, 3000));
+      const x = await sub.status();
+      if (x.ok && x.data.installed) {
+        setBusy(null);
+        return setSt(x.data);
       }
     }
+    setBusy(null);
+    setError(r.error);
   };
-  const useForAgent = async (model: string) => {
-    await s.approveStart("/engine/providers/proxy/credential", { baseURL: PROXY_URL, protocol: /claude/i.test(model) ? "anthropic" : "openai" });
-    await s.post("/engine/select", { provider: "proxy", model });
+  const waitFor = async (p: (typeof SUBS)[number], state: string | null) => {
+    for (let i = 0; i < 60; i++) {
+      await new Promise((res) => setTimeout(res, 3000));
+      if (state) {
+        const r = await sub.loginStatus(state);
+        if (r.ok && (r.data.login || r.data.models.some((m) => p.match.test(m)))) break;
+      } else {
+        const r = await sub.status();
+        if (r.ok && r.data.models.some((m) => p.match.test(m))) break;
+      }
+    }
+    await refresh();
+    setBusy(null);
+    setMsg(null);
+  };
+  const signIn = async (p: (typeof SUBS)[number]) => {
+    setError(null);
+    const r = await sub.login(p.id);
+    if (!r.ok) return setError(r.error);
+    await s.open(r.data.url);
+    setBusy(`Finish signing in to ${p.label} in your browser…`);
+    await waitFor(p, r.data.state);
+  };
+  const terminal = async (p: (typeof SUBS)[number], flag: string) => {
+    setError(null);
+    const r = await s.proxyCli({ op: "login", flag });
+    if (!r.ok) return setError(r.error);
+    if (!r.data.opened) {
+      void navigator.clipboard?.writeText(r.data.command);
+      setMsg("Command copied. Paste it into a terminal to sign in.");
+      return;
+    }
+    setBusy(`Finish signing in to ${p.label} in Terminal…`);
+    await waitFor(p, null);
   };
 
-  if (!cli) return <Spinner label="Checking sign-in…" />;
   return (
     <div>
-      {!cli.bin && cli.platform !== "web" && (
+      {!st.installed ? (
         <div className="row g12" style={{ marginTop: 12 }}>
           <span className="sm">Flow needs a small sign-in helper first.</span>
           <span className="grow" />
           <Btn kind="solid" disabled={!!busy} onClick={() => void install()}>Install sign-in helper</Btn>
         </div>
+      ) : (
+        !st.healthy && (
+          <div className="row g12" style={{ marginTop: 12 }}>
+            <StatusText tone="warn">The sign-in helper is not running.</StatusText>
+            <span className="grow" />
+            <Btn size="sm" onClick={() => void sub.op("start").then((r) => r.ok && setSt(r.data))}>Start it</Btn>
+          </div>
+        )
       )}
       {busy && <div style={{ marginTop: 10 }}><Spinner label={busy} /></div>}
-      <div className="provgrid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", marginTop: 14 }}>
-        {SUBS.map((sub) => {
-          const on = !!models?.models.some((m) => sub.match.test(m.id));
+      <div className="provgrid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", marginTop: 14 }}>
+        {SUBS.map((p) => {
+          const on = st.models.some((m) => p.match.test(m));
+          const flag = st.loginFlags.find((f) => p.flag.test(f));
           return (
-            <div key={sub.id} className={`hx col${on ? " prov on" : ""}`} style={{ gap: 10 }}>
-              <b>{sub.label}</b>
-              {on ? <StatusText tone="ok">connected</StatusText> : <Btn size="sm" disabled={!cli.bin && cli.platform !== "web"} onClick={() => void signIn(sub)}>Sign in</Btn>}
+            <div key={p.id} className={`hx col${on ? " prov on" : ""}`} style={{ gap: 8 }}>
+              <b>{p.label}</b>
+              {on ? (
+                <StatusText tone="ok">connected</StatusText>
+              ) : (
+                <>
+                  <Btn size="sm" kind="solid" disabled={!st.installed || !!busy} onClick={() => void signIn(p)}>Sign in</Btn>
+                  {flag && (
+                    <button className="linkbtn xs" disabled={!!busy} onClick={() => void terminal(p, flag)} style={{ alignSelf: "flex-start" }}>
+                      Sign in in Terminal
+                    </button>
+                  )}
+                </>
+              )}
             </div>
           );
         })}
       </div>
       {connected && (
         <div className="row g10 sm" style={{ marginTop: 12, flexWrap: "wrap" }}>
-          <span>Models available:</span>
-          <select className="textin" style={{ width: 240, height: 32 }} aria-label="Model for the agent" defaultValue="" onChange={(e) => e.target.value && void useForAgent(e.target.value)}>
-            <option value="">Choose for the agent…</option>
-            {models!.models.map((m) => (
-              <option key={m.id} value={m.id}>{m.id}</option>
+          <span>The agent uses:</span>
+          <select
+            className="textin"
+            style={{ width: 260, height: 32 }}
+            aria-label="Model for the agent"
+            value={st.selectedModel ?? ""}
+            onChange={(e) => void ate.engine?.select("subscription", e.target.value || undefined).then(() => refresh())}
+          >
+            <option value="">Best available (automatic)</option>
+            {st.models.map((m) => (
+              <option key={m} value={m}>{m}</option>
             ))}
           </select>
         </div>
