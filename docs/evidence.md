@@ -24,8 +24,9 @@ say "staged".
 | E10 | `POST /journal/verify` → ok, 70 records, head `0x5e72385d2128743e19c6cbb2ff2bc9ffdfd3a02e6d02914192a9af9ef5b5ad85`. Offline: `node scripts/verify-journal.mjs` recomputes all 70 hashes from the export (no deps) | Done (testnet) |
 | E13 | One `llm_veto` (`dec_1118327a147287cd`, HSK demo rebalance buy). Its premise was a `target_assets` guard-exit candidate still listed (within its 180 s TTL) after HSK had been re-enabled. No discretionary trade was originated | Partly |
 | E14 | Spread capture shown only on a staged testnet gap (WBTC pool 133 bps under the HashKey Global mid). Not a market result | Staged only |
+| E15 | Known issue: a stale `no_trade`. `dec_` record seq 68 (06:14:06 UTC) says "HSK is outside targetAssets" 74 s after "Trade HSK again" (seq 66) re-enabled HSK. The LLM was still shown the old `target_assets` guard-exit candidate inside its 180 s TTL (same cause as E13). No trade was affected; the fix is to drop guard-exit candidates when the strategy changes | Known issue |
 
-Other rows: E9 (tests) is 148 contract tests and 468 package tests, all passing (see the README). E11 is the counterfactual
+Other rows: E9 (tests) is 148 contract tests and 320 package tests (468 total), all passing (see the README). E11 is the counterfactual
 7-day replay in [`docs/replay-7d.md`](replay-7d.md). E12 (an unedited recording) is not done.
 
 ## E4 sub-table: rogue attacks (SPEC §22.3)

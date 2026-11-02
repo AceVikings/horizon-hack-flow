@@ -34,7 +34,7 @@ What each link shows: [`docs/JUDGE.md`](docs/JUDGE.md).
 | Rogue test on testnet | Done. Every attack with the stolen agent key reverted on-chain. |
 | Mainnet (chain 177) | Next. The same scripts deploy it. The owner moves to a Safe after that. |
 | AI trader | Claude (Sonnet) through Claude Code. You can plug in any MCP agent. |
-| Result | Claude opened and closed a WBTC lot on testnet for +70 bps net. All 7 attacks with the stolen key reverted. The guardian paused both vaults, and trades were refused until the owner unpaused. |
+| Result | Claude opened and closed a WBTC lot on testnet for +70 bps net, on a price gap we staged ourselves (no other traders on the test pool). All 7 attacks with the stolen key reverted. The guardian paused both vaults, and trades were refused until the owner unpaused. |
 | Caveats | The price gap for the trades was staged by us, because nobody else trades the test pools. Profit is not promised. The pools are thin. What Flow gives you is a hard limit on loss. |
 
 ### Proof on testnet
@@ -266,9 +266,11 @@ Refer to [`SPEC.md` §4.6](SPEC.md) for all conditions.
 
 ### Risk assumptions
 
-- **The oracle can be up to 25 h old.** Supra pushes prices on a slow cadence on HSK Chain, and a trade can also pull a fresh price. A tight limit would block trades. The price must still stay within 250 bps of the pool spot and TWAP. You can lower the limit for mainnet.
+- **The oracle can be up to 25 h old on testnet.** Supra pushes on HSK Chain every ~6 h or on a 0.5% move, and anyone can pull a fresh price with a proof. On testnet the pair barely moves, so a tight limit would block every trade. The price must still stay within 250 bps of the pool spot and TWAP.
+- **Mainnet plan: `maxOracleAge` = 3 h (10,800 s)**, set at deploy with `MAX_ORACLE_AGE=10800` (the testnet contracts stay as deployed). 3 h is half of Supra's 6 h heartbeat, so a price that only the heartbeat refreshes is never trusted for more than half a cycle. The daemon runs the Supra pull with `refreshAgeSec` 3,600: it pulls a proof in the background whenever the price is older than 1 h, and again right before a trade if `check()` says `ERR_ORACLE_STALE` (or `ERR_ORACLE_DEVIATION` on a price older than 1 h). If the pull fails, the vault refuses the trade (fail closed: no trade, no loss).
+- **Mainnet owner: a hardware wallet first, then a Safe.** The owner key (limits, withdraw, unpause, agent and guardian rotation) lives on a hardware wallet from the first mainnet deploy and moves to a Safe after that. It never sits on the agent's machine. The testnet owner is a hot deployer key.
 - **USDT is valued at $1.** A buy is counted at its USDT amount.
-- **An exit sell has a lower floor.** On the exit path the floor is min(oracle, TWAP). Spot is not checked there. The 500 bps exit limit and the loss math above cover this.
+- **An exit sell has a lower floor.** On the exit path the floor is min(oracle, TWAP). Spot is not checked there. This is the main attack: a stolen agent key plus a few minutes of TWAP manipulation on a thin pool can sell at up to 500 bps under the oracle. It is still capped by the exit loss bound above ($25.75 per vault per epoch).
 - **The agent key can pause.** A stolen key can stop the vault. That stops trading and does not lose funds. It is a fail-safe. Only the owner can unpause.
 
 ---
