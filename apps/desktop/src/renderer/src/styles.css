@@ -571,3 +571,10 @@ input.inp, select.inp { font: 500 13px/1 var(--body); color: var(--c); width: 10
 .ph button, .ph a, .ph input, .ph label, .ph [role="radiogroup"], .ph .acts { -webkit-app-region: no-drag; }
 /* chrome text is not selectable */
 .rail, .menu, button, .btn, .pill, .bd, .stat-pill, .net, .lbl, .eb, .h4, .ph h1, .tstat, .seg, .disclose, label { -webkit-user-select: none; user-select: none; }
+
+/* No pill-shaped status labels (user rule): badges, status and network labels are plain text + icon. */
+.bd, .bd.ok, .bd.bad, .bd.warn, .bd.info, .bd.y, .bd.lgx { background: none; border: 0; padding: 0; border-radius: 0; }
+.bd.y { color: var(--c); font-weight: 700; }
+.stat-pill, .net { background: none; border: 0; padding: 0; border-radius: 0; text-transform: none; letter-spacing: 0; font: 600 12px/1.2 var(--body); color: var(--fg2); }
+.net i { display: none; }
+.eb::before { display: none; }

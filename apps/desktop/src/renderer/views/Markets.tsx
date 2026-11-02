@@ -437,7 +437,7 @@ function ManualOrder({ mv, disabled }: { mv: MarketView; disabled: boolean }) {
         <span className="b7">{open ? "▾" : "▸"} Advanced: manual order</span>
         <span className="xs fg2">checked by your vault like every trade · ⌘↵ to place</span>
         <span className="grow" />
-        <Badge>{disabled ? "disabled while paused" : open ? "open" : "collapsed"}</Badge>
+        {disabled && <span className="xs fg2">off while paused</span>}
       </summary>
       {open && (
         <div className="grid" style={{ gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 18, marginTop: 14 }}>
