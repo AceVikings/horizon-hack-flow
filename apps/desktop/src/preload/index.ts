@@ -40,6 +40,7 @@ const ate = Object.freeze({
     proxy: (o: unknown) => sc("setup.proxy", o),
     strategyCode: (changeId: string) => sc("setup.strategyCode", changeId),
     proxyCli: (o: unknown) => sc("setup.proxyCli", o),
+    confirmRisk: (reason: string) => sc("setup.confirmRisk", reason),
   }),
   trader: Object.freeze({ status: () => call("trader.status"), start: (o: unknown) => call("trader.start", o), stop: () => call("trader.stop") }),
   approvals: Object.freeze({ list: () => call("approvals.list"), reject: (id: string) => call("approvals.reject", id), confirm: (id: string) => call("approvals.confirm", id) }),

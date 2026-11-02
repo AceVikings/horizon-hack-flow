@@ -6,7 +6,7 @@ import type { DaemonState } from "@shared/setup-bridge";
 import { useApp } from "../../src/app";
 import { PageHead } from "../../src/shell";
 import {Btn, QR} from "../../src/ui";
-import { Details, ErrLine, HandoffDialog, Section, Spinner, go, netLabel, useApproval, useSetup, useSetupGet, StatusText } from "./common";
+import { Details, ErrLine, Section, Spinner, go, netLabel, useApproval, useOwner, useSetup, useSetupGet, StatusText } from "./common";
 
 interface Cfg {
   chainId: number;
@@ -38,7 +38,7 @@ export default function Settings() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<{ message: string } | null>(null);
   const [gas, setGas] = useState(false);
-  const [unpause, setUnpause] = useState(false);
+  const owner = useOwner();
   const [aiLabel, setAiLabel] = useState<string | null>(null);
   useEffect(() => {
     void s.daemon().then((x) => setDaemon(x as DaemonState));
@@ -98,7 +98,7 @@ export default function Settings() {
                 <div className="row g8" style={{ marginTop: 12 }}>
                   {!d.agent.unlocked && <Btn size="sm" kind="solid" onClick={() => void s.unlock().then(() => c.reload())}>Unlock</Btn>}
                   <Btn size="sm" onClick={() => setGas((x) => !x)}>Top up gas</Btn>
-                  <Btn size="sm" onClick={() => setUnpause(true)}>Unpause vaults (owner wallet)</Btn>
+                  {owner && <Btn size="sm" onClick={() => void owner.unpause().then((r) => (r.ok ? c.reload() : setError(r.error)))}>Resume the vaults</Btn>}
                 </div>
                 {gas && d.agent.address && (
                   <div className="row g18 top" style={{ marginTop: 12 }}>
@@ -198,7 +198,6 @@ export default function Settings() {
         </>
       )}
       {ap.dialog}
-      <HandoffDialog open={unpause} onClose={() => setUnpause(false)} title="Unpause" intro="Only your owner wallet can unpause. Scan each code; Flow reads the result back." body={unpause ? { kind: "unpause" } : null} />
     </div>
   );
 }

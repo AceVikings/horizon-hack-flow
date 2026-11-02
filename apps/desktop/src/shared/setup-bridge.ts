@@ -88,14 +88,33 @@ export interface SetupBridge {
    * hand, open Terminal on one allowlisted login flag, or list the models its server reports at /v1/models.
    */
   proxyCli(o: { op: "detect" | "pick" | "login" | "models"; flag?: string; baseURL?: string; apiKey?: string }): Promise<Res<any>>;
+  /** Touch ID for a risk-raising change (v1 policy). `{ method: "none" }` when Touch ID is not set up (ask in-app). */
+  confirmRisk(reason: string): Promise<Res<{ method: "touch-id" | "none" }>>;
   strategyCode(changeId: string): Promise<{ code: string; expiresAt: number } | null>;
   proxy(o: { baseURL: string; mgmtKey: string; op: "accounts" | "auth-url" | "status"; provider?: string; state?: string }): Promise<Res<unknown>>;
 }
 
-export const SETUP_IPC = ["setup.daemon", "setup.start", "setup.stop", "setup.submitCode", "setup.unlock", "setup.get", "setup.post", "setup.keygen", "setup.approveStart", "setup.approveFinish", "setup.open", "setup.saveJson", "setup.proxy", "setup.strategyCode", "setup.proxyCli"] as const;
+export const SETUP_IPC = ["setup.daemon", "setup.start", "setup.stop", "setup.submitCode", "setup.unlock", "setup.get", "setup.post", "setup.keygen", "setup.approveStart", "setup.approveFinish", "setup.open", "setup.saveJson", "setup.proxy", "setup.strategyCode", "setup.proxyCli", "setup.confirmRisk"] as const;
 export type SetupIpc = (typeof SETUP_IPC)[number];
 
 const PROV = "(anthropic|openai|gemini|openrouter|ollama|proxy)";
 export const SETUP_GET_RE = /^\/setup\/(status|networks|vaults|agent|doctor|limits|fund|handoff|config|model|model\/check)$|^\/engine\/providers$/;
 export const SETUP_POST_RE = new RegExp(`^/setup/(state|network|vaults|handoff|complete|model|config)$|^/engine/select$|^/engine/providers/${PROV}/test$`);
 export const APPROVAL_RE = new RegExp(`^/setup/(config|model/key)$|^/engine/providers/${PROV}/credential$`);
+
+/**
+ * Flow-managed owner signing (CLOUD lane; contract pending in FREEZE-NOTES "CLOUD"): an isolated owner service,
+ * separate from the agent key, that deploys vaults and sends owner-only calls, so nothing is signed by hand.
+ * Setup builds against this shape and falls back to plain instructions when `window.ate.owner` is absent.
+ */
+export interface OwnerTxs {
+  txs: string[];
+}
+export interface OwnerBridge {
+  status(): Promise<Res<{ ready: boolean; address: string | null; chainId: number }>>;
+  createVaults(o?: { markets?: string[] }): Promise<Res<OwnerTxs & { vaults: { market: string; address: string }[] }>>;
+  setAgent(agent: string): Promise<Res<OwnerTxs>>;
+  /** `loosening` = risk-raising: the caller has already confirmed it with Touch ID (desktop) or a passkey (cloud). */
+  setLimits(limits: unknown, o?: { markets?: string[]; loosening?: boolean }): Promise<Res<OwnerTxs>>;
+  unpause(market?: string): Promise<Res<OwnerTxs>>;
+}

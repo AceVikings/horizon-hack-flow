@@ -2,7 +2,7 @@
 // handoff (QR per transaction + live landing poll), one-time-code approval dialog, small form controls.
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Res } from "@shared/bridge";
-import type { ApprovalPath, SetupBridge, SetupPath } from "@shared/setup-bridge";
+import type { ApprovalPath, OwnerBridge, SetupBridge, SetupPath } from "@shared/setup-bridge";
 import { useApp } from "../../src/app";
 import { short } from "../../src/format";
 import {Btn, Dialog, FlowMark, QR} from "../../src/ui";
@@ -16,6 +16,22 @@ const OFF: SetupBridge = new Proxy({} as SetupBridge, {
 export function useSetup(): SetupBridge {
   const { ate } = useApp();
   return ate.setup ?? OFF;
+}
+
+/** Flow-managed owner signing (CLOUD lane), when this build has it. No owner key ever reaches the renderer. */
+export function useOwner(): OwnerBridge | null {
+  const { ate } = useApp();
+  return (ate as unknown as { owner?: OwnerBridge }).owner ?? null;
+}
+
+/** Limit changes that raise risk (v1 Touch ID policy): any cap or tolerance going up, or a shorter cooldown. */
+export function isLoosening(before: Record<string, string | number>, after: Record<string, string | number>): boolean {
+  return Object.keys(after).some((k) => {
+    if (k === "epochDuration" || k === "maxOracleAge") return false;
+    const a = BigInt(after[k]!);
+    const b = BigInt(before[k] ?? 0);
+    return k === "cooldown" ? a < b : a > b;
+  });
 }
 
 /** GET a /setup route with reload + optional polling. */

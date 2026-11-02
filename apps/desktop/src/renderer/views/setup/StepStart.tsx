@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import type { AiHealth } from "@shared/bridge";
 import { useApp } from "../../src/app";
 import {Btn, QR} from "../../src/ui";
-import { Details, ErrLine, HandoffDialog, Section, Spinner, Wizard, go, useSetup, useSetupGet, StatusText } from "./common";
+import { Details, ErrLine, HandoffDialog, Section, Spinner, Wizard, go, useOwner, useSetup, useSetupGet, StatusText } from "./common";
 
 interface Fund {
   chainId: number;
@@ -206,9 +206,9 @@ function FundPart({ onState }: { onState(ok: boolean): void }) {
   );
 }
 
-const FIX: Record<string, { label: string; to?: string; handoff?: Record<string, unknown> }> = {
-  agent: { label: "Approve on owner wallet", handoff: { kind: "setAgent" } },
-  paused: { label: "Unpause on owner wallet", handoff: { kind: "unpause" } },
+const FIX: Record<string, { label: string; to?: string; owner?: "setAgent" | "unpause" }> = {
+  agent: { label: "Connect the key", owner: "setAgent" },
+  paused: { label: "Resume the vaults", owner: "unpause" },
   rpc: { label: "Change the RPC", to: "settings" },
   "chain-id": { label: "Change the RPC", to: "settings" },
   model: { label: "Fix the AI account", to: "accounts" },
@@ -216,7 +216,16 @@ const FIX: Record<string, { label: string; to?: string; handoff?: Record<string,
 
 function ChecksPart({ onState }: { onState(ok: boolean | null): void }) {
   const d = useSetupGet<Doctor>("/setup/doctor");
-  const [ho, setHo] = useState<Record<string, unknown> | null>(null);
+  const owner = useOwner();
+  const ag = useSetupGet<{ address: string | null }>("/setup/agent");
+  const [fixing, setFixing] = useState<string | null>(null);
+  const fix = async (id: string, what: "setAgent" | "unpause") => {
+    if (!owner) return;
+    setFixing(id);
+    const r = what === "unpause" ? await owner.unpause() : ag.data?.address ? await owner.setAgent(ag.data.address) : null;
+    setFixing(null);
+    if (r && r.ok) d.reload();
+  };
   const fails = d.data?.report.checks.filter((c) => c.status === "fail") ?? [];
   const warns = d.data?.report.checks.filter((c) => c.status === "warn") ?? [];
   useEffect(() => onState(d.data ? fails.length === 0 : null), [d.data, fails.length, onState]);
@@ -234,7 +243,7 @@ function ChecksPart({ onState }: { onState(ok: boolean | null): void }) {
                   <div className="b5">{c.label}</div>
                   <div className="xs fg2">{c.fix ?? c.detail ?? c.value}</div>
                 </div>
-                {fx?.handoff ? <Btn size="sm" kind="solid" onClick={() => setHo(fx.handoff!)}>{fx.label}</Btn> : fx?.to ? <Btn size="sm" kind="solid" onClick={() => go(fx.to!)}>{fx.label}</Btn> : <Btn size="sm" kind="solid" onClick={d.reload}>Check again</Btn>}
+                {fx?.owner && owner ? <Btn size="sm" kind="solid" disabled={fixing === c.id} onClick={() => void fix(c.id, fx.owner!)}>{fixing === c.id ? "Working…" : fx.label}</Btn> : fx?.to ? <Btn size="sm" kind="solid" onClick={() => go(fx.to!)}>{fx.label}</Btn> : <Btn size="sm" kind="solid" onClick={d.reload}>Check again</Btn>}
               </div>
             );
           })}
@@ -254,7 +263,6 @@ function ChecksPart({ onState }: { onState(ok: boolean | null): void }) {
           <button className="linkbtn sm" style={{ marginTop: 8 }} onClick={d.reload}>Run all checks again</button>
         </Details>
       )}
-      <HandoffDialog open={!!ho} onClose={() => setHo(null)} title="Owner wallet" intro="Scan with your owner wallet. Flow reads the result back from the chain." body={ho} onDone={() => d.reload()} />
     </Section>
   );
 }

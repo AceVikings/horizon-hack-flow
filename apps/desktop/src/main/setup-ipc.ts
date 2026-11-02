@@ -341,6 +341,16 @@ export function registerSetupIpc(o: { ipcMain: IpcMain; daemon: DaemonClient; ap
     }
     return err("bad op");
   };
+  handlers["setup.confirmRisk"] = async (reason: string) => {
+    const why = String(reason ?? "").replace(/[^\w .,$%→-]/g, "").slice(0, 120) || "raise the risk limits";
+    if (!canTouchId()) return { ok: true, data: { method: "none" } };
+    try {
+      await systemPreferences.promptTouchID(why);
+      return { ok: true, data: { method: "touch-id" } };
+    } catch {
+      return err("Touch ID was cancelled", "ATE_APPROVAL_REQUIRED");
+    }
+  };
   /** D3: the one-time code for a pending loosening change when Touch ID (ate-approve) is unavailable. */
   handlers["setup.strategyCode"] = async (changeId: string) => {
     if (typeof changeId !== "string" || !/^[A-Za-z0-9_-]{1,80}$/.test(changeId)) return null;
