@@ -1,0 +1,3316 @@
+{
+ "chainId": 133,
+ "exportedFrom": "ate-daemon journal, unattended LLM trader run 2026-11-02 06:38:59-07:50:25 UTC (copy of the testnet-133-journal.json chain, continued). Profile WHSK=demo (labelled rebalance buys, edge gate waived), WBTC default.",
+ "format": "Continuation of testnet-133-journal.json: entry seq 71 links to startPrevHash (that export's head). Same hashing rule. Check offline: node scripts/verify-journal.mjs docs/testnet-133-journal-run2.json",
+ "startPrevHash": "0x5e72385d2128743e19c6cbb2ff2bc9ffdfd3a02e6d02914192a9af9ef5b5ad85",
+ "head": "0x36740953a5e088180c7cd396039b39a95cf5769eb0429226244e3d692c37f398",
+ "count": 60,
+ "entries": [
+  {
+   "seq": 71,
+   "id": "prop_87e50eef121734dd",
+   "hash": "0x87e50eef121734dde0f4bbb723970886e7babdd6a1321eab8697714af6828a22",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793601553,
+   "candidateId": "cand_e485048f1567b70d",
+   "context": {
+    "blockNumber": "35207448",
+    "cex": {
+     "at": 1793601553,
+     "halfSpreadBps": 11,
+     "mid": "8730000",
+     "topDepthUsd": "57.06"
+    },
+    "oracle": {
+     "ageSec": 18956,
+     "price": "8741500",
+     "roundId": "1793582596000",
+     "updatedAt": 1793582596
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "42.28471338",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "65.25623251"
+    },
+    "pool": {
+     "deviationBps": 9,
+     "liquidity": "744097250641454677",
+     "price": "8733738",
+     "twap": "8732875",
+     "twapDeviationBps": 10
+    },
+    "quote": {
+     "amountOut": "57076213971545077075",
+     "exitPath": false,
+     "impactBps": 30,
+     "minOutFloor": "55601155408110736145",
+     "source": "simulation"
+    },
+    "signal": {
+     "costBps": 65,
+     "edgeBps": -10.01,
+     "generator": "rebalance",
+     "id": "cand_e485048f1567b70d"
+    }
+   },
+   "engine": "llm",
+   "intent": {
+    "amountIn": "5000000",
+    "market": "hsk-dex:WHSK/USDT:3000",
+    "side": "buy",
+    "tokenIn": "0xD57a8171b83E154145f47DcE512786173a9A36ca",
+    "vault": "0xF80A74F4D9C17Db8a2a0F32558a9FC3A63e2Bcd2"
+   },
+   "kind": "proposal",
+   "market": "hsk-dex:WHSK/USDT:3000",
+   "origin": "candidate",
+   "prevHash": "0x5e72385d2128743e19c6cbb2ff2bc9ffdfd3a02e6d02914192a9af9ef5b5ad85",
+   "profile": "demo",
+   "rationale": "profile=demo rebalance: HSK share 0.84% vs 40% target band, edge gate waived per demo profile, not arbitrage. Cost 65bps, signed edge -10bps -> net -75bps but waiver applies for this profile by design to maintain target allocation. Taking full $5 size as offered; no reason to size down since this is the minimum demo size and within epoch/turnover budget. CEX book thin (109.6 depth) but trade is small vs that. Not vetoing since this is an intentional allocation-maintenance trade, not a mispriced signal.",
+   "rationaleHash": "0x65f277a20d4f69c92ab4dddc71dacf100336886c7c96faf828ec147c2d34e269",
+   "verdict": {
+    "approvedBy": "policy",
+    "code": "OK",
+    "ok": true
+   }
+  },
+  {
+   "seq": 72,
+   "id": "dec_e61c7235f0b8210c",
+   "hash": "0xe61c7235f0b8210c91d384b4d39b95b14e5cea126e1a1fe71369e270cdf6ae07",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793601556,
+   "context": {
+    "blockNumber": "35207448",
+    "cex": {
+     "at": 1793601548,
+     "halfSpreadBps": 0,
+     "mid": "7824281500000",
+     "topDepthUsd": "60.25"
+    },
+    "oracle": {
+     "ageSec": 320,
+     "price": "7818248500000",
+     "roundId": "1793601232000",
+     "updatedAt": 1793601232
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "194.70840491",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "75"
+    },
+    "pool": {
+     "deviationBps": 41,
+     "liquidity": "1783701361",
+     "price": "7849785591981",
+     "twap": "7849081677787",
+     "twapDeviationBps": 40
+    }
+   },
+   "engine": "llm",
+   "kind": "no_trade",
+   "market": "hsk-dex:WBTC/USDT:3000",
+   "prevHash": "0x87e50eef121734dde0f4bbb723970886e7babdd6a1321eab8697714af6828a22",
+   "profile": "default",
+   "rationale": "Only candidate is the standing discretionary_exit (sell 69974 sats, netEdge -70bps) which is a standing offer, not a signal to act on now — position unrealised is only -14bps/-$0.08, oracle fresh (310s), pool vs CEX deviation small (41bps), no stop-loss/take-profit trigger. No spread-revert open candidate generated this cycle. Discretionary lane: no distinct mispricing thesis beyond noise (CEX half-spread 0bps, thin depth $60) worth risking $10 on; declining to originate a discretionary trade.",
+   "rationaleHash": "0x88954769df40845049fb69f21a8e84406d04d84d50308ea5dce9509bd806fdef",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "no_signal",
+    "ok": true
+   }
+  },
+  {
+   "seq": 73,
+   "id": "exec_079323d94905e2b4",
+   "hash": "0x079323d94905e2b4d50dc6eea8a81e12e7eb860aab8ddc11b3bda95fe344959f",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793601560,
+   "candidateId": "cand_e485048f1567b70d",
+   "context": {
+    "blockNumber": "35207451",
+    "cex": {
+     "at": 1793601553,
+     "halfSpreadBps": 11,
+     "mid": "8730000",
+     "topDepthUsd": "57.06"
+    },
+    "oracle": {
+     "ageSec": 18962,
+     "price": "8741500",
+     "roundId": "1793582596000",
+     "updatedAt": 1793582596
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "42.28471338",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "60.25623251"
+    },
+    "pool": {
+     "deviationBps": 9,
+     "liquidity": "744097250641454677",
+     "price": "8733738",
+     "twap": "8732875",
+     "twapDeviationBps": 10
+    },
+    "quote": {
+     "amountOut": "57076213971545077075",
+     "exitPath": false,
+     "impactBps": 30,
+     "minOutFloor": "55601155408110736145",
+     "source": "simulation"
+    }
+   },
+   "engine": "llm",
+   "execution": {
+    "amountOut": "57076213971545077075",
+    "blockNumber": 35207453,
+    "exitPath": false,
+    "gasUsed": "193369",
+    "txHash": "0xfdfaeb495a1db174c1b9f97106f127aef008437ee6eca7cd525d80df2496e86f"
+   },
+   "intent": {
+    "amountIn": "5000000",
+    "market": "hsk-dex:WHSK/USDT:3000",
+    "side": "buy",
+    "tokenIn": "0xD57a8171b83E154145f47DcE512786173a9A36ca",
+    "vault": "0xF80A74F4D9C17Db8a2a0F32558a9FC3A63e2Bcd2"
+   },
+   "kind": "execution",
+   "market": "hsk-dex:WHSK/USDT:3000",
+   "origin": "candidate",
+   "prevHash": "0xe61c7235f0b8210c91d384b4d39b95b14e5cea126e1a1fe71369e270cdf6ae07",
+   "profile": "demo",
+   "rationale": "profile=demo rebalance: HSK share 0.84% vs 40% target band, edge gate waived per demo profile, not arbitrage. Cost 65bps, signed edge -10bps -> net -75bps but waiver applies for this profile by design to maintain target allocation. Taking full $5 size as offered; no reason to size down since this is the minimum demo size and within epoch/turnover budget. CEX book thin (109.6 depth) but trade is small vs that. Not vetoing since this is an intentional allocation-maintenance trade, not a mispriced signal.",
+   "rationaleHash": "0x65f277a20d4f69c92ab4dddc71dacf100336886c7c96faf828ec147c2d34e269",
+   "refId": "prop_87e50eef121734dd",
+   "verdict": {
+    "approvedBy": "policy",
+    "code": "OK",
+    "ok": true
+   }
+  },
+  {
+   "seq": 74,
+   "id": "att_d0bdf70fff036fd0",
+   "hash": "0xd0bdf70fff036fd0dc7648f94cc87ae75e89594d05b8e84d47e519c695c62852",
+   "actor": {
+    "kind": "guard"
+   },
+   "at": 1793601561,
+   "attestation": {
+    "easUid": "0xd79ec746d1fb3c8b41d4314e93903e6d10b85957630e4bcbde9cb5557fdcbff8",
+    "schemaUid": "0x1c0c01e337924a140372f0043e9a9a3125e0e276b6dae78382676b3d0e53a04f",
+    "txHash": "0xe96f68f05da3d34128da31a11f33dce60fa6c13207f19c9213f4e9d053026b8a"
+   },
+   "context": {
+    "blockNumber": "35207451",
+    "cex": {
+     "at": 1793601553,
+     "halfSpreadBps": 11,
+     "mid": "8730000",
+     "topDepthUsd": "57.06"
+    },
+    "oracle": {
+     "ageSec": 18962,
+     "price": "8741500",
+     "roundId": "1793582596000",
+     "updatedAt": 1793582596
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "42.28471338",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "60.25623251"
+    },
+    "pool": {
+     "deviationBps": 9,
+     "liquidity": "744097250641454677",
+     "price": "8733738",
+     "twap": "8732875",
+     "twapDeviationBps": 10
+    }
+   },
+   "engine": "llm",
+   "kind": "attestation",
+   "market": "hsk-dex:WHSK/USDT:3000",
+   "origin": "candidate",
+   "prevHash": "0x079323d94905e2b4d50dc6eea8a81e12e7eb860aab8ddc11b3bda95fe344959f",
+   "profile": "demo",
+   "rationale": "EAS attestation of executed trade 0xfdfaeb495a1db174c1b9f97106f127aef008437ee6eca7cd525d80df2496e86f",
+   "rationaleHash": "0xe73ab2569ada92dd151b3dc79f30f966a31f3872f1ad559dea9735a8ff2de092",
+   "refId": "prop_87e50eef121734dd",
+   "verdict": {
+    "code": "OK",
+    "ok": true
+   }
+  },
+  {
+   "seq": 75,
+   "id": "prop_753258b3dd932781",
+   "hash": "0x753258b3dd9327815051ff6426f6e81705d69c2af7d08de1d64f2b3f06f45ef9",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793601675,
+   "candidateId": "cand_87b015761887e865",
+   "context": {
+    "blockNumber": "35207508",
+    "cex": {
+     "at": 1793601662,
+     "halfSpreadBps": 5,
+     "mid": "8715000",
+     "topDepthUsd": "40.02"
+    },
+    "oracle": {
+     "ageSec": 19076,
+     "price": "8741500",
+     "roundId": "1793582596000",
+     "updatedAt": 1793582596
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "37.28471338",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "60.25623251"
+    },
+    "pool": {
+     "deviationBps": 9,
+     "liquidity": "744097250641454677",
+     "price": "8734133",
+     "twap": "8732875",
+     "twapDeviationBps": 10
+    },
+    "quote": {
+     "amountOut": "57073626349478841929",
+     "exitPath": false,
+     "impactBps": 30,
+     "minOutFloor": "55601155408110736145",
+     "source": "simulation"
+    },
+    "signal": {
+     "costBps": 71,
+     "edgeBps": -4.28,
+     "generator": "rebalance",
+     "id": "cand_87b015761887e865"
+    }
+   },
+   "engine": "llm",
+   "intent": {
+    "amountIn": "5000000",
+    "market": "hsk-dex:WHSK/USDT:3000",
+    "side": "buy",
+    "tokenIn": "0xD57a8171b83E154145f47DcE512786173a9A36ca",
+    "vault": "0xF80A74F4D9C17Db8a2a0F32558a9FC3A63e2Bcd2"
+   },
+   "kind": "proposal",
+   "market": "hsk-dex:WHSK/USDT:3000",
+   "origin": "candidate",
+   "prevHash": "0xd0bdf70fff036fd0dc7648f94cc87ae75e89594d05b8e84d47e519c695c62852",
+   "profile": "demo",
+   "rationale": "profile=demo rebalance (not arbitrage): HSK share 0.84% vs 40%±2% target, signed edge -4.28bps, cost 71bps, net -75.28bps but edge gate is waived for this demo profile by design. Taking full $5 candidate size, no size-down needed — CEX book depth ($40) and fresh pool/CEX agreement (9bps dev) support a clean fill. No veto: this is the designated mechanism to build HSK exposure toward target under demo profile.",
+   "rationaleHash": "0x7d1b04dac92c19810c8066c927afd76451d15183a9c45bca05a9e97e1663ad74",
+   "verdict": {
+    "approvedBy": "policy",
+    "code": "OK",
+    "ok": true
+   }
+  },
+  {
+   "seq": 76,
+   "id": "exec_7c650a6ed6963d42",
+   "hash": "0x7c650a6ed6963d4267d388fbc6bf3c60eee0cc4652b4a599a3f14d6d902d6e1e",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793601681,
+   "candidateId": "cand_87b015761887e865",
+   "context": {
+    "blockNumber": "35207511",
+    "cex": {
+     "at": 1793601662,
+     "halfSpreadBps": 5,
+     "mid": "8715000",
+     "topDepthUsd": "40.02"
+    },
+    "oracle": {
+     "ageSec": 19082,
+     "price": "8741500",
+     "roundId": "1793582596000",
+     "updatedAt": 1793582596
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "37.28471338",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "55.25623251"
+    },
+    "pool": {
+     "deviationBps": 9,
+     "liquidity": "744097250641454677",
+     "price": "8734133",
+     "twap": "8732875",
+     "twapDeviationBps": 10
+    },
+    "quote": {
+     "amountOut": "57073626349478841929",
+     "exitPath": false,
+     "impactBps": 30,
+     "minOutFloor": "55601155408110736145",
+     "source": "simulation"
+    }
+   },
+   "engine": "llm",
+   "execution": {
+    "amountOut": "57073626349478841929",
+    "blockNumber": 35207513,
+    "exitPath": false,
+    "gasUsed": "213784",
+    "txHash": "0xb9ba6714cd9a327cfe40ffa2bc50162a93cb2e91de9843519983ef1869be91c5"
+   },
+   "intent": {
+    "amountIn": "5000000",
+    "market": "hsk-dex:WHSK/USDT:3000",
+    "side": "buy",
+    "tokenIn": "0xD57a8171b83E154145f47DcE512786173a9A36ca",
+    "vault": "0xF80A74F4D9C17Db8a2a0F32558a9FC3A63e2Bcd2"
+   },
+   "kind": "execution",
+   "market": "hsk-dex:WHSK/USDT:3000",
+   "origin": "candidate",
+   "prevHash": "0x753258b3dd9327815051ff6426f6e81705d69c2af7d08de1d64f2b3f06f45ef9",
+   "profile": "demo",
+   "rationale": "profile=demo rebalance (not arbitrage): HSK share 0.84% vs 40%±2% target, signed edge -4.28bps, cost 71bps, net -75.28bps but edge gate is waived for this demo profile by design. Taking full $5 candidate size, no size-down needed — CEX book depth ($40) and fresh pool/CEX agreement (9bps dev) support a clean fill. No veto: this is the designated mechanism to build HSK exposure toward target under demo profile.",
+   "rationaleHash": "0x7d1b04dac92c19810c8066c927afd76451d15183a9c45bca05a9e97e1663ad74",
+   "refId": "prop_753258b3dd932781",
+   "verdict": {
+    "approvedBy": "policy",
+    "code": "OK",
+    "ok": true
+   }
+  },
+  {
+   "seq": 77,
+   "id": "att_6253e4c07405e0c0",
+   "hash": "0x6253e4c07405e0c0138e8c9c4bc80c6c8189c9915557b6d78e063604e39d5dae",
+   "actor": {
+    "kind": "guard"
+   },
+   "at": 1793601681,
+   "attestation": {
+    "easUid": "0xa45310badcea32503132c7aacfd6691728bb58cc6f0e8fe8a971a1e05bb295bc",
+    "schemaUid": "0x1c0c01e337924a140372f0043e9a9a3125e0e276b6dae78382676b3d0e53a04f",
+    "txHash": "0x1683167a98848ec4509555f75000a6841c3794b2ed43d05e5f7fe76c7ff52a26"
+   },
+   "context": {
+    "blockNumber": "35207511",
+    "cex": {
+     "at": 1793601662,
+     "halfSpreadBps": 5,
+     "mid": "8715000",
+     "topDepthUsd": "40.02"
+    },
+    "oracle": {
+     "ageSec": 19082,
+     "price": "8741500",
+     "roundId": "1793582596000",
+     "updatedAt": 1793582596
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "37.28471338",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "55.25623251"
+    },
+    "pool": {
+     "deviationBps": 9,
+     "liquidity": "744097250641454677",
+     "price": "8734133",
+     "twap": "8732875",
+     "twapDeviationBps": 10
+    }
+   },
+   "engine": "llm",
+   "kind": "attestation",
+   "market": "hsk-dex:WHSK/USDT:3000",
+   "origin": "candidate",
+   "prevHash": "0x7c650a6ed6963d4267d388fbc6bf3c60eee0cc4652b4a599a3f14d6d902d6e1e",
+   "profile": "demo",
+   "rationale": "EAS attestation of executed trade 0xb9ba6714cd9a327cfe40ffa2bc50162a93cb2e91de9843519983ef1869be91c5",
+   "rationaleHash": "0xd554faceb9fe5e745c7d2fbccd59c3a8026afc62222a0bd07db5494dc3fdcfe2",
+   "refId": "prop_753258b3dd932781",
+   "verdict": {
+    "code": "OK",
+    "ok": true
+   }
+  },
+  {
+   "seq": 78,
+   "id": "dec_5dc57cd429ce65c7",
+   "hash": "0x5dc57cd429ce65c75f0b7dce5221d237dd0c25ae3daf600e03d615bc42e38874",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793601682,
+   "context": {
+    "blockNumber": "35207511",
+    "cex": {
+     "at": 1793601675,
+     "halfSpreadBps": 0,
+     "mid": "7822708500000",
+     "topDepthUsd": "60.23"
+    },
+    "oracle": {
+     "ageSec": 446,
+     "price": "7818248500000",
+     "roundId": "1793601232000",
+     "updatedAt": 1793601232
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "194.70840491",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "75"
+    },
+    "pool": {
+     "deviationBps": 41,
+     "liquidity": "1783701361",
+     "price": "7849785591981",
+     "twap": "7849081677787",
+     "twapDeviationBps": 40
+    }
+   },
+   "engine": "llm",
+   "kind": "no_trade",
+   "market": "hsk-dex:WBTC/USDT:3000",
+   "prevHash": "0x6253e4c07405e0c0138e8c9c4bc80c6c8189c9915557b6d78e063604e39d5dae",
+   "profile": "default",
+   "rationale": "Only candidates offered are standing discretionary_exit entries (netEdge -70bps) — no spread-revert or rebalance signal this cycle. Position unrealised P&L is small (-14bps exit, -8bps CEX), no stop-loss/take-profit trigger, so exiting now would just lock in fee drag for no reason. Discretionary lane: no distinct thesis beyond the existing small long; CEX book is tight (0bps half-spread, $60 depth) but no divergence pattern across cycles to justify a new $10 discretionary add. Standing down.",
+   "rationaleHash": "0xd317b2ceaaddcbd8b08a74a75638ecdc483e4f0ac38e371a5d456a12605cfa44",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "no_signal",
+    "ok": true
+   }
+  },
+  {
+   "seq": 79,
+   "id": "prop_2492d3fd1e57bcf2",
+   "hash": "0x2492d3fd1e57bcf28018dfd7845e4ef2c6db7b103e7f380f51d8b873f5fe771e",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793601795,
+   "candidateId": "cand_286fb805144745f8",
+   "context": {
+    "blockNumber": "35207568",
+    "cex": {
+     "at": 1793601792,
+     "halfSpreadBps": 5,
+     "mid": "8735000",
+     "topDepthUsd": "57.36"
+    },
+    "oracle": {
+     "ageSec": 19196,
+     "price": "8741500",
+     "roundId": "1793582596000",
+     "updatedAt": 1793582596
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "32.28471338",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "55.25623251"
+    },
+    "pool": {
+     "deviationBps": 8,
+     "liquidity": "744097250641454677",
+     "price": "8734529",
+     "twap": "8732875",
+     "twapDeviationBps": 10
+    },
+    "quote": {
+     "amountOut": "57071038903378277443",
+     "exitPath": false,
+     "impactBps": 30,
+     "minOutFloor": "55601155408110736145",
+     "source": "simulation"
+    },
+    "signal": {
+     "costBps": 65,
+     "edgeBps": -21.95,
+     "generator": "rebalance",
+     "id": "cand_286fb805144745f8"
+    }
+   },
+   "engine": "llm",
+   "intent": {
+    "amountIn": "5000000",
+    "market": "hsk-dex:WHSK/USDT:3000",
+    "side": "buy",
+    "tokenIn": "0xD57a8171b83E154145f47DcE512786173a9A36ca",
+    "vault": "0xF80A74F4D9C17Db8a2a0F32558a9FC3A63e2Bcd2"
+   },
+   "kind": "proposal",
+   "market": "hsk-dex:WHSK/USDT:3000",
+   "origin": "candidate",
+   "prevHash": "0x5dc57cd429ce65c75f0b7dce5221d237dd0c25ae3daf600e03d615bc42e38874",
+   "profile": "demo",
+   "rationale": "profile=demo rebalance: HSK share 2.5% vs 40% target band, edge gate waived per profile, cost 65bps, size capped at $5. Not arbitrage, a rebalance toward target allocation. No veto/size-down needed since this is the standard demo-profile $5 rebalance leg and epoch/turnover budget ample ($32 epoch, $55 turnover remaining). Discretionary lane not used: no distinct non-generator thesis this cycle, pool/CEX gap is noise-level (8bps deviation) and oracle is aging (19190s) so no fresh edge to act on discretionarily.",
+   "rationaleHash": "0x958627780baf590e4c601ef10899facf766c2e40fa6405f2f8157e2a10a70b4a",
+   "verdict": {
+    "approvedBy": "policy",
+    "code": "OK",
+    "ok": true
+   }
+  },
+  {
+   "seq": 80,
+   "id": "dec_6f2840d5b90e6aeb",
+   "hash": "0x6f2840d5b90e6aebf67381f2cadeabf05c15a948bdc7826f3e7ac32f70e2d223",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793601799,
+   "context": {
+    "blockNumber": "35207568",
+    "cex": {
+     "at": 1793601787,
+     "halfSpreadBps": 0,
+     "mid": "7822057500000",
+     "topDepthUsd": "60.23"
+    },
+    "oracle": {
+     "ageSec": 560,
+     "price": "7818248500000",
+     "roundId": "1793601232000",
+     "updatedAt": 1793601232
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "194.70840491",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "75"
+    },
+    "pool": {
+     "deviationBps": 41,
+     "liquidity": "1783701361",
+     "price": "7849785591981",
+     "twap": "7849081677787",
+     "twapDeviationBps": 40
+    }
+   },
+   "engine": "llm",
+   "kind": "no_trade",
+   "market": "hsk-dex:WBTC/USDT:3000",
+   "prevHash": "0x2492d3fd1e57bcf28018dfd7845e4ef2c6db7b103e7f380f51d8b873f5fe771e",
+   "profile": "default",
+   "rationale": "Only candidates are standing discretionary_exit sells with netEdge -70bps on a tiny -0.08 USD / -14bps unrealized position; not worth exiting, no guard_exit present. No spread-revert or rebalance open candidate this cycle (deviationBps 41, within normal default-profile band, oracle fresh at 554s). No discretionary thesis: CEX book is tight (0bps half-spread) and pool is slightly above CEX mid, a known transient, not a persistent edge worth a $10 small bet. Holding current BTC position, no new trade.",
+   "rationaleHash": "0x00415fa50e83c782bb38b1417eca63058f86d7daca4abdf19d96d24f89bb1a2f",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "no_signal",
+    "ok": true
+   }
+  },
+  {
+   "seq": 81,
+   "id": "exec_f01cee765e93a2c7",
+   "hash": "0xf01cee765e93a2c7d8b287b171fd9fd0e4d08d00f81b9586bb5d5cf1a5f8b570",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793601803,
+   "candidateId": "cand_286fb805144745f8",
+   "context": {
+    "blockNumber": "35207572",
+    "cex": {
+     "at": 1793601792,
+     "halfSpreadBps": 5,
+     "mid": "8735000",
+     "topDepthUsd": "57.36"
+    },
+    "oracle": {
+     "ageSec": 19204,
+     "price": "8741500",
+     "roundId": "1793582596000",
+     "updatedAt": 1793582596
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "32.28471338",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "50.25623251"
+    },
+    "pool": {
+     "deviationBps": 8,
+     "liquidity": "744097250641454677",
+     "price": "8734529",
+     "twap": "8732875",
+     "twapDeviationBps": 10
+    },
+    "quote": {
+     "amountOut": "57071038903378277443",
+     "exitPath": false,
+     "impactBps": 30,
+     "minOutFloor": "55601155408110736145",
+     "source": "simulation"
+    }
+   },
+   "engine": "llm",
+   "execution": {
+    "amountOut": "57071038903378277443",
+    "blockNumber": 35207574,
+    "exitPath": false,
+    "gasUsed": "218446",
+    "txHash": "0x8600785a95f757caefde830220a2c7445936b918c7d1d0dffee9b12be17d9732"
+   },
+   "intent": {
+    "amountIn": "5000000",
+    "market": "hsk-dex:WHSK/USDT:3000",
+    "side": "buy",
+    "tokenIn": "0xD57a8171b83E154145f47DcE512786173a9A36ca",
+    "vault": "0xF80A74F4D9C17Db8a2a0F32558a9FC3A63e2Bcd2"
+   },
+   "kind": "execution",
+   "market": "hsk-dex:WHSK/USDT:3000",
+   "origin": "candidate",
+   "prevHash": "0x6f2840d5b90e6aebf67381f2cadeabf05c15a948bdc7826f3e7ac32f70e2d223",
+   "profile": "demo",
+   "rationale": "profile=demo rebalance: HSK share 2.5% vs 40% target band, edge gate waived per profile, cost 65bps, size capped at $5. Not arbitrage, a rebalance toward target allocation. No veto/size-down needed since this is the standard demo-profile $5 rebalance leg and epoch/turnover budget ample ($32 epoch, $55 turnover remaining). Discretionary lane not used: no distinct non-generator thesis this cycle, pool/CEX gap is noise-level (8bps deviation) and oracle is aging (19190s) so no fresh edge to act on discretionarily.",
+   "rationaleHash": "0x958627780baf590e4c601ef10899facf766c2e40fa6405f2f8157e2a10a70b4a",
+   "refId": "prop_2492d3fd1e57bcf2",
+   "verdict": {
+    "approvedBy": "policy",
+    "code": "OK",
+    "ok": true
+   }
+  },
+  {
+   "seq": 82,
+   "id": "att_14fa17b819ab81eb",
+   "hash": "0x14fa17b819ab81eb7ae9024d6c0f396865f79cc3da6628ac1e11811367c876e0",
+   "actor": {
+    "kind": "guard"
+   },
+   "at": 1793601804,
+   "attestation": {
+    "easUid": "0x90647643256d3b81b9707644e781e07f25740c0c8d677f7177241a240e5dc1d5",
+    "schemaUid": "0x1c0c01e337924a140372f0043e9a9a3125e0e276b6dae78382676b3d0e53a04f",
+    "txHash": "0x62843960bb41ecf0d2da3c76fea72c43ac732a1a93b448ac71e1d02371a110ad"
+   },
+   "context": {
+    "blockNumber": "35207572",
+    "cex": {
+     "at": 1793601792,
+     "halfSpreadBps": 5,
+     "mid": "8735000",
+     "topDepthUsd": "57.36"
+    },
+    "oracle": {
+     "ageSec": 19204,
+     "price": "8741500",
+     "roundId": "1793582596000",
+     "updatedAt": 1793582596
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "32.28471338",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "50.25623251"
+    },
+    "pool": {
+     "deviationBps": 8,
+     "liquidity": "744097250641454677",
+     "price": "8734529",
+     "twap": "8732875",
+     "twapDeviationBps": 10
+    }
+   },
+   "engine": "llm",
+   "kind": "attestation",
+   "market": "hsk-dex:WHSK/USDT:3000",
+   "origin": "candidate",
+   "prevHash": "0xf01cee765e93a2c7d8b287b171fd9fd0e4d08d00f81b9586bb5d5cf1a5f8b570",
+   "profile": "demo",
+   "rationale": "EAS attestation of executed trade 0x8600785a95f757caefde830220a2c7445936b918c7d1d0dffee9b12be17d9732",
+   "rationaleHash": "0xf602362b29585ccd6b39abaeb40aedd010728450365ff8e98fc94f7a9ed98f73",
+   "refId": "prop_2492d3fd1e57bcf2",
+   "verdict": {
+    "code": "OK",
+    "ok": true
+   }
+  },
+  {
+   "seq": 83,
+   "id": "prop_72e782628de68083",
+   "hash": "0x72e782628de68083c03f8643a38cdff677e95887842fbb9d5ac5e09b91104589",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793601914,
+   "candidateId": "cand_a6844acefd1e502b",
+   "context": {
+    "blockNumber": "35207628",
+    "cex": {
+     "at": 1793601911,
+     "halfSpreadBps": 5,
+     "mid": "8745000",
+     "topDepthUsd": "175.67"
+    },
+    "oracle": {
+     "ageSec": 19316,
+     "price": "8741500",
+     "roundId": "1793582596000",
+     "updatedAt": 1793582596
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "27.28471338",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "50.25623251"
+    },
+    "pool": {
+     "deviationBps": 8,
+     "liquidity": "744097250641454677",
+     "price": "8734925",
+     "twap": "8733749",
+     "twapDeviationBps": 9
+    },
+    "quote": {
+     "amountOut": "57068451633227429088",
+     "exitPath": false,
+     "impactBps": 30,
+     "minOutFloor": "55601155408110736145",
+     "source": "simulation"
+    },
+    "signal": {
+     "costBps": 65,
+     "edgeBps": 0.53,
+     "generator": "rebalance",
+     "id": "cand_a6844acefd1e502b"
+    }
+   },
+   "engine": "llm",
+   "intent": {
+    "amountIn": "5000000",
+    "market": "hsk-dex:WHSK/USDT:3000",
+    "side": "buy",
+    "tokenIn": "0xD57a8171b83E154145f47DcE512786173a9A36ca",
+    "vault": "0xF80A74F4D9C17Db8a2a0F32558a9FC3A63e2Bcd2"
+   },
+   "kind": "proposal",
+   "market": "hsk-dex:WHSK/USDT:3000",
+   "origin": "candidate",
+   "prevHash": "0x14fa17b819ab81eb7ae9024d6c0f396865f79cc3da6628ac1e11811367c876e0",
+   "profile": "demo",
+   "rationale": "profile=demo rebalance: HSK share 4.15% vs 40%±2% target, edge gate waived by profile, cost 65bps. Not arbitrage - label profile=demo. Taking full $5 size since demo profile explicitly waives the edge gate for rebalancing demonstration; CEX book (bid/ask 5bps half-spread, $175 depth) is healthy, oracle aging but pool/oracle deviation only 8bps so no stale-price concern. No size-down needed. No discretionary trade this cycle - no fresh thesis beyond the scored rebalance candidate.",
+   "rationaleHash": "0x7698c497d91c4ac71ae978d61d807ae82bc8295c4cf03605e4ee6f7a3006f8e2",
+   "verdict": {
+    "code": "ATE_STRATEGY_BLOCKED",
+    "message": "HSK exit reserve: epoch remaining after trade 22.28 < exposure reserve 23.07 USD",
+    "ok": false
+   }
+  },
+  {
+   "seq": 84,
+   "id": "dec_c5100a159257acda",
+   "hash": "0xc5100a159257acdae3e69810a92f6d0b755b86ebe8a7b328d9a219b7166976ca",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793601921,
+   "context": {
+    "blockNumber": "35207628",
+    "cex": {
+     "at": 1793601911,
+     "halfSpreadBps": 5,
+     "mid": "8745000",
+     "topDepthUsd": "175.67"
+    },
+    "oracle": {
+     "ageSec": 19316,
+     "price": "8741500",
+     "roundId": "1793582596000",
+     "updatedAt": 1793582596
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "27.28471338",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "50.25623251"
+    },
+    "pool": {
+     "deviationBps": 8,
+     "liquidity": "744097250641454677",
+     "price": "8734925",
+     "twap": "8733749",
+     "twapDeviationBps": 9
+    }
+   },
+   "engine": "llm",
+   "kind": "no_trade",
+   "market": "hsk-dex:WHSK/USDT:3000",
+   "prevHash": "0x72e782628de68083c03f8643a38cdff677e95887842fbb9d5ac5e09b91104589",
+   "profile": "demo",
+   "rationale": "Rebalance buy candidate cand_a6844acefd1e502b (profile=demo, edge gate waived, cost 65bps) was rejected by guard: ATE_STRATEGY_BLOCKED - epoch remaining after trade (22.28) would fall below required exposure reserve (23.07 USD). Not retrying at smaller size this cycle since the reserve shortfall is driven by exposure growth, not amount; standing discretionary_exit candidates on HSK show only small unrealized loss (-0.09 exit, -17bps cex) not worth an early exit. No discretionary trade originated - no fresh thesis beyond the blocked rebalance.",
+   "rationaleHash": "0xc49278d80aed252eb889cf0e377d7baff2e75d8fbd5173a7e117c09a0a9cc12b",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "guard",
+    "ok": true
+   }
+  },
+  {
+   "seq": 85,
+   "id": "dec_85754aa7e3ba3b1b",
+   "hash": "0x85754aa7e3ba3b1b876a23b4a0a72513289e5f13257d183bdccd26b6c2ac1b26",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793601925,
+   "context": {
+    "blockNumber": "35207628",
+    "cex": {
+     "at": 1793601909,
+     "halfSpreadBps": 0,
+     "mid": "7820038500000",
+     "topDepthUsd": "60.21"
+    },
+    "oracle": {
+     "ageSec": 680,
+     "price": "7818248500000",
+     "roundId": "1793601232000",
+     "updatedAt": 1793601232
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "194.70840491",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "75"
+    },
+    "pool": {
+     "deviationBps": 41,
+     "liquidity": "1783701361",
+     "price": "7849785591981",
+     "twap": "7849081677787",
+     "twapDeviationBps": 40
+    }
+   },
+   "engine": "llm",
+   "kind": "no_trade",
+   "market": "hsk-dex:WBTC/USDT:3000",
+   "prevHash": "0xc5100a159257acdae3e69810a92f6d0b755b86ebe8a7b328d9a219b7166976ca",
+   "profile": "default",
+   "rationale": "No spread-revert or rebalance candidates generated for BTC this cycle, only standing discretionary_exit (netEdge -70bps, just cost, no real signal) which I decline given tiny unrealized loss (-0.08 USD, -14bps exit, -9bps cex) - not worth paying 70bps cost to exit. CEX book is thin (depth $60, half-spread ~0bps) so execution would be noisy for the small gain at stake. No discretionary thesis: pool trades slightly above CEX/oracle (41bps deviation) but within normal range, no persistent bot flow signal observed worth a $10 speculative long.",
+   "rationaleHash": "0x3a0404121def4ebd5bed9dc22c5a4c95e30c16b559b7fff1d722a10103ff8c03",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "no_signal",
+    "ok": true
+   }
+  },
+  {
+   "seq": 86,
+   "id": "prop_c9a487962483146b",
+   "hash": "0xc9a487962483146b4e94a522c9e0705a4ac7bfa083777c53234fb23240858859",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793602034,
+   "candidateId": "cand_c4827ef414567768",
+   "context": {
+    "blockNumber": "35207688",
+    "cex": {
+     "at": 1793602032,
+     "halfSpreadBps": 11,
+     "mid": "8760000",
+     "topDepthUsd": "165.08"
+    },
+    "oracle": {
+     "ageSec": 19436,
+     "price": "8741500",
+     "roundId": "1793582596000",
+     "updatedAt": 1793582596
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "27.28471338",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "50.25623251"
+    },
+    "pool": {
+     "deviationBps": 8,
+     "liquidity": "744097250641454677",
+     "price": "8734925",
+     "twap": "8733749",
+     "twapDeviationBps": 9
+    },
+    "quote": {
+     "amountOut": "52617686243090068792",
+     "exitPath": false,
+     "impactBps": 30,
+     "minOutFloor": "51264743456214608478",
+     "source": "simulation"
+    },
+    "signal": {
+     "costBps": 68.66,
+     "edgeBps": 5.8,
+     "generator": "rebalance",
+     "id": "cand_c4827ef414567768"
+    }
+   },
+   "engine": "llm",
+   "intent": {
+    "amountIn": "4610043",
+    "market": "hsk-dex:WHSK/USDT:3000",
+    "side": "buy",
+    "tokenIn": "0xD57a8171b83E154145f47DcE512786173a9A36ca",
+    "vault": "0xF80A74F4D9C17Db8a2a0F32558a9FC3A63e2Bcd2"
+   },
+   "kind": "proposal",
+   "market": "hsk-dex:WHSK/USDT:3000",
+   "origin": "candidate",
+   "prevHash": "0x85754aa7e3ba3b1b876a23b4a0a72513289e5f13257d183bdccd26b6c2ac1b26",
+   "profile": "demo",
+   "rationale": "profile=demo rebalance buy, not arbitrage: HSK share 5.81% vs 40% target band, signed edge 5.8bps - cost 68.66bps = -62.86bps net, but demo profile waives the edge gate for rebalancing toward target. Taking the full candidate size ($~4.61) since this is a rebalance flow not a signal trade; no size-down needed as it's already capped at the demo $5 tranche. Discretionary lane not used this cycle - no independent thesis beyond the rebalance signal.",
+   "rationaleHash": "0xc7f5bc2d140dbf63748e2e33203baa240be55d484d1c2ca574c80824b8fe152c",
+   "verdict": {
+    "approvedBy": "policy",
+    "code": "OK",
+    "ok": true
+   }
+  },
+  {
+   "seq": 87,
+   "id": "dec_f2f96861e88dec55",
+   "hash": "0xf2f96861e88dec5536d6df27e6a189bd6e66d62e2cd3b228bac64b724b958480",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793602037,
+   "context": {
+    "blockNumber": "35207688",
+    "cex": {
+     "at": 1793602023,
+     "halfSpreadBps": 0,
+     "mid": "7824598500000",
+     "topDepthUsd": "60.25"
+    },
+    "oracle": {
+     "ageSec": 800,
+     "price": "7818248500000",
+     "roundId": "1793601232000",
+     "updatedAt": 1793601232
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "194.70840491",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "75"
+    },
+    "pool": {
+     "deviationBps": 41,
+     "liquidity": "1783701361",
+     "price": "7849785591981",
+     "twap": "7849081677787",
+     "twapDeviationBps": 40
+    }
+   },
+   "engine": "llm",
+   "kind": "no_trade",
+   "market": "hsk-dex:WBTC/USDT:3000",
+   "prevHash": "0xc9a487962483146b4e94a522c9e0705a4ac7bfa083777c53234fb23240858859",
+   "profile": "default",
+   "rationale": "Only candidates offered are standing discretionary_exit entries with edgeBps=0 and costBps~70, netEdge -70bps - no spread-revert or rebalance signal this cycle, and position is small (~$55 exposure, -14bps unrealized) with no thesis to force an early exit. CEX book is thin (topDepth $60) and oracle is fresh so no dislocation to exploit. No discretionary origination either - no observed CEX ask thinning or bot flow pattern worth a $10 bet. Holding as-is.",
+   "rationaleHash": "0xde4ca64062190c34aabfa0d8142fecf51f9e7b953303024eee5571a97335fa76",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "no_signal",
+    "ok": true
+   }
+  },
+  {
+   "seq": 88,
+   "id": "exec_3500e0c81b349c04",
+   "hash": "0x3500e0c81b349c04662449b0b99da95f7d70644c58d3cd72f6d4e5436d1d7fcb",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793602040,
+   "candidateId": "cand_c4827ef414567768",
+   "context": {
+    "blockNumber": "35207691",
+    "cex": {
+     "at": 1793602032,
+     "halfSpreadBps": 11,
+     "mid": "8760000",
+     "topDepthUsd": "165.08"
+    },
+    "oracle": {
+     "ageSec": 19442,
+     "price": "8741500",
+     "roundId": "1793582596000",
+     "updatedAt": 1793582596
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "27.28471338",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "45.64618951"
+    },
+    "pool": {
+     "deviationBps": 8,
+     "liquidity": "744097250641454677",
+     "price": "8734925",
+     "twap": "8733749",
+     "twapDeviationBps": 9
+    },
+    "quote": {
+     "amountOut": "52617686243090068792",
+     "exitPath": false,
+     "impactBps": 30,
+     "minOutFloor": "51264743456214608478",
+     "source": "simulation"
+    }
+   },
+   "engine": "llm",
+   "execution": {
+    "amountOut": "52617686243090068792",
+    "blockNumber": 35207693,
+    "exitPath": false,
+    "gasUsed": "213760",
+    "txHash": "0x9e02bcc9082025a0cce08ac9b591dab5264aff6097f2af7b9490582c072069cd"
+   },
+   "intent": {
+    "amountIn": "4610043",
+    "market": "hsk-dex:WHSK/USDT:3000",
+    "side": "buy",
+    "tokenIn": "0xD57a8171b83E154145f47DcE512786173a9A36ca",
+    "vault": "0xF80A74F4D9C17Db8a2a0F32558a9FC3A63e2Bcd2"
+   },
+   "kind": "execution",
+   "market": "hsk-dex:WHSK/USDT:3000",
+   "origin": "candidate",
+   "prevHash": "0xf2f96861e88dec5536d6df27e6a189bd6e66d62e2cd3b228bac64b724b958480",
+   "profile": "demo",
+   "rationale": "profile=demo rebalance buy, not arbitrage: HSK share 5.81% vs 40% target band, signed edge 5.8bps - cost 68.66bps = -62.86bps net, but demo profile waives the edge gate for rebalancing toward target. Taking the full candidate size ($~4.61) since this is a rebalance flow not a signal trade; no size-down needed as it's already capped at the demo $5 tranche. Discretionary lane not used this cycle - no independent thesis beyond the rebalance signal.",
+   "rationaleHash": "0xc7f5bc2d140dbf63748e2e33203baa240be55d484d1c2ca574c80824b8fe152c",
+   "refId": "prop_c9a487962483146b",
+   "verdict": {
+    "approvedBy": "policy",
+    "code": "OK",
+    "ok": true
+   }
+  },
+  {
+   "seq": 89,
+   "id": "att_a77422946118db1d",
+   "hash": "0xa77422946118db1d971cec16535cf3655b6f544eb5b80226fa83a7c6ad0788b3",
+   "actor": {
+    "kind": "guard"
+   },
+   "at": 1793602041,
+   "attestation": {
+    "easUid": "0x3409a7ccdabaaa7ce1615cb78f51a5f82ab20b849161bb43240ef312eb40a5f3",
+    "schemaUid": "0x1c0c01e337924a140372f0043e9a9a3125e0e276b6dae78382676b3d0e53a04f",
+    "txHash": "0x6ec77c76ce5a47af814128ab9dd0d8747a28fcb09dec7d2ae36f99f765714ae1"
+   },
+   "context": {
+    "blockNumber": "35207691",
+    "cex": {
+     "at": 1793602032,
+     "halfSpreadBps": 11,
+     "mid": "8760000",
+     "topDepthUsd": "165.08"
+    },
+    "oracle": {
+     "ageSec": 19442,
+     "price": "8741500",
+     "roundId": "1793582596000",
+     "updatedAt": 1793582596
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "27.28471338",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "45.64618951"
+    },
+    "pool": {
+     "deviationBps": 8,
+     "liquidity": "744097250641454677",
+     "price": "8734925",
+     "twap": "8733749",
+     "twapDeviationBps": 9
+    }
+   },
+   "engine": "llm",
+   "kind": "attestation",
+   "market": "hsk-dex:WHSK/USDT:3000",
+   "origin": "candidate",
+   "prevHash": "0x3500e0c81b349c04662449b0b99da95f7d70644c58d3cd72f6d4e5436d1d7fcb",
+   "profile": "demo",
+   "rationale": "EAS attestation of executed trade 0x9e02bcc9082025a0cce08ac9b591dab5264aff6097f2af7b9490582c072069cd",
+   "rationaleHash": "0xa3aae0c0452be11444e57371abdeb053d818becd515a5ba1f0af276cf6ee47cc",
+   "refId": "prop_c9a487962483146b",
+   "verdict": {
+    "code": "OK",
+    "ok": true
+   }
+  },
+  {
+   "seq": 90,
+   "id": "prop_b5b693424aa01869",
+   "hash": "0xb5b693424aa0186928d677eb3d85820e0ee650cf9c05d2c911b71c422d499bb0",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793602156,
+   "candidateId": "cand_e19d7efcbe2356b7",
+   "context": {
+    "blockNumber": "35207748",
+    "cex": {
+     "at": 1793602153,
+     "halfSpreadBps": 22,
+     "mid": "8760000",
+     "topDepthUsd": "342.18"
+    },
+    "oracle": {
+     "ageSec": 19556,
+     "price": "8741500",
+     "roundId": "1793582596000",
+     "updatedAt": 1793582596
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "22.67467038",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "45.64618951"
+    },
+    "pool": {
+     "deviationBps": 8,
+     "liquidity": "744097250641454677",
+     "price": "8735291",
+     "twap": "8734622",
+     "twapDeviationBps": 8
+    },
+    "quote": {
+     "amountOut": "52615486943831955823",
+     "exitPath": false,
+     "impactBps": 30,
+     "minOutFloor": "51264743456214608478",
+     "source": "simulation"
+    },
+    "signal": {
+     "costBps": 68.66,
+     "edgeBps": 28.62,
+     "generator": "rebalance",
+     "id": "cand_e19d7efcbe2356b7"
+    }
+   },
+   "engine": "llm",
+   "intent": {
+    "amountIn": "4610043",
+    "market": "hsk-dex:WHSK/USDT:3000",
+    "side": "buy",
+    "tokenIn": "0xD57a8171b83E154145f47DcE512786173a9A36ca",
+    "vault": "0xF80A74F4D9C17Db8a2a0F32558a9FC3A63e2Bcd2"
+   },
+   "kind": "proposal",
+   "market": "hsk-dex:WHSK/USDT:3000",
+   "origin": "candidate",
+   "prevHash": "0xa77422946118db1d971cec16535cf3655b6f544eb5b80226fa83a7c6ad0788b3",
+   "profile": "demo",
+   "rationale": "profile=demo rebalance buy: HSK share 5.81% vs 40% target band, edge 28.62bps - cost 68.66bps = -40.04bps net (edge gate waived per demo profile, not arbitrage). Taking full candidate size ($4.61) since CEX book is tight (11bps half-spread, oracle fresh/aging but pool-vs-oracle dev only 8bps) and epoch/turnover have ample room ($22.67 epoch, $45.65 turnover remaining). No size-down needed.",
+   "rationaleHash": "0x627b5b5f18428af11bb654389a658a99b022aca09618ef53183266f83c9ff640",
+   "verdict": {
+    "code": "ATE_STRATEGY_BLOCKED",
+    "message": "HSK exit reserve: epoch remaining after trade 18.06 < exposure reserve 27.39 USD",
+    "ok": false
+   }
+  },
+  {
+   "seq": 91,
+   "id": "dec_eb92999042f26083",
+   "hash": "0xeb92999042f26083c6c9702195d37b0ce08d268706cac8525cb44bfca2e36576",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793602163,
+   "context": {
+    "blockNumber": "35207748",
+    "cex": {
+     "at": 1793602153,
+     "halfSpreadBps": 22,
+     "mid": "8760000",
+     "topDepthUsd": "342.18"
+    },
+    "oracle": {
+     "ageSec": 19556,
+     "price": "8741500",
+     "roundId": "1793582596000",
+     "updatedAt": 1793582596
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "22.67467038",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "45.64618951"
+    },
+    "pool": {
+     "deviationBps": 8,
+     "liquidity": "744097250641454677",
+     "price": "8735291",
+     "twap": "8734622",
+     "twapDeviationBps": 8
+    }
+   },
+   "engine": "llm",
+   "kind": "no_trade",
+   "market": "hsk-dex:WHSK/USDT:3000",
+   "prevHash": "0xb5b693424aa0186928d677eb3d85820e0ee650cf9c05d2c911b71c422d499bb0",
+   "profile": "demo",
+   "rationale": "Rebalance buy candidate cand_e19d7efcbe2356b7 (profile=demo, edge gate waived, not arbitrage) was rejected by the strategy guard: ATE_STRATEGY_BLOCKED - epoch remaining after trade would leave $18.06 < required $27.39 exit reserve. Not retrying smaller size this cycle since the reserve shortfall is structural for this epoch, not a sizing issue; standing discretionary_exit noted but not actioned, position P&L is marginal (-60bps exit-mark, -12bps CEX). No discretionary origination: no fresh thesis beyond the existing rebalance signal, which is already blocked by reserve policy.",
+   "rationaleHash": "0xdb8ca1fa9b15ccf31bb8bf250d68a4889d97ccb726dd08cd57f806eb747dd36c",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "guard",
+    "ok": true
+   }
+  },
+  {
+   "seq": 92,
+   "id": "dec_890f75557d2b34e1",
+   "hash": "0x890f75557d2b34e1eb83dfabc0f7b5ffe4f131403fea3b2cf1bd25d63fe1675c",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793602169,
+   "context": {
+    "blockNumber": "35207748",
+    "cex": {
+     "at": 1793602150,
+     "halfSpreadBps": 0,
+     "mid": "7827205500000",
+     "topDepthUsd": "60.27"
+    },
+    "oracle": {
+     "ageSec": 920,
+     "price": "7818248500000",
+     "roundId": "1793601232000",
+     "updatedAt": 1793601232
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "194.70840491",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "75"
+    },
+    "pool": {
+     "deviationBps": 41,
+     "liquidity": "1783701361",
+     "price": "7849785591981",
+     "twap": "7849081677787",
+     "twapDeviationBps": 40
+    }
+   },
+   "engine": "llm",
+   "kind": "no_trade",
+   "market": "hsk-dex:WBTC/USDT:3000",
+   "prevHash": "0xeb92999042f26083c6c9702195d37b0ce08d268706cac8525cb44bfca2e36576",
+   "profile": "default",
+   "rationale": "No spread-revert or rebalance open candidate offered for BTC this cycle - only the standing discretionary_exit sell (netEdge -70bps) for the existing small position, which is a close-only candidate and not worth triggering (unrealised -14bps exit, -2bps CEX, both negligible; avgEntry 7829162298853 vs mark 7817660702546). CEX book is tight (0bps half-spread) but depth is thin ($60 top-of-book) and pool-vs-oracle deviation (41bps/40bps TWAP) isn't being scored into any generator candidate, so there's nothing bound to act on. No discretionary origination: thin CEX depth and no multi-cycle flow pattern observed to justify a sub-$10 speculative entry.",
+   "rationaleHash": "0x418105cab915d0864af7a1da138ace821702643db374b17dab406c5f17281c48",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "no_signal",
+    "ok": true
+   }
+  },
+  {
+   "seq": 93,
+   "id": "dec_2e41f89265d0fc76",
+   "hash": "0x2e41f89265d0fc76d5c3230d19d9f72021922958910d50b1998b31381fa40c91",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793602273,
+   "context": {
+    "blockNumber": "35207803",
+    "cex": {
+     "at": 1793602263,
+     "halfSpreadBps": 39,
+     "mid": "8755000",
+     "topDepthUsd": "127.45"
+    },
+    "oracle": {
+     "ageSec": 19666,
+     "price": "8741500",
+     "roundId": "1793582596000",
+     "updatedAt": 1793582596
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "22.67467038",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "45.64618951"
+    },
+    "pool": {
+     "deviationBps": 8,
+     "liquidity": "744097250641454677",
+     "price": "8735291",
+     "twap": "8734622",
+     "twapDeviationBps": 8
+    }
+   },
+   "engine": "llm",
+   "kind": "no_trade",
+   "market": "hsk-dex:WHSK/USDT:3000",
+   "prevHash": "0x890f75557d2b34e1eb83dfabc0f7b5ffe4f131403fea3b2cf1bd25d63fe1675c",
+   "profile": "demo",
+   "rationale": "Only candidate this cycle is the standing discretionary_exit (sell, netEdge -65 to -82bps, pure cost with no edge). Current position unrealised exit -60bps/-6bps cex — small drawdown, not stop-loss territory, APRO oracle is stale (19666s, health=aging) so I don't trust it enough to force an exit on a cost-negative signal. Not binding the exit; no spread-revert/rebalance candidate was generated to act on. Discretionary lane: no fresh thesis — CEX book for HSK is thin ($127 top depth) and oracle is aging, too uncertain to originate a new discretionary position this cycle.",
+   "rationaleHash": "0xcd54411328cc8c3a3b6d16848fc56c7a7f8f00e883a4fa32204789db23f78e36",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "no_signal",
+    "ok": true
+   }
+  },
+  {
+   "seq": 94,
+   "id": "dec_65dd159296f1822f",
+   "hash": "0x65dd159296f1822fc650c6379147fb97ca7c1e17e22fdbf196c39785b799b95c",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793602275,
+   "context": {
+    "blockNumber": "35207808",
+    "cex": {
+     "at": 1793602259,
+     "halfSpreadBps": 0,
+     "mid": "7825776500000",
+     "topDepthUsd": "60.26"
+    },
+    "oracle": {
+     "ageSec": 1040,
+     "price": "7818248500000",
+     "roundId": "1793601232000",
+     "updatedAt": 1793601232
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "194.70840491",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "75"
+    },
+    "pool": {
+     "deviationBps": 41,
+     "liquidity": "1783701361",
+     "price": "7849785591981",
+     "twap": "7849081677787",
+     "twapDeviationBps": 40
+    }
+   },
+   "engine": "llm",
+   "kind": "no_trade",
+   "market": "hsk-dex:WBTC/USDT:3000",
+   "prevHash": "0x2e41f89265d0fc76d5c3230d19d9f72021922958910d50b1998b31381fa40c91",
+   "profile": "default",
+   "rationale": "Only candidate is the standing discretionary_exit (sell, netEdge -70bps, pure cost, no edge). Position unrealised exit -14bps/-4bps cex — negligible drawdown, oracle fresh (1030s) and pool/CEX agree closely, no reason to force a cost-negative exit. No spread-revert or rebalance candidate was generated to act on this cycle. Discretionary lane: no distinct signal — CEX spread is essentially zero and depth modest ($60), nothing here the generators are missing; not originating a new position.",
+   "rationaleHash": "0xb1840437d3219f4ec86e8bd3439ecdf0dd4f3a4e12173174bb8df92361811f1d",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "no_signal",
+    "ok": true
+   }
+  },
+  {
+   "seq": 95,
+   "id": "dec_4ed156694c3367e0",
+   "hash": "0x4ed156694c3367e085d37d2cad3dacc9e1b647866c4fe8513fad4f8d72b7a4f7",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793602393,
+   "context": {
+    "blockNumber": "35207863",
+    "cex": {
+     "at": 1793602373,
+     "halfSpreadBps": 5,
+     "mid": "8755000",
+     "topDepthUsd": "166.33"
+    },
+    "oracle": {
+     "ageSec": 19786,
+     "price": "8741500",
+     "roundId": "1793582596000",
+     "updatedAt": 1793582596
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "22.67467038",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "45.64618951"
+    },
+    "pool": {
+     "deviationBps": 8,
+     "liquidity": "744097250641454677",
+     "price": "8735291",
+     "twap": "8734622",
+     "twapDeviationBps": 8
+    }
+   },
+   "engine": "llm",
+   "kind": "no_trade",
+   "market": "hsk-dex:WHSK/USDT:3000",
+   "prevHash": "0x65dd159296f1822fc650c6379147fb97ca7c1e17e22fdbf196c39785b799b95c",
+   "profile": "demo",
+   "rationale": "Only candidate offered is the standing discretionary_exit (sell full 252.8 WHSK, netEdge -65bps). Position unrealised exit P&L is only -0.11 USD (-60bps) on a demo-profile $5-size rebalance position; CEX mid 8755000 vs pool 8735291 is tight (8bps dev), oracle aging but Supra agrees. No reason to force an exit at a negative cost when loss is immaterial and no stop-loss/guard condition is breached. No spread-revert or rebalance candidate is active this cycle (demo waiver doesn't change that there's no new entry signal). Discretionary lane: no fresh thesis — CEX book (166 USD depth, 5bps half-spread) shows nothing unusual, so not originating a new discretionary trade.",
+   "rationaleHash": "0x34fc3bf8d17cc19968d91dbac5d4b064fc8b56c956f74f343a3264bf9d2ec1b3",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "no_signal",
+    "ok": true
+   }
+  },
+  {
+   "seq": 96,
+   "id": "dec_231ef32b2fc8249f",
+   "hash": "0x231ef32b2fc8249ff9bb6d773ed10b522eed7cea973640e744e270391411820c",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793602397,
+   "context": {
+    "blockNumber": "35207868",
+    "cex": {
+     "at": 1793602392,
+     "halfSpreadBps": 0,
+     "mid": "7824659500000",
+     "topDepthUsd": "60.25"
+    },
+    "oracle": {
+     "ageSec": 1160,
+     "price": "7818248500000",
+     "roundId": "1793601232000",
+     "updatedAt": 1793601232
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "194.70840491",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "75"
+    },
+    "pool": {
+     "deviationBps": 41,
+     "liquidity": "1783701361",
+     "price": "7849785591981",
+     "twap": "7849081677787",
+     "twapDeviationBps": 40
+    }
+   },
+   "engine": "llm",
+   "kind": "no_trade",
+   "market": "hsk-dex:WBTC/USDT:3000",
+   "prevHash": "0x4ed156694c3367e085d37d2cad3dacc9e1b647866c4fe8513fad4f8d72b7a4f7",
+   "profile": "default",
+   "rationale": "Only candidate offered is the standing discretionary_exit (sell full 69974 WBTC, netEdge -70bps). Unrealised exit P&L is -0.08 USD (-14bps), feeDrag already 0.15 — exiting now would realize a worse loss than holding; oracle is fresh (1150s) and pool/CEX deviation is 40bps TWAP vs 41bps spot, consistent, no dislocation needing an urgent exit. No spread-revert/rebalance candidate present this cycle, so nothing to act/veto beyond the standing exit, which I decline given the negative net edge and absence of any stop-loss/guard trigger. Discretionary lane: CEX book is extremely tight (0bps half-spread, $60 depth) with no persistent thinning pattern observed across cycles, so no new discretionary thesis to put $≤10 at risk.",
+   "rationaleHash": "0x148cd601ad2138397eb5bcf0a23e142a668f5d2b856642e91ffe221d420c5948",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "no_signal",
+    "ok": true
+   }
+  },
+  {
+   "seq": 97,
+   "id": "dec_87357eccc3868cc0",
+   "hash": "0x87357eccc3868cc01230533acaede3da0b490e41ae84322b0653cde931860487",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793602513,
+   "context": {
+    "blockNumber": "35207923",
+    "cex": {
+     "at": 1793602497,
+     "halfSpreadBps": 11,
+     "mid": "8760000",
+     "topDepthUsd": "293.31"
+    },
+    "oracle": {
+     "ageSec": 19906,
+     "price": "8741500",
+     "roundId": "1793582596000",
+     "updatedAt": 1793582596
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "22.67467038",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "45.64618951"
+    },
+    "pool": {
+     "deviationBps": 8,
+     "liquidity": "744097250641454677",
+     "price": "8735291",
+     "twap": "8734622",
+     "twapDeviationBps": 8
+    }
+   },
+   "engine": "llm",
+   "kind": "no_trade",
+   "market": "hsk-dex:WHSK/USDT:3000",
+   "prevHash": "0x231ef32b2fc8249ff9bb6d773ed10b522eed7cea973640e744e270391411820c",
+   "profile": "demo",
+   "rationale": "Only candidate is the standing discretionary_exit (sell full 252.78 WHSK, cost 65-94bps, edge 0, netEdge negative). Position unrealized exit -60bps/-$0.11, oracle aging (19906s) but pool/CEX deviation only 8bps, no stress. No spread-revert or rebalance candidate fired this cycle. Not exiting on a small, normal mark wobble with no thesis; holding is cheaper than paying 65-94bps to flatten. No discretionary long/short thesis either: CEX book is thin ($293 top depth) and oracle is stale, so no edge worth originating a new $5-10 position on.",
+   "rationaleHash": "0x660b1ced2915bbad3871b0531379b459866ef22fe2ff4c6ba5b77ddcf087ff96",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "no_signal",
+    "ok": true
+   }
+  },
+  {
+   "seq": 98,
+   "id": "dec_058ef681d191da5a",
+   "hash": "0x058ef681d191da5ad80bce74f9f74bf558f31e0b161cf33154b2ff05c5767470",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793602517,
+   "context": {
+    "blockNumber": "35207928",
+    "cex": {
+     "at": 1793602512,
+     "halfSpreadBps": 0,
+     "mid": "7819529500000",
+     "topDepthUsd": "60.21"
+    },
+    "oracle": {
+     "ageSec": 1280,
+     "price": "7818248500000",
+     "roundId": "1793601232000",
+     "updatedAt": 1793601232
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "194.70840491",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "75"
+    },
+    "pool": {
+     "deviationBps": 41,
+     "liquidity": "1783701361",
+     "price": "7849785591981",
+     "twap": "7849081677787",
+     "twapDeviationBps": 40
+    }
+   },
+   "engine": "llm",
+   "kind": "no_trade",
+   "market": "hsk-dex:WBTC/USDT:3000",
+   "prevHash": "0x87357eccc3868cc01230533acaede3da0b490e41ae84322b0653cde931860487",
+   "profile": "default",
+   "rationale": "Only candidate is the standing discretionary_exit (sell 69974 sats, cost 70bps, edge 0, netEdge -70). Position unrealized exit -14bps/-$0.08, CEX-marked -11bps, both trivial. Pool vs oracle deviation 40-41bps but within normal band and oracle is fresh (1270s); no guard_exit or spread-revert/rebalance candidate present this cycle, so nothing to act on. Not paying 70bps to flatten a near-breakeven lot with no stress signal. Discretionary lane: CEX spread is essentially zero (0bps half-spread) and depth is thin ($60), no mispricing worth a bounded $10 position; declining to originate.",
+   "rationaleHash": "0x27dde55d16a92fafa9dd145b6b35d83372093a05609625e6ef0ed9060cf23126",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "no_signal",
+    "ok": true
+   }
+  },
+  {
+   "seq": 99,
+   "id": "dec_ba7558014ac6bc9a",
+   "hash": "0xba7558014ac6bc9a3fe4624ea449b9ad0860ffae7031c1cb667eeabf9dd9d48d",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793602637,
+   "candidateId": "cand_abdfe548b7d74375",
+   "context": {
+    "blockNumber": "35207988",
+    "cex": {
+     "at": 1793602629,
+     "halfSpreadBps": 5,
+     "mid": "8755000",
+     "topDepthUsd": "50.92"
+    },
+    "oracle": {
+     "ageSec": 20036,
+     "price": "8741500",
+     "roundId": "1793582596000",
+     "updatedAt": 1793582596
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "22.67467038",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "45.64618951"
+    },
+    "pool": {
+     "deviationBps": 8,
+     "liquidity": "744097250641454677",
+     "price": "8735291",
+     "twap": "8734622",
+     "twapDeviationBps": 8
+    },
+    "signal": {
+     "costBps": 71,
+     "edgeBps": 0,
+     "generator": "discretionary_exit",
+     "id": "cand_abdfe548b7d74375"
+    }
+   },
+   "engine": "llm",
+   "kind": "no_trade",
+   "market": "hsk-dex:WHSK/USDT:3000",
+   "prevHash": "0x058ef681d191da5ad80bce74f9f74bf558f31e0b161cf33154b2ff05c5767470",
+   "profile": "demo",
+   "rationale": "Only candidate is the standing discretionary_exit (sell full 252.79 WHSK, netEdge -71bps, pure cost with zero edge). Position is only -60bps/-$0.11 unrealised exit-mark, oracle is stale (20026s, health=aging) but pool vs CEX/TWAP deviation is tiny (8bps) and no stop-loss/guard trigger. No spread-revert or rebalance candidates fired this cycle (profile=demo rebalance edge gate waived but generator didn't propose anything, implying band is within tolerance). Declining to force an exit on a trivial unrealised loss; holding. No discretionary entry either: no CEX book thinning/bot-flow thesis visible, HSK book is thin ($50.92 top depth) and oracle staleness argues against adding risk, not for a new small long.",
+   "rationaleHash": "0x0a9c7879b6cdefb52dc51c4f51e8ef1d41dfceed2c1ddd24b6952d4214837c4d",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "llm_veto",
+    "ok": true
+   }
+  },
+  {
+   "seq": 100,
+   "id": "dec_62891a84c419ea8d",
+   "hash": "0x62891a84c419ea8db516de87605b645b90aa5e8cc5eb81cedf316491283058f4",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793602641,
+   "candidateId": "cand_8395de2a1b12c7ef",
+   "context": {
+    "blockNumber": "35207991",
+    "cex": {
+     "at": 1793602631,
+     "halfSpreadBps": 0,
+     "mid": "7824183500000",
+     "topDepthUsd": "60.25"
+    },
+    "oracle": {
+     "ageSec": 1406,
+     "price": "7818248500000",
+     "roundId": "1793601232000",
+     "updatedAt": 1793601232
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "194.70840491",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "75"
+    },
+    "pool": {
+     "deviationBps": 41,
+     "liquidity": "1783701361",
+     "price": "7849785591981",
+     "twap": "7849081677787",
+     "twapDeviationBps": 40
+    },
+    "signal": {
+     "costBps": 70,
+     "edgeBps": 0,
+     "generator": "discretionary_exit",
+     "id": "cand_8395de2a1b12c7ef"
+    }
+   },
+   "engine": "llm",
+   "kind": "no_trade",
+   "market": "hsk-dex:WBTC/USDT:3000",
+   "prevHash": "0xba7558014ac6bc9a3fe4624ea449b9ad0860ffae7031c1cb667eeabf9dd9d48d",
+   "profile": "default",
+   "rationale": "Only candidate is the standing discretionary_exit (sell full 69974 sats WBTC, netEdge -70bps, no real signal, just cost). Position unrealised exit -14bps/-$0.08, oracle fresh (1390s), pool-vs-oracle deviation 40-41bps but CEX mid tracks oracle closely (within ~3bps) so this looks like normal pool noise, not a dislocation worth exiting into. No spread-revert/rebalance candidate fired (real default profile, no waiver), so no entry signal either. Vetoing the exit on a de-minimis loss with no stop-loss trip. No discretionary trade: CEX book is extremely tight (halfSpread 0bps) with no thinning pattern or bot-flow evidence to justify a new $≤10 position; nothing paid-signal-worthy this cycle.",
+   "rationaleHash": "0x95eaf986abeb22a0866690a0e56f72272ab028460450215dfefe3ed57703596d",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "llm_veto",
+    "ok": true
+   }
+  },
+  {
+   "seq": 101,
+   "id": "dec_1d20dbae7b48b971",
+   "hash": "0x1d20dbae7b48b971ee22deec7e8368db4113d6bbaeabda1f87fb009aa273c3d2",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793602751,
+   "context": {
+    "blockNumber": "35208045",
+    "cex": {
+     "at": 1793602740,
+     "halfSpreadBps": 11,
+     "mid": "8730000",
+     "topDepthUsd": "108.15"
+    },
+    "oracle": {
+     "ageSec": 20150,
+     "price": "8741500",
+     "roundId": "1793582596000",
+     "updatedAt": 1793582596
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "22.67467038",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "45.64618951"
+    },
+    "pool": {
+     "deviationBps": 8,
+     "liquidity": "744097250641454677",
+     "price": "8735291",
+     "twap": "8734622",
+     "twapDeviationBps": 8
+    }
+   },
+   "engine": "llm",
+   "kind": "no_trade",
+   "market": "hsk-dex:WHSK/USDT:3000",
+   "prevHash": "0x62891a84c419ea8db516de87605b645b90aa5e8cc5eb81cedf316491283058f4",
+   "profile": "demo",
+   "rationale": "Only candidate is the standing discretionary_exit (edge 0bps, cost ~65-184bps, netEdge negative) — not a real signal, just the standing exit floor. Position unrealized -60bps exit/-35bps CEX, well within tolerance, no stop-loss trigger. CEX book thin (~$108 depth) and no fresh arb signal vs pool. Not vetoing an actionable candidate, there isn't one. No discretionary thesis either: no multi-cycle CEX book thinning or flow pattern observed this cycle to justify a new $10 position.",
+   "rationaleHash": "0xf4a456d993f5896e5db615372c1f6fa46a3f2f1c7a1ae55d79064bf0706b2d27",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "no_signal",
+    "ok": true
+   }
+  },
+  {
+   "seq": 102,
+   "id": "dec_b0519b2e4f772ffe",
+   "hash": "0xb0519b2e4f772ffe000eab629ee5efb6739a56484065c5a743f83660da226aab",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793602753,
+   "context": {
+    "blockNumber": "35208047",
+    "cex": {
+     "at": 1793602751,
+     "halfSpreadBps": 4,
+     "mid": "7826434000000",
+     "topDepthUsd": "60.24"
+    },
+    "oracle": {
+     "ageSec": 1518,
+     "price": "7818248500000",
+     "roundId": "1793601232000",
+     "updatedAt": 1793601232
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "194.70840491",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "75"
+    },
+    "pool": {
+     "deviationBps": 41,
+     "liquidity": "1783701361",
+     "price": "7849785591981",
+     "twap": "7849081677787",
+     "twapDeviationBps": 40
+    }
+   },
+   "engine": "llm",
+   "kind": "no_trade",
+   "market": "hsk-dex:WBTC/USDT:3000",
+   "prevHash": "0x1d20dbae7b48b971ee22deec7e8368db4113d6bbaeabda1f87fb009aa273c3d2",
+   "profile": "default",
+   "rationale": "Only candidate is the standing discretionary_exit (edge 0bps, cost 70bps, netEdge -70) — not a real trade signal. Position unrealized -14bps exit/-11bps CEX, within normal noise, no stop-loss/take-profit trigger. Pool vs oracle deviation ~40bps (pool richer) but CEX spread is essentially zero and book thin ($60 depth), so no clean spread-revert candidate was generated this cycle. No discretionary thesis: no sustained CEX/pool divergence or flow signal strong enough to warrant a small position.",
+   "rationaleHash": "0xdae233c300609994f90219c64f98fcfc119630c397ab29e8c6d471a4e94e086a",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "no_signal",
+    "ok": true
+   }
+  },
+  {
+   "seq": 103,
+   "id": "dec_fd32750f8ba654b0",
+   "hash": "0xfd32750f8ba654b019868f426ce6314117529eda1cf66561db4faf48456646ca",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793602871,
+   "context": {
+    "blockNumber": "35208102",
+    "cex": {
+     "at": 1793602855,
+     "halfSpreadBps": 11,
+     "mid": "8740000",
+     "topDepthUsd": "109.18"
+    },
+    "oracle": {
+     "ageSec": 20264,
+     "price": "8741500",
+     "roundId": "1793582596000",
+     "updatedAt": 1793582596
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "22.67467038",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "45.64618951"
+    },
+    "pool": {
+     "deviationBps": 8,
+     "liquidity": "744097250641454677",
+     "price": "8735291",
+     "twap": "8734622",
+     "twapDeviationBps": 8
+    }
+   },
+   "engine": "llm",
+   "kind": "no_trade",
+   "market": "hsk-dex:WHSK/USDT:3000",
+   "prevHash": "0xb0519b2e4f772ffe000eab629ee5efb6739a56484065c5a743f83660da226aab",
+   "profile": "demo",
+   "rationale": "Only candidate offered is the standing discretionary_exit (cost 65-82bps, edge 0, netEdge negative) — not a real signal, just the always-available exit hook. Position unrealized is -0.11 USD exit-mark / -23bps cexmark, well inside normal noise, no stop-loss/take-profit trigger, oracle aging but pool/CEX agree within 8bps so no dislocation to fade. No spread-revert or rebalance candidate generated this cycle. Discretionary lane: no mispricing signal (CEX book tight 11bps half-spread, no bot flow anomaly visible), so declining to originate a $5-10 discretionary trade.",
+   "rationaleHash": "0x7d21b13a3ee164a3ee57550a5eebbbde55028625379dc1d726eb5226d7a96812",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "no_signal",
+    "ok": true
+   }
+  },
+  {
+   "seq": 104,
+   "id": "dec_0ca4468173a4fd63",
+   "hash": "0x0ca4468173a4fd633e65ba6c8cb172e41db888ed0a7f938998c05df4416235b9",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793602875,
+   "context": {
+    "blockNumber": "35208108",
+    "cex": {
+     "at": 1793602862,
+     "halfSpreadBps": 0,
+     "mid": "7825577500000",
+     "topDepthUsd": "60.26"
+    },
+    "oracle": {
+     "ageSec": 1640,
+     "price": "7818248500000",
+     "roundId": "1793601232000",
+     "updatedAt": 1793601232
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "194.70840491",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "75"
+    },
+    "pool": {
+     "deviationBps": 41,
+     "liquidity": "1783701361",
+     "price": "7849785591981",
+     "twap": "7849081677787",
+     "twapDeviationBps": 40
+    }
+   },
+   "engine": "llm",
+   "kind": "no_trade",
+   "market": "hsk-dex:WBTC/USDT:3000",
+   "prevHash": "0xfd32750f8ba654b019868f426ce6314117529eda1cf66561db4faf48456646ca",
+   "profile": "default",
+   "rationale": "Only candidate offered is the standing discretionary_exit (cost 70bps, edge 0, netEdge -70bps) — not an actionable signal, just the always-on exit hook. Position unrealized -0.08 USD / -14bps exit-mark, within noise; no stop-loss trigger. Pool vs oracle/CEX deviation is 40bps (pool richer) but CEX half-spread is 0bps with thin $60 top depth, so acting on that gap risks slippage exceeding the apparent edge, and no spread-revert candidate was generated to capture it (daemon already screened this out). No rebalance or spread-revert candidate this cycle. Discretionary lane: no distinct thesis beyond the oracle/pool gap the daemon already declined to surface; declining to originate a trade.",
+   "rationaleHash": "0xd9d692f070db0c09f611b92eb000772de7954c9d170e289d316af8117e7b71a1",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "no_signal",
+    "ok": true
+   }
+  },
+  {
+   "seq": 105,
+   "id": "dec_8d8e1a677280574e",
+   "hash": "0x8d8e1a677280574e6dc3346582cfbbff5935cea87f772d9922378340bb9b1ea0",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793602994,
+   "context": {
+    "blockNumber": "35208168",
+    "cex": {
+     "at": 1793602981,
+     "halfSpreadBps": 45,
+     "mid": "8740000",
+     "topDepthUsd": "95.78"
+    },
+    "oracle": {
+     "ageSec": 20396,
+     "price": "8741500",
+     "roundId": "1793582596000",
+     "updatedAt": 1793582596
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "22.67467038",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "45.64618951"
+    },
+    "pool": {
+     "deviationBps": 8,
+     "liquidity": "744097250641454677",
+     "price": "8735291",
+     "twap": "8734622",
+     "twapDeviationBps": 8
+    }
+   },
+   "engine": "llm",
+   "kind": "no_trade",
+   "market": "hsk-dex:WHSK/USDT:3000",
+   "prevHash": "0x0ca4468173a4fd633e65ba6c8cb172e41db888ed0a7f938998c05df4416235b9",
+   "profile": "demo",
+   "rationale": "Only candidate is the standing discretionary_exit (cost 65-111bps, zero edge) — not a signal, just the always-available exit option. Position is -60bps/-0.11usd unrealised on exit basis, well inside normal noise, no stop-loss trigger, pool vs TWAP only 8bps deviation (no dislocation to revert). No spread-revert/rebalance candidate generated this cycle. Discretionary lane: no fresh thesis — CEX book is thin (topDepth $95, half-spread 51bps) and oracle is aging (20384s), so any small discretionary entry would be trading on stale/illiquid signal; skip.",
+   "rationaleHash": "0x0bacdc56d657b5cfdc49b9902dea6ac857b0ddb0988bd68d1107666119df2ff2",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "no_signal",
+    "ok": true
+   }
+  },
+  {
+   "seq": 106,
+   "id": "dec_ec605fa341495e65",
+   "hash": "0xec605fa341495e65eef7b3f6ea9d993786ee65b60543b2cb0251f690367d3bcf",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793602997,
+   "context": {
+    "blockNumber": "35208168",
+    "cex": {
+     "at": 1793602991,
+     "halfSpreadBps": 0,
+     "mid": "7828609500000",
+     "topDepthUsd": "60.28"
+    },
+    "oracle": {
+     "ageSec": 1760,
+     "price": "7818248500000",
+     "roundId": "1793601232000",
+     "updatedAt": 1793601232
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "194.70840491",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "75"
+    },
+    "pool": {
+     "deviationBps": 41,
+     "liquidity": "1783701361",
+     "price": "7849785591981",
+     "twap": "7849081677787",
+     "twapDeviationBps": 40
+    }
+   },
+   "engine": "llm",
+   "kind": "no_trade",
+   "market": "hsk-dex:WBTC/USDT:3000",
+   "prevHash": "0x8d8e1a677280574e6dc3346582cfbbff5935cea87f772d9922378340bb9b1ea0",
+   "profile": "default",
+   "rationale": "Only candidate is the standing discretionary_exit (cost ~70bps, zero edge), not an actionable signal. Position unrealised -14bps on exit basis / +1bps on CEX mark — negligible, no stop-loss trigger. Pool vs TWAP deviation only 40bps with oracle fresh (1748s) and CEX book tight (0bps half-spread) but no spread-revert or rebalance candidate was generated, so there's no net-edge entry to take. Discretionary lane: no new thesis this cycle — nothing anomalous in CEX book shape or flow beyond normal noise; skip to preserve the 3/day budget.",
+   "rationaleHash": "0x037f81472dfdeae00f8bd9dfaaab389ca39da031d7f826c4c02a1308180a066f",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "no_signal",
+    "ok": true
+   }
+  },
+  {
+   "seq": 107,
+   "id": "dec_8dd16bdd95e3d806",
+   "hash": "0x8dd16bdd95e3d80679e95c592e06017eed0cdf2f3f6808c7f03ce5d7bf736b79",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793603113,
+   "context": {
+    "blockNumber": "35208227",
+    "cex": {
+     "at": 1793603110,
+     "halfSpreadBps": 34,
+     "mid": "8730000",
+     "topDepthUsd": "11.00"
+    },
+    "oracle": {
+     "ageSec": 20514,
+     "price": "8741500",
+     "roundId": "1793582596000",
+     "updatedAt": 1793582596
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "22.67467038",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "45.64618951"
+    },
+    "pool": {
+     "deviationBps": 8,
+     "liquidity": "744097250641454677",
+     "price": "8735291",
+     "twap": "8734622",
+     "twapDeviationBps": 8
+    }
+   },
+   "engine": "llm",
+   "kind": "no_trade",
+   "market": "hsk-dex:WHSK/USDT:3000",
+   "prevHash": "0xec605fa341495e65eef7b3f6ea9d993786ee65b60543b2cb0251f690367d3bcf",
+   "profile": "demo",
+   "rationale": "Only candidate is the standing discretionary_exit (sell full 252.79 WHSK) with netEdgeBps -65 to -111 — cost exceeds any edge, and current unrealised exit loss is just -60bps/-$0.11, well within tolerance, no stop-loss trigger. No spread-revert or rebalance candidate offered this cycle. Not vetoing an act, just declining to force an exit with negative edge. Discretionary lane: no fresh thesis — CEX book is thin ($11 top depth) and oracle is aging (20504s), too stale to originate a new small long/short confidently.",
+   "rationaleHash": "0x2660e122c87f66e1754b3617371cf57b15c98e4011218fa5f6a1f75ee7a8593b",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "no_signal",
+    "ok": true
+   }
+  },
+  {
+   "seq": 108,
+   "id": "dec_34b11ca751fa8bfd",
+   "hash": "0x34b11ca751fa8bfd8d13389811ea076bf1f727e6e7e9ca27e8588e036e778deb",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793603116,
+   "context": {
+    "blockNumber": "35208228",
+    "cex": {
+     "at": 1793603109,
+     "halfSpreadBps": 0,
+     "mid": "7826909500000",
+     "topDepthUsd": "60.27"
+    },
+    "oracle": {
+     "ageSec": 1880,
+     "price": "7818248500000",
+     "roundId": "1793601232000",
+     "updatedAt": 1793601232
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "194.70840491",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "75"
+    },
+    "pool": {
+     "deviationBps": 41,
+     "liquidity": "1783701361",
+     "price": "7849785591981",
+     "twap": "7849081677787",
+     "twapDeviationBps": 40
+    }
+   },
+   "engine": "llm",
+   "kind": "no_trade",
+   "market": "hsk-dex:WBTC/USDT:3000",
+   "prevHash": "0x8dd16bdd95e3d80679e95c592e06017eed0cdf2f3f6808c7f03ce5d7bf736b79",
+   "profile": "default",
+   "rationale": "Only candidate is the standing discretionary_exit (sell full 69974 sats) with netEdgeBps -70 — cost exceeds edge, and unrealised exit loss is minor (-14bps/-$0.08), no stop-loss condition. No spread-revert or rebalance candidate this cycle. Declining to force exit at negative edge; this is not a veto of a profitable candidate. Discretionary lane: BTC CEX book is tight (0bps half-spread, $60 depth) and oracle fresh, but pool is trading ~40bps above oracle/CEX with no clear directional signal or persistent bot flow noted — not worth a new $10 position this cycle.",
+   "rationaleHash": "0x3ede63b9581fbdb86c335262c34456c0f086c1c7faa23bc6905ea32e5c6309b7",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "no_signal",
+    "ok": true
+   }
+  },
+  {
+   "seq": 109,
+   "id": "dec_6ea065bb68f2cc59",
+   "hash": "0x6ea065bb68f2cc598385709d798ab63a3c67b134876d9999936b5ad8e04847bc",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793603234,
+   "context": {
+    "blockNumber": "35208288",
+    "cex": {
+     "at": 1793603228,
+     "halfSpreadBps": 11,
+     "mid": "8740000",
+     "topDepthUsd": "89.01"
+    },
+    "oracle": {
+     "ageSec": 20636,
+     "price": "8741500",
+     "roundId": "1793582596000",
+     "updatedAt": 1793582596
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "22.67467038",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "45.64618951"
+    },
+    "pool": {
+     "deviationBps": 8,
+     "liquidity": "744097250641454677",
+     "price": "8735291",
+     "twap": "8734622",
+     "twapDeviationBps": 8
+    }
+   },
+   "engine": "llm",
+   "kind": "no_trade",
+   "market": "hsk-dex:WHSK/USDT:3000",
+   "prevHash": "0x34b11ca751fa8bfd8d13389811ea076bf1f727e6e7e9ca27e8588e036e778deb",
+   "profile": "demo",
+   "rationale": "Only candidate offered is the standing discretionary_exit (sell, netEdge -65..-100bps, pure cost with zero edge). Position unrealised is small (-0.11 USD, -60bps mark basis) with positive realised P&L (+98.71) for the vault; not approaching stop-loss, no reason to force an exit at negative edge. No spread-revert/rebalance candidate fired this cycle. Discretionary lane: no new thesis — CEX book (HSK mid 8.74, half-spread 11bps, depth only $89) is thin and oracle is stale (20626s, \"aging\"), giving no fresh edge to act on; skipping origination.",
+   "rationaleHash": "0x7ff9d72722bc226d98f6c389c158e9e076d33ea6903d2ed7b2e9328e8facb5ff",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "no_signal",
+    "ok": true
+   }
+  },
+  {
+   "seq": 110,
+   "id": "dec_12b5d0bae089ff59",
+   "hash": "0x12b5d0bae089ff59876405584110c531b17d2f6e8386965e5b7f0537a5171ff7",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793603237,
+   "context": {
+    "blockNumber": "35208288",
+    "cex": {
+     "at": 1793603231,
+     "halfSpreadBps": 0,
+     "mid": "7826489500000",
+     "topDepthUsd": "60.26"
+    },
+    "oracle": {
+     "ageSec": 2000,
+     "price": "7818248500000",
+     "roundId": "1793601232000",
+     "updatedAt": 1793601232
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "194.70840491",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "75"
+    },
+    "pool": {
+     "deviationBps": 41,
+     "liquidity": "1783701361",
+     "price": "7849785591981",
+     "twap": "7849081677787",
+     "twapDeviationBps": 40
+    }
+   },
+   "engine": "llm",
+   "kind": "no_trade",
+   "market": "hsk-dex:WBTC/USDT:3000",
+   "prevHash": "0x6ea065bb68f2cc598385709d798ab63a3c67b134876d9999936b5ad8e04847bc",
+   "profile": "default",
+   "rationale": "Only candidate is the standing discretionary_exit (sell, netEdge -70bps, pure cost, no edge). Position unrealised is small (-0.08 USD, -14bps) and well within tolerance; no stop-loss trigger. Pool vs TWAP deviation is 40-41bps (slightly elevated) but no spread-revert/rebalance candidate was generated this cycle, so nothing to act on at a real edge. Discretionary lane: CEX half-spread is 0bps but top depth is thin ($60) and oracle age ~2000s is fine but no persistent bot-flow or thinning pattern observed to justify a new $10 discretionary long; skipping origination.",
+   "rationaleHash": "0x454df1f922b8b48615616f66e7b06ea54bb183976f3c31f1b8f36de79777ad14",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "no_signal",
+    "ok": true
+   }
+  },
+  {
+   "seq": 111,
+   "id": "dec_8b315904120db509",
+   "hash": "0x8b315904120db509b6d78066d09b1401bc93369720b7fd28c0af41961014fc1d",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793603353,
+   "context": {
+    "blockNumber": "35208347",
+    "cex": {
+     "at": 1793603334,
+     "halfSpreadBps": 5,
+     "mid": "8755000",
+     "topDepthUsd": "98.14"
+    },
+    "oracle": {
+     "ageSec": 20754,
+     "price": "8741500",
+     "roundId": "1793582596000",
+     "updatedAt": 1793582596
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "22.67467038",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "45.64618951"
+    },
+    "pool": {
+     "deviationBps": 8,
+     "liquidity": "744097250641454677",
+     "price": "8735291",
+     "twap": "8734622",
+     "twapDeviationBps": 8
+    }
+   },
+   "engine": "llm",
+   "kind": "no_trade",
+   "market": "hsk-dex:WHSK/USDT:3000",
+   "prevHash": "0x12b5d0bae089ff59876405584110c531b17d2f6e8386965e5b7f0537a5171ff7",
+   "profile": "demo",
+   "rationale": "Only candidates offered are standing discretionary_exit entries with netEdge -65 to -82bps (cost>edge), not worth triggering given position is only -60bps on exit mark and -6bps on CEX mark, well inside normal noise, no stop-loss/take-profit breach. No spread-revert or rebalance(demo) candidates this cycle. HSK oracle is aging (20744s) adding uncertainty, so no reason to override. Discretionary lane: no new thesis - CEX top depth is thin ($98) and oracle stale, insufficient signal for a fresh $5-10 speculative entry this cycle.",
+   "rationaleHash": "0x3c04139d45c372be41c7903bd31b088f8565f051f72faf73ae977087dca7f175",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "no_signal",
+    "ok": true
+   }
+  },
+  {
+   "seq": 112,
+   "id": "dec_0addbba75c4354c7",
+   "hash": "0x0addbba75c4354c7de149dd83ac95605910a39d3046bb91b9ca23d45931fe025",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793603357,
+   "context": {
+    "blockNumber": "35208348",
+    "cex": {
+     "at": 1793603350,
+     "halfSpreadBps": 0,
+     "mid": "7824422500000",
+     "topDepthUsd": "60.25"
+    },
+    "oracle": {
+     "ageSec": 2120,
+     "price": "7818248500000",
+     "roundId": "1793601232000",
+     "updatedAt": 1793601232
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "194.70840491",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "75"
+    },
+    "pool": {
+     "deviationBps": 41,
+     "liquidity": "1783701361",
+     "price": "7849785591981",
+     "twap": "7849081677787",
+     "twapDeviationBps": 40
+    }
+   },
+   "engine": "llm",
+   "kind": "no_trade",
+   "market": "hsk-dex:WBTC/USDT:3000",
+   "prevHash": "0x8b315904120db509b6d78066d09b1401bc93369720b7fd28c0af41961014fc1d",
+   "profile": "default",
+   "rationale": "Only candidates are standing discretionary_exit entries (netEdge -70bps, cost>edge) on a position that is only -14bps on exit mark / -7bps on CEX mark - normal noise, no stop-loss breach, no reason to force an exit. No spread-revert or rebalance candidates generated this cycle for BTC (profile=default, real spread capture required and none cleared the edge gate). Discretionary lane: CEX book is tight (0bps half-spread) but top depth only $60 and pool-vs-TWAP deviation is 40bps (elevated), suggesting one-sided pool pressure rather than a clean arb; not enough edge/clarity to justify a new $10 discretionary position this cycle.",
+   "rationaleHash": "0x90e305e88df89e2cf9cb62e1e8d41c132de0be38d91b98e1a5b8cb4ff5163598",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "no_signal",
+    "ok": true
+   }
+  },
+  {
+   "seq": 113,
+   "id": "dec_5fbb26079dcb5398",
+   "hash": "0x5fbb26079dcb5398ec8cbeb324f3d59ef3c610eb6ba97e03224b55e4c0d76081",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793603474,
+   "context": {
+    "blockNumber": "35208408",
+    "cex": {
+     "at": 1793603472,
+     "halfSpreadBps": 11,
+     "mid": "8750000",
+     "topDepthUsd": "157.41"
+    },
+    "oracle": {
+     "ageSec": 20876,
+     "price": "8741500",
+     "roundId": "1793582596000",
+     "updatedAt": 1793582596
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "22.67467038",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "45.64618951"
+    },
+    "pool": {
+     "deviationBps": 8,
+     "liquidity": "744097250641454677",
+     "price": "8735291",
+     "twap": "8734622",
+     "twapDeviationBps": 8
+    }
+   },
+   "engine": "llm",
+   "kind": "no_trade",
+   "market": "hsk-dex:WHSK/USDT:3000",
+   "prevHash": "0x0addbba75c4354c7de149dd83ac95605910a39d3046bb91b9ca23d45931fe025",
+   "profile": "demo",
+   "rationale": "Only candidate is the standing discretionary_exit (cand_8c6fa680543edbe7), netEdge -65bps (cost 65bps vs 0 edge) — not actionable, just an available exit, not a signal. Current unrealised exit P&L is only -0.11 USD (-60bps) on a $22 position, well inside normal noise, no stop-loss/take-profit trigger. No spread-revert or rebalance candidate was generated this cycle (demo profile waives edge gate but none was offered), so nothing to act on. Discretionary lane: no distinct thesis beyond the existing demo position; CEX book is thin ($101 top depth) and pool/CEX deviation is only 8bps, not worth a new $5-10 discretionary punt. Standing. No veto needed since nothing being declined.",
+   "rationaleHash": "0xb50a190b8e43a20002a9901dc48134fd605fe5ca1c2bb6b08b48b0a135c03337",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "no_signal",
+    "ok": true
+   }
+  },
+  {
+   "seq": 114,
+   "id": "dec_db7406f17ae88557",
+   "hash": "0xdb7406f17ae8855797ed47178e30029935a08f889503ee1c9a93764f3185f0e3",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793603478,
+   "context": {
+    "blockNumber": "35208408",
+    "cex": {
+     "at": 1793603469,
+     "halfSpreadBps": 0,
+     "mid": "7822892500000",
+     "topDepthUsd": "60.24"
+    },
+    "oracle": {
+     "ageSec": 2240,
+     "price": "7818248500000",
+     "roundId": "1793601232000",
+     "updatedAt": 1793601232
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "194.70840491",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "75"
+    },
+    "pool": {
+     "deviationBps": 41,
+     "liquidity": "1783701361",
+     "price": "7849785591981",
+     "twap": "7849081677787",
+     "twapDeviationBps": 40
+    }
+   },
+   "engine": "llm",
+   "kind": "no_trade",
+   "market": "hsk-dex:WBTC/USDT:3000",
+   "prevHash": "0x5fbb26079dcb5398ec8cbeb324f3d59ef3c610eb6ba97e03224b55e4c0d76081",
+   "profile": "default",
+   "rationale": "Only candidate is the standing discretionary_exit (cand_c4c473c506e54c40), netEdge -70bps, not an active signal. Unrealised exit P&L -0.08 USD (-14bps) on $54.7 position — negligible, no stop-loss breach (position lot realised +0.20 earlier). Pool vs CEX deviation 40bps twap but CEX halfSpread is 0bps with thin $60 top depth — any apparent gap is likely stale/thin-book noise, and no spread-revert/rebalance candidate was actually generated, so there's nothing with positive net edge to act on. Discretionary lane: no new thesis; BTC oracle fresh, no anomaly in flow worth a $10 punt this cycle. Standing, no trade.",
+   "rationaleHash": "0x2cf6d58e8fa3bb4bd5111bf68e7041d1cbf7d737a47799953f7accc96848bdd6",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "no_signal",
+    "ok": true
+   }
+  },
+  {
+   "seq": 115,
+   "id": "dec_1b197b958cc8be61",
+   "hash": "0x1b197b958cc8be6102236384f663dbb3091d265e5c3e3c0917c0186742b24db7",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793603593,
+   "context": {
+    "blockNumber": "35208464",
+    "cex": {
+     "at": 1793603581,
+     "halfSpreadBps": 5,
+     "mid": "8755000",
+     "topDepthUsd": "40.09"
+    },
+    "oracle": {
+     "ageSec": 20988,
+     "price": "8741500",
+     "roundId": "1793582596000",
+     "updatedAt": 1793582596
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "22.67467038",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "45.64618951"
+    },
+    "pool": {
+     "deviationBps": 8,
+     "liquidity": "744097250641454677",
+     "price": "8735291",
+     "twap": "8734622",
+     "twapDeviationBps": 8
+    }
+   },
+   "engine": "llm",
+   "kind": "no_trade",
+   "market": "hsk-dex:WHSK/USDT:3000",
+   "prevHash": "0xdb7406f17ae8855797ed47178e30029935a08f889503ee1c9a93764f3185f0e3",
+   "profile": "demo",
+   "rationale": "Only candidate is the standing discretionary_exit (sell, netEdge -65 to -77bps, cost~65-77bps vs 0 edge). Position is only -60bps underwater on exit mark (-$0.11) and -6bps on CEX mark; not a stop-loss level, and realized P&L is already +$98.71 today, so forcing an exit now just pays the spread/fee for no reason. No fresh spread-revert or rebalance candidates generated this cycle. Discretionary lane: CEX top depth is thin ($40) and oracle is aging (20988s), so no new discretionary entry — insufficient confidence to risk capital on a stale-ish oracle/thin book.",
+   "rationaleHash": "0x439cd3274252219356b3cabdc0d9e5cfc8923d995d599518a83d8f24eaef4435",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "no_signal",
+    "ok": true
+   }
+  },
+  {
+   "seq": 116,
+   "id": "dec_82e4ac4ec0d81e7b",
+   "hash": "0x82e4ac4ec0d81e7b67d09f7c382719ba47f064f4cce9f94ffe9fbc6a19e850cb",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793603596,
+   "context": {
+    "blockNumber": "35208468",
+    "cex": {
+     "at": 1793603587,
+     "halfSpreadBps": 0,
+     "mid": "7821939500000",
+     "topDepthUsd": "60.23"
+    },
+    "oracle": {
+     "ageSec": 2360,
+     "price": "7818248500000",
+     "roundId": "1793601232000",
+     "updatedAt": 1793601232
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "194.70840491",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "75"
+    },
+    "pool": {
+     "deviationBps": 41,
+     "liquidity": "1783701361",
+     "price": "7849785591981",
+     "twap": "7849081677787",
+     "twapDeviationBps": 40
+    }
+   },
+   "engine": "llm",
+   "kind": "no_trade",
+   "market": "hsk-dex:WBTC/USDT:3000",
+   "prevHash": "0x1b197b958cc8be6102236384f663dbb3091d265e5c3e3c0917c0186742b24db7",
+   "profile": "default",
+   "rationale": "Only candidate is the standing discretionary_exit (sell, netEdge -70 to -75bps). Position unrealized exit P&L is -14bps (-$0.08), far from stop-loss, and pool shows meaningful 40bps deviation from CEX but CEX book is tight (0bps half-spread) and oracle fresh (2352s) — no spread-revert open candidate was generated, meaning the daemon didn't see a tradeable net-edge after costs. Not worth paying 70bps cost to exit a tiny -14bps position. Discretionary lane: no distinct thesis beyond what the generator already evaluates; depth is modest ($60) and no multi-cycle pattern observed in recent flow to justify a new $10 discretionary long/short.",
+   "rationaleHash": "0xa4ef925c4153761d2a1efb558f00e6eff4784874fa420ef43fbc5b7736248ae8",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "no_signal",
+    "ok": true
+   }
+  },
+  {
+   "seq": 117,
+   "id": "dec_956ae062fb06f2ff",
+   "hash": "0x956ae062fb06f2ffbaf0e6b18a1442743e77c0af15641c9e33ecdfeea3c4a547",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793603713,
+   "context": {
+    "blockNumber": "35208524",
+    "cex": {
+     "at": 1793603701,
+     "halfSpreadBps": 5,
+     "mid": "8745000",
+     "topDepthUsd": "40.05"
+    },
+    "oracle": {
+     "ageSec": 21108,
+     "price": "8741500",
+     "roundId": "1793582596000",
+     "updatedAt": 1793582596
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "22.67467038",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "45.64618951"
+    },
+    "pool": {
+     "deviationBps": 8,
+     "liquidity": "744097250641454677",
+     "price": "8735291",
+     "twap": "8734622",
+     "twapDeviationBps": 8
+    }
+   },
+   "engine": "llm",
+   "kind": "no_trade",
+   "market": "hsk-dex:WHSK/USDT:3000",
+   "prevHash": "0x82e4ac4ec0d81e7b67d09f7c382719ba47f064f4cce9f94ffe9fbc6a19e850cb",
+   "profile": "demo",
+   "rationale": "Only candidate is the standing discretionary_exit (costBps 65-77, netEdge negative, no edge). Position is small ($22 exposure), unrealised exit -60bps/-0.11 USD — within normal noise, not a stop-loss trigger, and daily P&L is strongly positive (+$98.7 realised). No spread-revert or rebalance candidate fired this cycle. Not vetoing anything since discretionary_exit is a standing offer, not a signal to act on. No discretionary thesis: CEX book (5bps half-spread, $40 depth) and pool TWAP/spot (8bps dev) show nothing abnormal to trade on beyond generator-level noise.",
+   "rationaleHash": "0x20667add66f860a7d9dce9b006a26fb5be27344bd5a02083e9d60973e698fc81",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "no_signal",
+    "ok": true
+   }
+  },
+  {
+   "seq": 118,
+   "id": "dec_41ab45c7697f1d82",
+   "hash": "0x41ab45c7697f1d82fef14a48e50a4bc13caab547bde17682859c7d19261b555c",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793603715,
+   "context": {
+    "blockNumber": "35208528",
+    "cex": {
+     "at": 1793603711,
+     "halfSpreadBps": 0,
+     "mid": "7816945000000",
+     "topDepthUsd": "60.19"
+    },
+    "oracle": {
+     "ageSec": 2480,
+     "price": "7818248500000",
+     "roundId": "1793601232000",
+     "updatedAt": 1793601232
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "194.70840491",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "75"
+    },
+    "pool": {
+     "deviationBps": 41,
+     "liquidity": "1783701361",
+     "price": "7849785591981",
+     "twap": "7849081677787",
+     "twapDeviationBps": 40
+    }
+   },
+   "engine": "llm",
+   "kind": "no_trade",
+   "market": "hsk-dex:WBTC/USDT:3000",
+   "prevHash": "0x956ae062fb06f2ffbaf0e6b18a1442743e77c0af15641c9e33ecdfeea3c4a547",
+   "profile": "default",
+   "rationale": "Only candidate is the standing discretionary_exit (costBps 70, netEdge -70, no edge). Position exposure $54.7, unrealised exit -14bps -$0.08, immaterial. Pool vs CEX deviation 40bps but oracle fresh (2472s) and CEX half-spread is 0bps with $60 depth — the pool premium looks like a one-sided quote away from CEX rather than an exploitable gap given costs, and no spread-revert/rebalance candidate was generated to act on it. Not vetoing the discretionary_exit (standing, not a trigger). No discretionary thesis: no multi-cycle book-thinning or bot-flow pattern observed worth a <=$10 position.",
+   "rationaleHash": "0xd7753cdad026a26b0806229d8a09eb47d8b885ef8c7199bcf7d93208656a3c0c",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "no_signal",
+    "ok": true
+   }
+  },
+  {
+   "seq": 119,
+   "id": "dec_b6dca979476e2694",
+   "hash": "0xb6dca979476e2694ace89c57c346f32f126692ba6863fda27dd1ea2025a97b83",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793603830,
+   "context": {
+    "blockNumber": "35208583",
+    "cex": {
+     "at": 1793603821,
+     "halfSpreadBps": 5,
+     "mid": "8735000",
+     "topDepthUsd": "40.03"
+    },
+    "oracle": {
+     "ageSec": 21226,
+     "price": "8741500",
+     "roundId": "1793582596000",
+     "updatedAt": 1793582596
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "22.67467038",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "45.64618951"
+    },
+    "pool": {
+     "deviationBps": 8,
+     "liquidity": "744097250641454677",
+     "price": "8735291",
+     "twap": "8734622",
+     "twapDeviationBps": 8
+    }
+   },
+   "engine": "llm",
+   "kind": "no_trade",
+   "market": "hsk-dex:WHSK/USDT:3000",
+   "prevHash": "0x41ab45c7697f1d82fef14a48e50a4bc13caab547bde17682859c7d19261b555c",
+   "profile": "demo",
+   "rationale": "Only candidate is the standing discretionary_exit (netEdge -65 to -77bps, cost~65-77bps, no edge). Current position unrealized exit -60bps/-$0.11, mark close to avg entry; no deterioration thesis to force an early exit at a guaranteed cost. No spread-revert/rebalance candidate was generated this cycle. CEX book thin ($40 top depth) and no bot-flow or oracle-divergence signal worth a discretionary entry; declining to originate one.",
+   "rationaleHash": "0xd97dba09acbc6ff51a66f12c37a7710e63b28fb7cd9f9c5f53cd487d0349d73a",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "no_signal",
+    "ok": true
+   }
+  },
+  {
+   "seq": 120,
+   "id": "dec_b5e5f4441c4607d6",
+   "hash": "0xb5e5f4441c4607d6b77f70c306a6d50925bd3642b125779a9e49748abfb55a91",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793603832,
+   "context": {
+    "blockNumber": "35208583",
+    "cex": {
+     "at": 1793603822,
+     "halfSpreadBps": 0,
+     "mid": "7819212500000",
+     "topDepthUsd": "60.21"
+    },
+    "oracle": {
+     "ageSec": 2590,
+     "price": "7818248500000",
+     "roundId": "1793601232000",
+     "updatedAt": 1793601232
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "194.70840491",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "75"
+    },
+    "pool": {
+     "deviationBps": 41,
+     "liquidity": "1783701361",
+     "price": "7849785591981",
+     "twap": "7849081677787",
+     "twapDeviationBps": 40
+    }
+   },
+   "engine": "llm",
+   "kind": "no_trade",
+   "market": "hsk-dex:WBTC/USDT:3000",
+   "prevHash": "0xb6dca979476e2694ace89c57c346f32f126692ba6863fda27dd1ea2025a97b83",
+   "profile": "default",
+   "rationale": "Only candidate is standing discretionary_exit (netEdge -70bps, pure cost, no edge). Position unrealized exit -14bps/-$0.08, oracle fresh, pool vs oracle deviation ~41bps but within limits and not actionable without a generator candidate. No spread-revert/rebalance candidate this cycle. CEX spread near-zero and depth modest ($60); no stale-edge or bot-flow signal to justify a discretionary trade.",
+   "rationaleHash": "0xdcae7efcf96e7754a24e1b84a26dd41e89e228eacac1ab2096fd264b7c30b374",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "no_signal",
+    "ok": true
+   }
+  },
+  {
+   "seq": 121,
+   "id": "dec_c1cfa82b681c3df9",
+   "hash": "0xc1cfa82b681c3df9d1b0a8f1fbc36c4ca984d5befb2f3982dd3dce2bd066e8b8",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793603951,
+   "context": {
+    "blockNumber": "35208643",
+    "cex": {
+     "at": 1793603931,
+     "halfSpreadBps": 5,
+     "mid": "8745000",
+     "topDepthUsd": "103.84"
+    },
+    "oracle": {
+     "ageSec": 21346,
+     "price": "8741500",
+     "roundId": "1793582596000",
+     "updatedAt": 1793582596
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "22.67467038",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "45.64618951"
+    },
+    "pool": {
+     "deviationBps": 8,
+     "liquidity": "744097250641454677",
+     "price": "8735291",
+     "twap": "8734622",
+     "twapDeviationBps": 8
+    }
+   },
+   "engine": "llm",
+   "kind": "no_trade",
+   "market": "hsk-dex:WHSK/USDT:3000",
+   "prevHash": "0xb5e5f4441c4607d6b77f70c306a6d50925bd3642b125779a9e49748abfb55a91",
+   "profile": "demo",
+   "rationale": "Only candidate is the standing discretionary_exit (sell, costBps~65-77, edgeBps 0, netEdge negative) — exiting now would just pay cost with no edge; position unrealised -0.11 USD (-60bps exit-mark) is minor noise, not a stop-out. No spread-revert or rebalance candidate was generated this cycle (demo profile, deviation only 8bps, within band). Discretionary lane: CEX book thin (~$104 top depth) and no multi-cycle flow pattern observed to justify a new small long; skipping.",
+   "rationaleHash": "0x93c68e57c01a4818d208a7cc353f8cd860101d0653076618a1b85db2e50b7152",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "no_signal",
+    "ok": true
+   }
+  },
+  {
+   "seq": 122,
+   "id": "dec_2eaf8b7ebc21da41",
+   "hash": "0x2eaf8b7ebc21da4139e56f808a4e69b0d37dca4fcc1e873b3deaf62c46c31be8",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793603955,
+   "context": {
+    "blockNumber": "35208648",
+    "cex": {
+     "at": 1793603945,
+     "halfSpreadBps": 0,
+     "mid": "7815251500000",
+     "topDepthUsd": "60.18"
+    },
+    "oracle": {
+     "ageSec": 2720,
+     "price": "7818248500000",
+     "roundId": "1793601232000",
+     "updatedAt": 1793601232
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "194.70840491",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "75"
+    },
+    "pool": {
+     "deviationBps": 41,
+     "liquidity": "1783701361",
+     "price": "7849785591981",
+     "twap": "7849081677787",
+     "twapDeviationBps": 40
+    }
+   },
+   "engine": "llm",
+   "kind": "no_trade",
+   "market": "hsk-dex:WBTC/USDT:3000",
+   "prevHash": "0xc1cfa82b681c3df9d1b0a8f1fbc36c4ca984d5befb2f3982dd3dce2bd066e8b8",
+   "profile": "default",
+   "rationale": "Only candidate is the standing discretionary_exit (sell, costBps 70, edgeBps 0, netEdge -70) — not worth paying cost to exit a position only -0.08 USD (-14bps) underwater on a fresh oracle (age 2710s). Pool/oracle deviation is 41bps but no spread-revert candidate was generated, so the guard isn't seeing a tradeable gap net of cost. Discretionary lane: CEX spread is essentially zero (halfSpreadBps 0) and depth thin (~$60); no distinct thesis beyond what the standing exit already covers, so skipping new discretionary risk.",
+   "rationaleHash": "0x61b8cdefa0c6c8da415aa2352113197b7282251dcadc681766ebd0a6913928a5",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "no_signal",
+    "ok": true
+   }
+  },
+  {
+   "seq": 123,
+   "id": "dec_939974bf96046b1e",
+   "hash": "0x939974bf96046b1e9b978091e0400337a01b67ad1907683105f575c37aaf21a0",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793604074,
+   "context": {
+    "blockNumber": "35208708",
+    "cex": {
+     "at": 1793604058,
+     "halfSpreadBps": 5,
+     "mid": "8735000",
+     "topDepthUsd": "40.03"
+    },
+    "oracle": {
+     "ageSec": 21476,
+     "price": "8741500",
+     "roundId": "1793582596000",
+     "updatedAt": 1793582596
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "22.67467038",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "45.64618951"
+    },
+    "pool": {
+     "deviationBps": 8,
+     "liquidity": "744097250641454677",
+     "price": "8735291",
+     "twap": "8734622",
+     "twapDeviationBps": 8
+    }
+   },
+   "engine": "llm",
+   "kind": "no_trade",
+   "market": "hsk-dex:WHSK/USDT:3000",
+   "prevHash": "0x2eaf8b7ebc21da4139e56f808a4e69b0d37dca4fcc1e873b3deaf62c46c31be8",
+   "profile": "demo",
+   "rationale": "Only the standing discretionary_exit candidate is offered (sell full 252.79 WHSK, netEdge -65bps); position is at -60bps exit / -29bps CEX unrealised, well inside normal noise, no stop-loss/take-profit trigger and no spread-revert or rebalance candidate generated this cycle, so there's no actionable entry signal. Not vetoing the exit since we're not executing it (not required, just declining to use it this cycle given shallow loss and no guard trigger). Discretionary lane: CEX top depth is thin ($40) and oracle is aging (21468s old) with no clear persistent mispricing in pool swaps, so no thesis justifies a $10 discretionary clip this cycle.",
+   "rationaleHash": "0x0b103489ffed0942be6c3b0f68f7142077c602bfedf63a7965786cf7fdb57a59",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "no_signal",
+    "ok": true
+   }
+  },
+  {
+   "seq": 124,
+   "id": "dec_13cb5c21cb03c4dc",
+   "hash": "0x13cb5c21cb03c4dce26fd0b0eb4a369d84b77e0db9db43434f89e82ed194aebd",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793604077,
+   "context": {
+    "blockNumber": "35208708",
+    "cex": {
+     "at": 1793604074,
+     "halfSpreadBps": 0,
+     "mid": "7826681500000",
+     "topDepthUsd": "60.27"
+    },
+    "oracle": {
+     "ageSec": 2840,
+     "price": "7818248500000",
+     "roundId": "1793601232000",
+     "updatedAt": 1793601232
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "194.70840491",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "75"
+    },
+    "pool": {
+     "deviationBps": 41,
+     "liquidity": "1783701361",
+     "price": "7849785591981",
+     "twap": "7849081677787",
+     "twapDeviationBps": 40
+    }
+   },
+   "engine": "llm",
+   "kind": "no_trade",
+   "market": "hsk-dex:WBTC/USDT:3000",
+   "prevHash": "0x939974bf96046b1e9b978091e0400337a01b67ad1907683105f575c37aaf21a0",
+   "profile": "default",
+   "rationale": "Only the standing discretionary_exit candidate exists (sell 69974 sats, netEdge -70bps); position unrealised is only -14bps exit / -3bps CEX, no stop-loss trigger, and the daemon generated no spread-revert or rebalance candidate this cycle (pool trades ~40bps above oracle/CEX, within normal band, no net-edge entry after costs). CEX book here is tight (0bps half-spread) but depth is thin ($60) so any entry edge would be marginal after slippage anyway. Discretionary lane: no distinct thesis beyond what generators already see; declining to use one of the 3 daily discretionary slots for a non-signal.",
+   "rationaleHash": "0x797c6baee007965ea2ced096c1f128ac742d7ba0a8d2051679560bc44b15bbed",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "no_signal",
+    "ok": true
+   }
+  },
+  {
+   "seq": 125,
+   "id": "dec_d5fa1671e63cf134",
+   "hash": "0xd5fa1671e63cf13461ea11b1870949223b38c19bcd7b780c6108ebf5c7fe84b7",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793604193,
+   "context": {
+    "blockNumber": "35208763",
+    "cex": {
+     "at": 1793604182,
+     "halfSpreadBps": 5,
+     "mid": "8765000",
+     "topDepthUsd": "98.02"
+    },
+    "oracle": {
+     "ageSec": 21586,
+     "price": "8741500",
+     "roundId": "1793582596000",
+     "updatedAt": 1793582596
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "22.67467038",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "45.64618951"
+    },
+    "pool": {
+     "deviationBps": 8,
+     "liquidity": "744097250641454677",
+     "price": "8735291",
+     "twap": "8734622",
+     "twapDeviationBps": 8
+    }
+   },
+   "engine": "llm",
+   "kind": "no_trade",
+   "market": "hsk-dex:WHSK/USDT:3000",
+   "prevHash": "0x13cb5c21cb03c4dce26fd0b0eb4a369d84b77e0db9db43434f89e82ed194aebd",
+   "profile": "demo",
+   "rationale": "Only candidate offered is the standing discretionary_exit (sell full 252.79 WHSK, cost ~65-71bps, edge 0, netEdge -65 to -71bps). Position unrealised exit P&L is only -0.11 USD / -60bps, not a stop-loss/TP situation, and taking the exit now would just lock in the spread cost for no edge, so not binding it. No spread-revert or rebalance candidate was generated this cycle. Discretionary lane: CEX book is thin ($98 top depth) and pool/oracle deviation is only 8bps, no mispricing signal worth a $≤10 position; skipping discretionary origination this cycle.",
+   "rationaleHash": "0xc6ea832e1143a472bb4be894950cd26b5af69824a12a7bc8a211d527560d40e4",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "no_signal",
+    "ok": true
+   }
+  },
+  {
+   "seq": 126,
+   "id": "dec_08d24ae778fcade5",
+   "hash": "0x08d24ae778fcade5754fa22c2817f17ef4565c6cdbd94e01b4e9290ecbe52396",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793604197,
+   "context": {
+    "blockNumber": "35208769",
+    "cex": {
+     "at": 1793604185,
+     "halfSpreadBps": 0,
+     "mid": "7820247500000",
+     "topDepthUsd": "60.22"
+    },
+    "oracle": {
+     "ageSec": 2962,
+     "price": "7818248500000",
+     "roundId": "1793601232000",
+     "updatedAt": 1793601232
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "194.70840491",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "75"
+    },
+    "pool": {
+     "deviationBps": 41,
+     "liquidity": "1783701361",
+     "price": "7849785591981",
+     "twap": "7849081677787",
+     "twapDeviationBps": 40
+    }
+   },
+   "engine": "llm",
+   "kind": "no_trade",
+   "market": "hsk-dex:WBTC/USDT:3000",
+   "prevHash": "0xd5fa1671e63cf13461ea11b1870949223b38c19bcd7b780c6108ebf5c7fe84b7",
+   "profile": "default",
+   "rationale": "Only candidate is the standing discretionary_exit (sell full 69974 sats WBTC, cost ~70bps, edge 0, netEdge -70bps). Current unrealised exit P&L is -0.08 USD/-14bps, far from a stop-loss trigger, so exiting now would just realize the spread cost for no benefit — not binding it. No spread-revert or rebalance candidate was generated this cycle despite pool trading ~40bps above oracle/TWAP (profile=default, no waiver), but that gap is on the sell side relative to our long and the daemon didn't surface an open/close candidate to act on. Discretionary lane: CEX spread is essentially zero (halfSpreadBps=0) with thin $60 depth and oracle is fresh — no distinct edge the generators are missing, so skipping discretionary origination.",
+   "rationaleHash": "0x154fe46d02e4d49889d550588a89fb4f9993f75c449ae842abfbcc8fb8c2c320",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "no_signal",
+    "ok": true
+   }
+  },
+  {
+   "seq": 127,
+   "id": "dec_9c27f3ea94e05b43",
+   "hash": "0x9c27f3ea94e05b43eb8878a428c3929772df8b8ec947528361bb11c763a946f0",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793604702,
+   "context": {
+    "blockNumber": "35208769",
+    "cex": {
+     "at": 1793604182,
+     "halfSpreadBps": 5,
+     "mid": "8765000",
+     "topDepthUsd": "98.02"
+    },
+    "oracle": {
+     "ageSec": 21598,
+     "price": "8741500",
+     "roundId": "1793582596000",
+     "updatedAt": 1793582596
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "22.67467038",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "45.64618951"
+    },
+    "pool": {
+     "deviationBps": 8,
+     "liquidity": "744097250641454677",
+     "price": "8735291",
+     "twap": "8734622",
+     "twapDeviationBps": 8
+    }
+   },
+   "engine": "rules",
+   "kind": "no_trade",
+   "market": "hsk-dex:WHSK/USDT:3000",
+   "prevHash": "0x08d24ae778fcade5754fa22c2817f17ef4565c6cdbd94e01b4e9290ecbe52396",
+   "profile": "demo",
+   "rationale": "[engine=rules] runner killed LLM cycle 23 after 90 s; its open proposals expire normally and their reservations are released",
+   "rationaleHash": "0x80df904261558693613a6e2a1bd44a18a083633b6b3e96ac7934ff070e3a1377",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "timeout",
+    "ok": true
+   }
+  },
+  {
+   "seq": 128,
+   "id": "dec_a9ec7e7cf9ca8e9d",
+   "hash": "0xa9ec7e7cf9ca8e9db4260988c4bdbc0b1d3e88645110e93158da00cfde65a0bd",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793604702,
+   "context": {
+    "blockNumber": "35208769",
+    "cex": {
+     "at": 1793604185,
+     "halfSpreadBps": 0,
+     "mid": "7820247500000",
+     "topDepthUsd": "60.22"
+    },
+    "oracle": {
+     "ageSec": 2962,
+     "price": "7818248500000",
+     "roundId": "1793601232000",
+     "updatedAt": 1793601232
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "194.70840491",
+     "maxTradeUsd": "100",
+     "turnoverRemainingUsd": "75"
+    },
+    "pool": {
+     "deviationBps": 41,
+     "liquidity": "1783701361",
+     "price": "7849785591981",
+     "twap": "7849081677787",
+     "twapDeviationBps": 40
+    }
+   },
+   "engine": "rules",
+   "kind": "no_trade",
+   "market": "hsk-dex:WBTC/USDT:3000",
+   "prevHash": "0x9c27f3ea94e05b43eb8878a428c3929772df8b8ec947528361bb11c763a946f0",
+   "profile": "default",
+   "rationale": "[engine=rules] runner killed LLM cycle 23 after 90 s; its open proposals expire normally and their reservations are released",
+   "rationaleHash": "0x80df904261558693613a6e2a1bd44a18a083633b6b3e96ac7934ff070e3a1377",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "timeout",
+    "ok": true
+   }
+  },
+  {
+   "seq": 129,
+   "id": "dec_a5e945d69788109e",
+   "hash": "0xa5e945d69788109e31575a55f8439091899399617ea8767d689ed77e361bc18e",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793605825,
+   "context": {
+    "blockNumber": "0",
+    "oracle": {
+     "ageSec": 0,
+     "price": "0",
+     "roundId": "0",
+     "updatedAt": 0
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "0",
+     "maxTradeUsd": "0",
+     "turnoverRemainingUsd": "45.64618951"
+    },
+    "pool": {
+     "deviationBps": 0,
+     "liquidity": "0",
+     "price": "0",
+     "twap": "0",
+     "twapDeviationBps": 0
+    }
+   },
+   "engine": "rules",
+   "kind": "no_trade",
+   "market": "hsk-dex:WHSK/USDT:3000",
+   "prevHash": "0xa9ec7e7cf9ca8e9db4260988c4bdbc0b1d3e88645110e93158da00cfde65a0bd",
+   "profile": "demo",
+   "rationale": "[engine=rules] runner killed LLM cycle 24 after 90 s; its open proposals expire normally and their reservations are released",
+   "rationaleHash": "0x13ada04c3cb049b02dbf872595d6d9280e534e540c4c467aee7bf5fd528bca55",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "timeout",
+    "ok": true
+   }
+  },
+  {
+   "seq": 130,
+   "id": "dec_36740953a5e08818",
+   "hash": "0x36740953a5e088180c7cd396039b39a95cf5769eb0429226244e3d692c37f398",
+   "actor": {
+    "address": "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+    "kind": "agent",
+    "via": "mcp"
+   },
+   "at": 1793605825,
+   "context": {
+    "blockNumber": "0",
+    "oracle": {
+     "ageSec": 0,
+     "price": "0",
+     "roundId": "0",
+     "updatedAt": 0
+    },
+    "policy": {
+     "cooldownRemainingSec": 0,
+     "epochRemainingUsd": "0",
+     "maxTradeUsd": "0",
+     "turnoverRemainingUsd": "75"
+    },
+    "pool": {
+     "deviationBps": 0,
+     "liquidity": "0",
+     "price": "0",
+     "twap": "0",
+     "twapDeviationBps": 0
+    }
+   },
+   "engine": "rules",
+   "kind": "no_trade",
+   "market": "hsk-dex:WBTC/USDT:3000",
+   "prevHash": "0xa5e945d69788109e31575a55f8439091899399617ea8767d689ed77e361bc18e",
+   "profile": "default",
+   "rationale": "[engine=rules] runner killed LLM cycle 24 after 90 s; its open proposals expire normally and their reservations are released",
+   "rationaleHash": "0x13ada04c3cb049b02dbf872595d6d9280e534e540c4c467aee7bf5fd528bca55",
+   "verdict": {
+    "code": "NO_TRADE",
+    "message": "timeout",
+    "ok": true
+   }
+  }
+ ]
+}

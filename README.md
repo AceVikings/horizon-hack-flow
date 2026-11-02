@@ -20,7 +20,7 @@ These links are on the HashKey Chain **testnet** (chain 133), with test tokens. 
 2. [An AI trade](https://testnet-explorer.hskchain.net/tx/0x4ff2ad5176975fed3b45e5242894cce949b68b626051e82ec3d270474fde9c0d) and [its EAS attestation](https://testnet-explorer.hskchain.net/tx/0x1f042937320537b9e3b749d327eb2648613aeb1c6319a476f48341bba0a798f8).
 3. [A rogue agent trade that reverted](https://testnet-explorer.hskchain.net/tx/0x0677fb8896195c736201374805876d0aa0122b0ea57ecdf08b5f78f40b531558) (bad price).
 4. [Pause](https://testnet-explorer.hskchain.net/tx/0xaba62b83fd096241a703c4f4ced8b7a7eb4a3e9101a127c71c60e1c11c4a221a), then [unpause](https://testnet-explorer.hskchain.net/tx/0x530bafc2456b50dd35ee58359f02b1c4b8e44c9719f154caff7e599680f9e949) (Vault-HSK); the same on Vault-BTC: [pause](https://testnet-explorer.hskchain.net/tx/0xbfe744ebf7e53f8375c11247b5de1a721cbf0dfa8c66487a4bdacdf4cf130de6), [trade refused](https://testnet-explorer.hskchain.net/tx/0x37e290d6bc3048f77c95563c39fa0dc2d336f2628f227c7cbe9a7bdaf7c41575), [unpause](https://testnet-explorer.hskchain.net/tx/0x486ea3f24e20f3cc928b07a3c61bb2ad86ed51bbb614809a0946288066b77e61).
-5. [The journal export](docs/testnet-133-journal.json) (70 records, hash chain). Recompute every hash offline: `node scripts/verify-journal.mjs`.
+5. [The journal export](docs/testnet-133-journal.json) (70 records, hash chain). Recompute every hash offline: `node scripts/verify-journal.mjs`. A 71-minute unattended run continues it in [`testnet-133-journal-run2.json`](docs/testnet-133-journal-run2.json).
 
 What each link shows: [`docs/JUDGE.md`](docs/JUDGE.md).
 
@@ -466,7 +466,7 @@ flowchart LR
 ```mermaid
 timeline
     title Roadmap
-    Now : Testnet vaults (chain 133) : AI trader running unattended
+    Now : Testnet vaults (chain 133) : AI trader ran unattended for 71 min (24 cycles, demo profile on HSK)
     Next : Mainnet vaults (chain 177) : Source verified on Blockscout and Sourcify
     30 days : Vault owner moves to a Safe : Published npm packages for other agent teams
     60 days : More HSKSwap markets : Kredo prediction-market adapter
