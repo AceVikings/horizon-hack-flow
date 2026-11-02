@@ -9,6 +9,7 @@ import { useApp, useNow, useRemote } from "../src/app";
 import { baseDecimals, fmtUnits } from "../src/format";
 import { PageHead, useNav } from "../src/shell";
 import { Btn, Pill, TxLink } from "../src/ui";
+import { CodeApprove, approveRiskier } from "./approveCode";
 import type { ViewProps } from "./registry";
 
 const PROMPTS = ["How am I doing?", "Show me BTC price today", "Stop trading", "Go to cash"];
@@ -41,6 +42,14 @@ const money = (s: string) => {
   const n = Number(s);
   return `${n > 0 ? "+" : n < 0 ? "−" : ""}$${Math.abs(n).toFixed(2)}`;
 };
+
+/** Hide internal ids and helper names from agent replies (the card above already shows the change). */
+const plain = (t: string) =>
+  t
+    .split("\n")
+    .filter((l) => !/changeId|ate-approve|chg_[0-9a-f]{8}/.test(l))
+    .join("\n")
+    .trim();
 
 type ToolRes = { ok?: boolean; data?: unknown; error?: { code?: string; message?: string; details?: PendingChange } } | undefined;
 type Block = { kind: "user"; m: ChatMessage } | { kind: "agent"; parts: ChatMessage[] };
@@ -84,25 +93,53 @@ export default function Ask(_: ViewProps) {
     hist.reload();
     setTimeout(() => setSending(false), 1200);
   };
+  const [codes, setCodes] = useState<Record<string, { code: string; expiresAt: number } | null>>({});
   const confirm = async (p: PendingChange) => {
     setDecided((d) => ({ ...d, [p.changeId]: "busy" }));
-    const r = await ate.strategy.approve(p.changeId);
-    setDecided((d) => ({ ...d, [p.changeId]: r.ok ? "ok" : "no" }));
-    if (r.ok) toast({ kind: "ok", text: p.confirm === "sells_now" ? "Confirmed. The vault is selling now." : "Approved and applied." });
-    else {
+    const fail = (m: string) => {
       setDecided((d) => {
         const n = { ...d };
         delete n[p.changeId];
         return n;
       });
-      toast({ kind: "error", text: r.error.message, ...(r.error.hint ? { sub: r.error.hint } : {}) });
+      toast({ kind: "error", text: m });
+    };
+    if (p.confirm === "sells_now") {
+      // go to cash only tightens risk: a plain confirm, no Touch ID
+      const r = ate.approvals ? await ate.approvals.confirm(p.changeId) : null;
+      if (r?.ok) {
+        setDecided((d) => ({ ...d, [p.changeId]: "ok" }));
+        toast({ kind: "ok", text: "Done. The vault is selling now." });
+      } else fail(r && !r.ok ? r.error.message : "offline");
+      return;
     }
+    const r = await approveRiskier(ate, p.changeId);
+    if (r.done) {
+      setDecided((d) => ({ ...d, [p.changeId]: "ok" }));
+      toast({ kind: "ok", text: "Approved and applied." });
+    } else if (r.code) {
+      setDecided((d) => ({ ...d, [p.changeId]: "busy" }));
+      setCodes((c) => ({ ...c, [p.changeId]: r.code }));
+    } else fail(r.message);
   };
   const cancel = async (p: PendingChange) => {
     setDecided((d) => ({ ...d, [p.changeId]: "no" }));
     if (ate.approvals) await ate.approvals.reject(p.changeId);
   };
 
+  const codeEntry = (p: PendingChange) =>
+    codes[p.changeId] ? (
+      <CodeApprove
+        ate={ate}
+        changeId={p.changeId}
+        code={codes[p.changeId]!}
+        onDone={(ok, m) => {
+          setDecided((d) => ({ ...d, [p.changeId]: ok ? "ok" : "busy" }));
+          if (ok) setCodes((c) => ({ ...c, [p.changeId]: null }));
+          toast(ok ? { kind: "ok", text: "Approved and applied." } : { kind: "error", text: m ?? "Code rejected" });
+        }}
+      />
+    ) : null;
   const engine = ai.last ? (ai.last.credential === "none" ? "simple answers (no AI account)" : ai.last.modelLabel) : null;
 
   return (
@@ -136,10 +173,10 @@ export default function Ask(_: ViewProps) {
               {b.parts.map((p) =>
                 p.role === "agent" ? (
                   <div key={p.id} style={{ whiteSpace: "pre-wrap", marginTop: 4 }}>
-                    {p.text}
+                    {plain(p.text)}
                   </div>
                 ) : (
-                  <ToolLine key={p.id} m={p} open={!!open[p.id]} onToggle={() => setOpen((o) => ({ ...o, [p.id]: !o[p.id] }))} now={now} decided={decided} onConfirm={confirm} onCancel={cancel} />
+                  <ToolLine key={p.id} m={p} open={!!open[p.id]} onToggle={() => setOpen((o) => ({ ...o, [p.id]: !o[p.id] }))} now={now} decided={decided} onConfirm={confirm} onCancel={cancel} code={codeEntry} />
                 ),
               )}
             </div>
@@ -181,7 +218,7 @@ export default function Ask(_: ViewProps) {
   );
 }
 
-function ToolLine({ m, open, onToggle, now, decided, onConfirm, onCancel }: { m: ChatMessage; open: boolean; onToggle(): void; now: number; decided: Record<string, "ok" | "no" | "busy">; onConfirm(p: PendingChange): void; onCancel(p: PendingChange): void }) {
+function ToolLine({ m, open, onToggle, now, decided, onConfirm, onCancel, code }: { m: ChatMessage; open: boolean; onToggle(): void; now: number; decided: Record<string, "ok" | "no" | "busy">; onConfirm(p: PendingChange): void; onCancel(p: PendingChange): void; code(p: PendingChange): React.ReactNode }) {
   const name = m.tool?.name ?? m.text;
   const res = m.tool?.result as ToolRes;
   const pending = res?.ok === false && res.error?.code === "ATE_APPROVAL_REQUIRED" ? res.error.details : undefined;
@@ -207,12 +244,13 @@ function ToolLine({ m, open, onToggle, now, decided, onConfirm, onCancel }: { m:
           {!d && !expired && (
             <div className="row g10" style={{ marginTop: 12 }}>
               <Btn kind="pri" onClick={() => onConfirm(pending)}>
-                Confirm with Touch ID
+                {sells ? "Sell now" : "Approve with Touch ID"}
               </Btn>
-              <Btn onClick={() => onCancel(pending)}>Cancel</Btn>
+              <Btn onClick={() => onCancel(pending)}>{sells ? "Keep it" : "Cancel"}</Btn>
             </div>
           )}
-          {d === "busy" && <div className="sm fg2" style={{ marginTop: 10 }}>Waiting for Touch ID…</div>}
+          {d === "busy" && !expired && code(pending)}
+          {d === "busy" && !code(pending) && !sells && <div className="sm fg2" style={{ marginTop: 10 }}>Waiting for Touch ID…</div>}
         </div>
       </section>
     );

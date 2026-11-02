@@ -8,6 +8,7 @@ import { useApp, useNow, useRemote } from "../src/app";
 import { ago, int } from "../src/format";
 import { PageHead, useNav } from "../src/shell";
 import { Btn, Seg } from "../src/ui";
+import { CodeApprove, approveRiskier } from "./approveCode";
 import type { ViewProps } from "./registry";
 
 type Mode = "autonomous" | "propose" | "watch";
@@ -94,7 +95,19 @@ export default function Agent(_: ViewProps) {
     else if (r.ok) toast({ kind: "ok", text: `Trading ${PRESETS.find((x) => x.id === p)!.name.toLowerCase()}` });
   };
   const setModel = (m: string) => sel && void act("model", () => ate.engine!.select(sel.id, m), `Model: ${models.find((x) => x.id === m)?.label ?? m}`);
-  const approve = (p: PendingChange) => act(p.changeId, () => ate.strategy.approve(p.changeId), p.confirm === "sells_now" ? "Confirmed. The vault sells now." : "Approved");
+  const [codes, setCodes] = useState<Record<string, { code: string; expiresAt: number } | null>>({});
+  const approve = async (p: PendingChange) => {
+    // go to cash only tightens risk: a plain confirm, no Touch ID
+    if (p.confirm === "sells_now") return act(p.changeId, () => (ate.approvals ? ate.approvals.confirm(p.changeId) : Promise.resolve({ ok: false as const, error: { code: "ATE_INTERNAL" as never, message: "offline" } })), "Confirmed. The vault sells now.");
+    setBusy(p.changeId);
+    const r = await approveRiskier(ate, p.changeId);
+    setBusy(null);
+    if (r.done) toast({ kind: "ok", text: "Approved" });
+    else if (r.code) setCodes((c) => ({ ...c, [p.changeId]: r.code }));
+    else toast({ kind: "error", text: r.message });
+    pend.reload();
+    strat.reload();
+  };
   const reject = (p: PendingChange) => act(p.changeId, () => (ate.approvals ? ate.approvals.reject(p.changeId) : Promise.resolve({ ok: true as const, data: null })), "Rejected. Nothing changed.");
 
   const status = t?.stopping ? "Stopping after this check." : t?.running ? (t.mode === "propose" ? "Your agent suggests trades. It does not trade." : t.runtime === "rules" ? "Your agent is trading on simple rules (no AI account yet)." : "Your agent is trading.") : t?.external ? "Your agent is trading (started outside Flow)." : t ? "Your agent is off. The vault still sells to protect you." : "";
@@ -123,7 +136,7 @@ export default function Agent(_: ViewProps) {
               </div>
               <div className="row g8" style={{ marginTop: 12, alignItems: "center" }}>
                 <Btn kind="pri" disabled={busy === p.changeId} onClick={() => void approve(p)}>
-                  {busy === p.changeId ? "Touch ID…" : "Approve with Touch ID"}
+                  {p.confirm === "sells_now" ? "Confirm" : busy === p.changeId ? "Touch ID…" : "Approve with Touch ID"}
                 </Btn>
                 <Btn disabled={busy === p.changeId} onClick={() => void reject(p)}>
                   Reject
@@ -132,6 +145,19 @@ export default function Agent(_: ViewProps) {
                   {p.confirm === "sells_now" ? "sells now" : "takes more risk"} · expires in {mmss(p.expiresAt - now)}
                 </span>
               </div>
+              {codes[p.changeId] && (
+                <CodeApprove
+                  ate={ate}
+                  changeId={p.changeId}
+                  code={codes[p.changeId]!}
+                  onDone={(ok, m) => {
+                    toast(ok ? { kind: "ok", text: "Approved" } : { kind: "error", text: m ?? "Code rejected" });
+                    if (ok) setCodes((c) => ({ ...c, [p.changeId]: null }));
+                    pend.reload();
+                    strat.reload();
+                  }}
+                />
+              )}
             </div>
           ))}
         </section>
