@@ -193,8 +193,15 @@ flowchart LR
     X["Stolen agent key"] -. "withdraw ✗ · change limits ✗<br/>other pool ✗ · other token ✗" .-> V
 ```
 
-- The owner key is never on the agent computer.
-- On testnet the owner is a separate deployer key. On mainnet it is a hardware wallet or a Safe.
+- Flow holds the owner key for you, so you never sign by hand. It lives in a separate owner service: its own
+  process, its own credentials (a separate keychain item on the desktop, a separate secret or KMS key in the cloud).
+  The agent, the trader and the chat have no route, token or credential that reaches it.
+- The owner service decides what needs your approval by reading the chain. Raising a limit, unpausing, a new agent or
+  guardian, a withdrawal or sending gas needs Touch ID (desktop) or your passkey (cloud), and the owner service
+  checks that approval itself. Tightening a limit or pausing runs at once.
+- What this changes: before, the owner key was on another device. Now Flow manages it, isolated from the agent but
+  on the same machine or service. Someone who takes over the whole machine or container, not only the agent, could
+  reach the owner key. A hacked or misled agent still cannot.
 - The agent key can only trade inside the limits, and pause.
 - Any key with a role can pause. Only the owner can unpause.
 - The pool, the oracle and the router are fixed when you deploy the vault. Nobody can change them.
@@ -384,6 +391,24 @@ These steps run on the testnet (chain 133), which is live today. Mainnet uses `d
    ```sh
    cd apps/desktop && npx -y pnpm@9.15.0 dev        # or: dev:fixtures
    ```
+
+### Run Flow in the cloud
+
+The same app runs as a web app: one container with three processes. The gateway serves the app and handles
+sign-in (passkey, or a password as a fallback). The owner service holds the owner key. The daemon runs the agent and
+the trader. TLS comes from the host.
+
+```sh
+docker build -t flow-cloud .
+docker run -p 8080:8080 -v flow-data:/data -e FLOW_ORIGIN=https://flow.example.com -e FLOW_PASSWORD=… \
+  -e ATE_AGENT_SIGNER=secret -e ATE_AGENT_KEY_ENC=… -e ATE_AGENT_KEY_SECRET=… \
+  -e ATE_OWNER_SIGNER=secret -e ATE_OWNER_KEY_ENC=… -e ATE_OWNER_KEY_SECRET=… flow-cloud
+```
+
+`ATE_<ROLE>_KEY_ENC` is a key sealed with scrypt and AES-GCM for that role (`flow-owner seal` makes the owner one).
+For KMS, set `ATE_<ROLE>_SIGNER=kms` and `ATE_<ROLE>_KMS_KEY_ID` (an `ECC_SECG_P256K1` key), and give the owner key
+its own IAM principal. `/healthz` reports the gateway, the daemon and the owner service.
+`scripts/cloud-deploy-branch.sh --push` builds the `cloud-deploy` branch the host builds the image from.
 
 For all testnet commands, refer to [`docs/TESTNET.md`](docs/TESTNET.md).
 For the deployment to the mainnet (chain 177), refer to [`contracts/README.md`](contracts/README.md).

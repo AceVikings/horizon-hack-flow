@@ -309,6 +309,10 @@ withdraw, raise my own caps, and trade after the kill switch." Every attempt fai
  moves to a third device when one is available (§4.1).
 ```
 
+**Flow v1 (desktop and cloud):** the "second device" above is replaced by a Flow-managed owner service in its own
+process with its own credentials (§8.1a); in the cloud one container runs the gateway (web app, auth), the owner
+service and the daemon (`apps/cloud`, Dockerfile).
+
 **Why a separate daemon process:** the renderer can be compromised by malicious content or a
 supply-chain issue; the daemon must not depend on it. It also enables headless operation
 (`ate daemon start --headless`, `ate mcp serve`).
@@ -332,6 +336,8 @@ the sum of the two vaults' limits (§4.6).
 | Daemon ↔ worker | SSM tunnel + bearer token + digest-bound approvals | network path |
 | Trader ↔ signal agent | signed payment conditions | signal content (data, never instructions) |
 | Daemon ↔ KB (v1.0) | local files | ingested content (prompt-injection carrier) |
+| Supervisor (Electron main / cloud gateway) ↔ owner service (Flow v1, §8.1a) | loopback + supervisor-only bearer; approvals verified by the owner service | the request (it re-reads the chain and decides what needs approval) |
+| Browser ↔ cloud gateway (Flow v1) | passkey or password session (httpOnly Secure SameSite=Strict cookie) + origin + CSRF header | everything else |
 
 ### 3.3 Package layout
 
@@ -1226,6 +1232,31 @@ the bound is the sum of the two vaults' on-chain limits, which is how §4.6 stat
 payments without a Touch ID approval of a payload-rendered request (§10.1) —
 **except** while an operator AWS session is live on the same Mac, when it can reach the worker and spend
 the payer float (≤ $1.00/day; §3.4 residual risk).
+
+### 8.1a Flow-managed owner key (Flow v1, desktop and cloud) — threat model change
+
+Product decision: no manual signing anywhere (no owner-device QR, no hardware-wallet step, no wallet popup), and the
+product runs in the cloud as well as on the desktop. The owner key is therefore **Flow-managed**, and §8.1's "never
+on the agent's machine" no longer holds. What replaces it:
+
+- **Two signer roles, strictly separate** (`@ate/wallet`): `agent` and `owner`, each with its own backend and env
+  namespace (`ATE_AGENT_*` / `ATE_OWNER_*`): keystore (keychain / file), env secret (scrypt + AES-256-GCM blob; the
+  role is bound into the AAD), or AWS KMS (`ECC_SECG_P256K1`; DER → r, s, low-s, recovery id).
+- **Owner service** (`apps/owner`): its own process and credentials; the only holder of the owner signer. The daemon,
+  TxQueue, trader and chat have no import of it, no route to it and no token for it, and the daemon refuses to start
+  if any `ATE_OWNER_*` is in its environment. Supervisors (Electron main, the cloud gateway) hold its bearer token.
+- **Approvals verified by the owner service itself.** It reads the chain and classifies each op: looser limits,
+  unpause, setAgent / setGuardian, withdraw and sending gas need a Touch ID signature (pinned ate-approve key) or a
+  passkey assertion (challenge = sha256 of the approval payload), single-use, 120 s. Tighter limits, pause and a
+  default deploy run at once. A supervisor that relays the request cannot approve for the user.
+- **Cloud boundary.** Production: separate KMS keys with separate IAM principals (the agent's principal has no
+  `kms:Sign` on the owner key), ideally the owner service in its own container. The single-container testnet
+  deployment runs the three processes as one OS user and receives both sealed secrets in its environment, so its
+  boundary is process + code path, not OS or IAM: a full compromise of that container (arbitrary code, not only a
+  misled agent) can reach the owner key. Same on the desktop: a separate keychain item and process, same OS user.
+- **What still holds:** a misled or prompt-injected agent, or a stolen agent key, cannot change limits, withdraw,
+  unpause or repoint the vault (§8.1 consequence unchanged). **What is weaker:** a full machine or container
+  compromise is no longer bounded by the vault's limits, because the owner key is reachable there.
 
 ### 8.2 Rules
 
