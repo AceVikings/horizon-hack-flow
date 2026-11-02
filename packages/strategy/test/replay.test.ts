@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { MARKET_WBTC, MARKET_WHSK } from "@ate/core";
 import { sqrtPriceX96FromPrice } from "@ate/core/fixtures";
-import { decodeSwapData, defaultReplayParams, impactBpsForUsd, renderReport, simulate, type Kline, type SwapPoint } from "../src/replay/index.js";
+import { decodeSwapData, defaultReplayParams, impactBpsForUsd, renderReport, simulate, twapKlines, type Kline, type SwapPoint } from "../src/replay/index.js";
 
 const enc = (x: bigint) => (x < 0n ? (1n << 256n) + x : x).toString(16).padStart(64, "0");
 
@@ -35,7 +35,7 @@ describe("replay", () => {
     const swaps = [swap(from - 10, 7_714_461_000_000n, 8, 10n ** 14n)];
     const klines: Kline[] = [];
     for (let t = from - 60; t <= to; t += 60) klines.push({ t, close: 78_023.15 });
-    const { report } = simulate(MARKET_WBTC, swaps, klines, from, to, defaultReplayParams(MARKET_WBTC, 0.01));
+    const { report } = simulate(MARKET_WBTC, swaps, klines, from, to, defaultReplayParams(MARKET_WBTC, 0.01, "cex"));
     expect(report.fired.buy).toBe(report.cyclesWithData);
     expect(report.counterfactual.firedMeanNetBps!).toBeGreaterThan(70);
     expect(report.counterfactual.taken).toBe(6); // 4 on day 1 ($100 share ÷ $25), then capped by maxPositionUsd $150 on day 2
@@ -46,12 +46,12 @@ describe("replay", () => {
   });
 
   it("WHSK: 30 bps gaps never fire; transient spikes close; report says no edge after fees", () => {
-    const from = 2_000_000;
+    const from = 1_800_000;
     const to = from + 6 * 3600;
     const swaps = [swap(from - 1, 8_790_000n, 18, 10n ** 22n), swap(from + 3600, 8_700_000n, 18, 10n ** 22n), swap(from + 3600 + 600, 8_790_000n, 18, 10n ** 22n)];
     const klines: Kline[] = [];
     for (let t = from - 60; t <= to; t += 60) klines.push({ t, close: 0.088164 });
-    const { report } = simulate(MARKET_WHSK, swaps, klines, from, to, defaultReplayParams(MARKET_WHSK, 5.7));
+    const { report } = simulate(MARKET_WHSK, swaps, klines, from, to, defaultReplayParams(MARKET_WHSK, 5.7, "cex"));
     expect(report.fired.buy + report.fired.sell).toBeGreaterThan(0); // the 1.3% dip for 10 min
     expect(report.episodes.closed).toBe(1);
     expect(report.episodes.medianTimeToCloseSec).toBe(600);
@@ -60,5 +60,23 @@ describe("replay", () => {
     const md = renderReport([report], { generatedAt: to, days: 1, source: "test", notes: [] });
     expect(md).toMatch(/Counterfactual, from logs, not realised P&L/);
     expect(md).toMatch(/Top-decile gaps/);
+  });
+
+  it("on-chain reference (default): the pool's own 300 s TWAP rebuilt from Swap logs; a swap-driven dip fires a buy", () => {
+    const from = 1_800_000;
+    const to = from + 2 * 3600;
+    const swaps = [swap(from - 600, 8_790_000n, 18, 10n ** 22n), swap(from + 3600, 8_650_000n, 18, 10n ** 22n)];
+    const tw = twapKlines(swaps, from, to);
+    expect(tw.find((k) => k.t === from + 3600)!.close).toBeCloseTo(0.0879, 6);
+    expect(tw.find((k) => k.t === from + 3600 + 120)!.close).toBeCloseTo((180 * 0.0879 + 120 * 0.0865) / 300, 6);
+    expect(tw.find((k) => k.t === from + 3600 + 300)!.close).toBeCloseTo(0.0865, 6);
+    const p = defaultReplayParams(MARKET_WHSK, 0);
+    expect(p.reference).toBe("twap");
+    const { report } = simulate(MARKET_WHSK, swaps, tw, from, to, p);
+    expect(report.fired.buy).toBeGreaterThan(0);
+    const md = renderReport([report], { generatedAt: to, days: 1, source: "test", notes: [] });
+    expect(md).toMatch(/pool − TWAP/);
+    expect(md).toMatch(/no readable price history/);
+    expect(md).not.toMatch(/CEX half-spread/);
   });
 });

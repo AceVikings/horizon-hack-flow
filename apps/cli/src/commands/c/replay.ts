@@ -1,4 +1,5 @@
-// `ate replay --days 7` (§11.3 Replay, E11): both markets, pool Swap logs (Blockscout) + HashKey Global 1 m klines
+// `ate replay --days 7` (§11.3 Replay, E11): both markets, pool Swap logs measured against the pool's own 300 s TWAP
+// (on-chain, default) or HashKey Global 1 m klines (`--reference cex`, optional)
 // → docs/replay-7d.md. Needs no vault. Counterfactual, from logs, not realised P&L.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -9,9 +10,9 @@ import type { CommandModule } from "../index.js";
 
 const cmd: CommandModule = {
   name: "replay",
-  summary: "Replay the last N days of both pools vs HashKey Global (counterfactual, E11) → docs/replay-7d.md",
+  summary: "Replay the last N days of both pools vs an on-chain reference (pool TWAP; counterfactual, E11) → docs/replay-7d.md",
   usage: [
-    "ate replay [--days 7] [--market WHSK|WBTC] [--out docs/replay-7d.md] [--json out.json]",
+    "ate replay [--days 7] [--market WHSK|WBTC] [--reference twap|cex] [--out docs/replay-7d.md] [--json out.json]",
     "           [--half-spread WHSK=5.7,WBTC=0.01] [--source rpc|blockscout] [--rpc URL] [--blockscout URL] [--delay-ms 1000]",
   ].join("\n"),
   async run(ctx) {
@@ -23,6 +24,7 @@ const cmd: CommandModule = {
         out: { type: "string" },
         json: { type: "string" },
         "half-spread": { type: "string" },
+        reference: { type: "string", default: "twap" },
         blockscout: { type: "string" },
         rpc: { type: "string" },
         source: { type: "string", default: "rpc" },
@@ -48,6 +50,7 @@ const cmd: CommandModule = {
       days,
       markets,
       halfSpreadBps,
+      reference: values.reference === "cex" ? "cex" : "twap",
       ...(values.blockscout ? { blockscout: values.blockscout } : {}),
       ...(values.rpc ? { rpcUrl: values.rpc } : {}),
       source: values.source === "blockscout" ? "blockscout" : "rpc",

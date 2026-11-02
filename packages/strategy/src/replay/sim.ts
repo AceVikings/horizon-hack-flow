@@ -1,4 +1,5 @@
-// `ate replay --days N` simulation (§11.3 Replay, E11). Pure: takes pool Swap points and CEX 1 m klines,
+// `ate replay --days N` simulation (§11.3 Replay, E11). Pure: takes pool Swap points and a reference price series
+// (default: the pool's own 300 s TWAP rebuilt from the Swap logs — on-chain; optional: HashKey Global 1 m klines),
 // runs the default-profile spread-revert rules on a cycleSeconds grid and measures gap persistence.
 // Counterfactual, from logs, not realised P&L. Our own trades' pool impact is not simulated.
 
@@ -26,7 +27,12 @@ export interface Kline {
   volume?: number;
 }
 
+/** Replay reference: "twap" = the pool's 300 s TWAP from its own Swap logs (on-chain, default); "cex" = HashKey Global (optional, the earlier reference). */
+export type ReplayReference = "twap" | "cex";
+
 export interface ReplayParams {
+  /** Absent = "cex" (reports written before the on-chain reference). */
+  reference?: ReplayReference;
   cycleSeconds: number;
   entrySpreadBps: number;
   minNetEdgeBps: number;
@@ -41,6 +47,7 @@ export interface ReplayParams {
 export interface CycleRow {
   at: number;
   pool: number;
+  /** The reference price (the pool TWAP by default; the HashKey Global close with reference "cex"). Name kept for old JSON. */
   cex: number;
   gapBps: number;
   impactBps: number;
@@ -136,6 +143,34 @@ function lastAtOrBefore<T extends { at?: number; t?: number }>(xs: T[], t: numbe
     } else hi = mid - 1;
   }
   return ans >= 0 ? xs[ans]! : null;
+}
+
+/**
+ * The pool's time-weighted average price over the trailing `windowSec`, one point per `stepSec`, rebuilt from its
+ * Swap logs (the price is a step function between swaps) — the same quantity as the pool's on-chain observe() TWAP.
+ */
+export function twapKlines(swaps: SwapPoint[], from: number, to: number, windowSec = 300, stepSec = 60): Kline[] {
+  const sw = [...swaps].sort((a, b) => a.at - b.at);
+  const out: Kline[] = [];
+  if (!sw.length) return out;
+  let j = 0; // index of the first swap after the window start
+  for (let t = Math.ceil(from / stepSec) * stepSec; t <= to; t += stepSec) {
+    const a = t - windowSec;
+    while (j < sw.length && sw[j]!.at <= a) j++;
+    const before = j > 0 ? sw[j - 1]! : null;
+    if (!before) continue; // no price known at the window start
+    let px = Number(before.priceE8) / 1e8;
+    let at = a;
+    let acc = 0;
+    for (let k = j; k < sw.length && sw[k]!.at <= t; k++) {
+      acc += px * (sw[k]!.at - at);
+      at = sw[k]!.at;
+      px = Number(sw[k]!.priceE8) / 1e8;
+    }
+    acc += px * (t - at);
+    out.push({ t, close: acc / windowSec });
+  }
+  return out;
 }
 
 export function simulate(market: MarketId, swaps: SwapPoint[], klines: Kline[], from: number, to: number, p: ReplayParams): { report: MarketReplay; rows: CycleRow[] } {
