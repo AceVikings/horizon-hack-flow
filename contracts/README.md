@@ -100,6 +100,10 @@ The script prints each vault address and its ABI-encoded constructor args. Recor
 No allow-listing is needed. If a Supra pair gets stale, the daemon refreshes it with a pull proof (ABI-NOTES.md,
 "Daemon refresh path").
 
+## Testnet (133)
+
+`script/DeployTestnet.s.sol` deploys the full stack on HashKey Chain testnet. It creates test tokens (`src/testnet/TestToken.sol`) and HSKSwap pools, then deploys the adapters, vaults, seeds and the EAS schema, and writes `deployments/133.json`. For the addresses, the token `faucet()`, and how to run the daemon and trader on 133, see [docs/TESTNET.md](../docs/TESTNET.md).
+
 ## Verify on Blockscout
 
 Verify each adapter (`src/oracles/SupraAggregatorAdapter.sol:SupraAggregatorAdapter`, using the adapter
