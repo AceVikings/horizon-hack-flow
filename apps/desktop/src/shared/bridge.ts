@@ -229,6 +229,8 @@ export interface SubscriptionStatus {
   lastError: string | null;
   checkedAt: number | null;
   loginFlags: string[];
+  /** Flow's proxy config: a terminal sign-in must pass `-config <configPath>`. */
+  configPath: string;
   selectedModel: string | null;
 }
 
@@ -293,7 +295,13 @@ export interface AteBridge {
     select(provider: EngineProvider["id"], model?: string): Promise<Res<EngineProviders>>;
   };
   /** Additive (lane D3): your subscriptions through the CLIProxyAPI sidecar (install / start / stop / restart / check). */
-  subscription?: { status(): Promise<Res<SubscriptionStatus>>; op(op: "install" | "start" | "stop" | "restart" | "check"): Promise<Res<SubscriptionStatus>> };
+  subscription?: {
+    status(): Promise<Res<SubscriptionStatus>>;
+    op(op: "install" | "start" | "stop" | "restart" | "check"): Promise<Res<SubscriptionStatus>>;
+    /** In-app sign-in: the provider's login URL (open in the browser) and a state to poll. */
+    login(provider: "claude" | "codex" | "antigravity" | "kimi" | "kimi-ai" | "xai" | "devin" | "meta"): Promise<Res<{ url: string; state: string | null }>>;
+    loginStatus(state: string): Promise<Res<{ login: unknown; models: string[]; selectedModel: string | null }>>;
+  };
   events: { subscribe(handler: (e: DaemonEvent) => void): () => void };
 }
 
@@ -342,6 +350,8 @@ export const IPC_METHODS = [
   "engine.select",
   "subscription.status",
   "subscription.op",
+  "subscription.login",
+  "subscription.loginStatus",
   // lane D1 (additive)
   "candidates.get",
   // lane D4 (additive)
