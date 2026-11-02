@@ -64,7 +64,9 @@ export default function Agent(_: ViewProps) {
   const mode: Mode | "" = !t ? "" : t.running ? t.mode : t.external ? "autonomous" : "watch";
   const ph = profileOf(s, HSK);
   const pb = profileOf(s, BTC);
-  const preset = ph && ph === pb ? ph : null;
+  // a market trading the user's own strategy keeps its preset choice from the other market
+  const customOn = s ? ([HSK, BTC] as MarketId[]).filter((m) => s.strategy.markets[m]?.custom) : [];
+  const preset = customOn.includes(HSK) ? pb : customOn.includes(BTC) ? ph : ph && ph === pb ? ph : null;
   const sel = prov.last?.providers.find((p) => p.selected);
   const models = sel?.models.filter((m) => m.tools !== false) ?? [];
   const auto = !!prov.last?.selected.auto;
@@ -218,7 +220,8 @@ export default function Agent(_: ViewProps) {
           </button>
         ))}
       </div>
-      {s && !preset && <div className="xs fg2" style={{ marginTop: 8 }}>Your settings are custom. Pick one to reset both markets.</div>}
+      {s && customOn.length > 0 && <div className="xs fg2" style={{ marginTop: 8 }}>{customOn.map((m) => `${m === BTC ? "BTC" : "HSK"} trades your strategy “${s.strategy.markets[m]?.custom?.name}”`).join(". ")}. Its stop and limits still apply.</div>}
+      {s && !preset && customOn.length === 0 && <div className="xs fg2" style={{ marginTop: 8 }}>Your settings are custom. Pick one to reset both markets.</div>}
 
       <h2 className="h4" style={{ marginTop: 32 }}>Your strategies</h2>
       <YourStrategies list={strats.last?.strategies ?? null} error={strats.res && !strats.res.ok ? strats.res.error.message : null} />

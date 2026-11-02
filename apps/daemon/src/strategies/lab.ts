@@ -377,7 +377,7 @@ export class StrategyLab {
 
   /** The AI decider: the live tool loop pointed at the paper market (or, for opencode, one JSON answer per cycle). */
   private decider(mode: "tools" | "json"): PracticeDecider {
-    const system = `${this.o.traderPrompt}\n\n## Practice run\nThis is a PRACTICE run on past data: the tools answer from a simulated market at a past time, and nothing you do reaches a vault, the journal or the chain. Treat it exactly like a live cycle. Only the strategy's candidates can be bought; discretionary trades are off.`;
+    const system = `${this.o.traderPrompt}\n\n## Practice run\nThis is a PRACTICE run on past data: the tools answer from a simulated market at a past time, and nothing you do reaches a vault, the journal or the chain. Treat it exactly like a live cycle. Only the strategy's candidates can be bought; discretionary trades are off. In practice YOU decide every candidate, whatever the strategy kind (nothing trades by itself here): take it, buy less or say no, and start each rationale's Details with the Analysis line.`;
     if (mode === "tools") {
       return async ({ cycle, at, call, signal }) => {
         const conv = this.o.ai.conversation("trader");
