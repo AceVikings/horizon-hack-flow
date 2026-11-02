@@ -16,6 +16,9 @@ const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inl
 const devUrl = process.env["ELECTRON_RENDERER_URL"];
 
 let win: BrowserWindow | null = null;
+/** True once the user quits (Cmd+Q / menu / signal). Until then Flow always keeps a main window. */
+let quitting = false;
+const SHOTS = !!process.env.ATE_SCREENSHOT_DIR;
 const chatLog = new Map<string, ChatMessage[]>();
 const payments: PaymentsList = { gate: "no-go", rows: [] };
 let settings: Settings = { rpcUrls: [], unlockTimeoutMin: 30, daemonPort: null };
@@ -264,8 +267,15 @@ async function invoke(method: IpcMethod, arg: any, arg2?: any): Promise<unknown>
 // App icon: apps/desktop/build/icon.{png,icns,ico}, rendered from packages/ui/brand/app-icon.svg.
 const APP_ICON = resolve(__dirname, "../../build/icon.png");
 
+/** The main window, made if there is none (or it was destroyed), and shown. */
+function ensureWindow(): BrowserWindow {
+  if (!win || win.isDestroyed()) createWindow();
+  else if (!SHOTS && !win.isVisible()) win.show();
+  return win!;
+}
+
 function createWindow(): void {
-  win = new BrowserWindow({
+  const w = new BrowserWindow({
     icon: APP_ICON,
     width: 1480,
     height: 920,
@@ -276,7 +286,7 @@ function createWindow(): void {
     // macOS: native traffic lights inset over the dark rail (no separate title bar); the rail's top strip is the drag region.
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
     ...(process.platform === "darwin" ? { trafficLightPosition: { x: 16, y: 16 } } : {}),
-    show: !process.env.ATE_SCREENSHOT_DIR,
+    show: !SHOTS,
     webPreferences: {
       preload: join(__dirname, "../preload/index.js"),
       sandbox: true,
@@ -286,6 +296,28 @@ function createWindow(): void {
       additionalArguments: FIXTURES ? ["--ate-fixtures"] : [],
     },
   });
+  win = w;
+  // macOS: the close button hides the window (the app stays in the Dock, as before); only quitting really closes it.
+  w.on("close", (e) => {
+    if (quitting || SHOTS || process.platform !== "darwin") return;
+    e.preventDefault();
+    w.hide();
+  });
+  // An unexpected close (destroyed without quitting) gets a fresh main window.
+  w.on("closed", () => {
+    if (win === w) win = null;
+    if (!quitting && !SHOTS && process.platform === "darwin") setTimeout(() => !quitting && ensureWindow(), 200);
+  });
+  // A crashed or killed renderer reloads instead of leaving a dead window.
+  w.webContents.on("render-process-gone", (_e, d) => {
+    if (quitting || d.reason === "clean-exit") return;
+    console.error(`[flow] renderer gone (${d.reason}); reloading`);
+    setTimeout(() => {
+      if (w.isDestroyed()) return void ensureWindow();
+      w.webContents.reload();
+    }, 300);
+  });
+  if (!FIXTURES) w.webContents.once("did-finish-load", () => void w.webContents.executeJavaScript(`location.hash = "#/unlock"`).catch(() => {}));
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https:\/\/(hsk\.blockscout\.com|testnet-explorer\.hskchain\.net)\//.test(url)) void shell.openExternal(url);
     return { action: "deny" };
@@ -357,17 +389,22 @@ app.whenReady().then(async () => {
   const owner = new DesktopOwner(app.getAppPath(), daemon, () => setup.restart());
   for (const [k, fn] of Object.entries(owner.api)) ipcMain.handle(`ate:owner.${k}`, (_e, a, b) => (FIXTURES ? bad("fixtures mode") : (fn as (a: unknown, b: unknown) => Promise<unknown>)(a, b)));
   app.on("will-quit", () => owner.stop());
-  app.on("before-quit", () => void (process.env.FLOW_KEEP_DAEMON === "1" ? undefined : setup.shutdown()));
-  for (const sig of ["SIGTERM", "SIGINT"] as const) process.once(sig, () => void setup.shutdown().finally(() => app.exit(0)));
+  app.on("before-quit", () => {
+    quitting = true;
+    if (process.env.FLOW_KEEP_DAEMON !== "1") void setup.shutdown();
+  });
+  for (const sig of ["SIGTERM", "SIGINT"] as const) process.once(sig, () => ((quitting = true), void setup.shutdown().finally(() => app.exit(0))));
   createWindow();
   if (!FIXTURES) {
-    win!.webContents.once("did-finish-load", () => void win?.webContents.executeJavaScript(`location.hash = "#/unlock"`));
     void setup.boot();
     if (process.env.FLOW_SETUP_SHOTS) void import("./setup-shots").then((m) => m.runSetupShots(() => win, process.env.FLOW_SETUP_SHOTS!));
   }
-  app.on("activate", () => BrowserWindow.getAllWindows().length === 0 && createWindow());
+  app.on("activate", () => void ensureWindow());
 });
 app.on("window-all-closed", () => {
-  daemon.close();
-  if (process.platform !== "darwin" || process.env.ATE_SCREENSHOT_DIR) app.quit();
+  // macOS keeps the app (and its daemon link) alive; the window comes back from "closed" or on activate.
+  if (process.platform !== "darwin" || SHOTS) {
+    daemon.close();
+    app.quit();
+  }
 });
