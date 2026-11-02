@@ -12,6 +12,8 @@ If the agent makes a mistake, gets a bad prompt or loses its key, the contract s
 
 Built by team Vikings for the HSK Chain Horizon Hackathon (AI Agent Trading). Apache-2.0.
 
+**Demo video (2:33):** <https://youtu.be/HemAPYeCcrI> · **DoraHacks:** <https://dorahacks.io/build/50869>
+
 ## How Flow meets Track 1
 
 | Track 1 item | What Flow does | Where to see it |
