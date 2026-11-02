@@ -30,8 +30,6 @@ export default function Welcome() {
   return (
     <div className="welcome" data-shot="00-welcome">
       <div className="wl">
-        <div style={{ marginBottom: 44 }}>
-        </div>
         <Logo size={64} />
         <div style={{ marginTop: "auto" }} />
         <h1>
@@ -57,13 +55,6 @@ export default function Welcome() {
           <Btn size="lg" className="ghostlight" onClick={() => void start(true)}>
             I already have vaults
           </Btn>
-        </div>
-        <div className="row g18 sm" style={{ marginTop: 22, color: "var(--sage)" }}>
-          <span>About 10 minutes</span>
-          <span aria-hidden="true">·</span>
-          <span>No terminal</span>
-          <span aria-hidden="true">·</span>
-          <span>Owner keys stay on your own device</span>
         </div>
       </div>
       <div className="wr">
