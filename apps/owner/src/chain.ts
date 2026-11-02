@@ -100,8 +100,33 @@ export class OwnerChain {
   }
 
   /** One owner call, waited until mined; a revert is an error. */
+  /**
+   * Sends one owner tx and waits for it. The nonce is ours to track (a load-balanced RPC can report a stale pending
+   * nonce right after a receipt); on a nonce clash (another tool used the same owner key) we resync and retry.
+   */
+  private nonce: number | null = null;
+  private async submit(tx: { to: Address | null; data: Hex; value?: bigint }): Promise<Hex> {
+    for (let attempt = 0; ; attempt++) {
+      const chainNonce = await this.pub.getTransactionCount({ address: this.address, blockTag: "pending" });
+      const nonce = Math.max(chainNonce, this.nonce ?? 0);
+      try {
+        const hash = await this.wallet.sendTransaction({ account: this.account, chain: this.wallet.chain, to: tx.to as never, data: tx.data, value: tx.value ?? 0n, nonce });
+        this.nonce = nonce + 1;
+        return hash;
+      } catch (e) {
+        const m = (e as Error).message;
+        if (attempt < 4 && /nonce|underpriced|already known/i.test(m)) {
+          this.nonce = nonce + 1;
+          await new Promise((r) => setTimeout(r, 1500));
+          continue;
+        }
+        throw e;
+      }
+    }
+  }
+
   async send(label: string, to: Address, data: Hex, value = 0n): Promise<{ label: string; hash: Hex }> {
-    const hash = await this.wallet.sendTransaction({ account: this.account, chain: this.wallet.chain, to, data, value });
+    const hash = await this.submit({ to, data, value });
     const r = await this.pub.waitForTransactionReceipt({ hash, timeout: 120_000 });
     if (r.status !== "success") throw new OwnerError(502, `${label} reverted (${hash})`);
     return { label, hash };
@@ -112,14 +137,23 @@ export class OwnerChain {
   }
 
   private async create(label: string, data: Hex): Promise<{ label: string; hash: Hex; address: Address }> {
-    const hash = await this.wallet.sendTransaction({ account: this.account, chain: this.wallet.chain, data, to: null as never });
+    const hash = await this.submit({ to: null, data });
     const r = await this.pub.waitForTransactionReceipt({ hash, timeout: 180_000 });
     if (r.status !== "success" || !r.contractAddress) throw new OwnerError(502, `${label} failed (${hash})`);
     return { label, hash, address: r.contractAddress };
   }
 
   /** Deploy.s.sol `_deployOne`, per market. Returns the new addresses and every tx. */
-  async deploy(o: { markets: ("hsk" | "btc")[]; agent: Address; guardian?: Address; limits: VaultLimits; env?: NodeJS.ProcessEnv }) {
+  async deploy(o: {
+    markets: ("hsk" | "btc")[];
+    agent: Address;
+    guardian?: Address;
+    limits: VaultLimits;
+    env?: NodeJS.ProcessEnv;
+    /** Contracts from an interrupted deploy (resumed instead of redeployed). */
+    prior?: { market: string; vault?: Address; adapter?: Address }[];
+    onStep?: (p: { market: string; vault?: Address; adapter?: Address }) => void;
+  }) {
     const vaultCode = artifact("PolicyVault", o.env);
     const adapterCode = artifact("SupraAggregatorAdapter", o.env);
     const txs: { label: string; hash: Hex }[] = [];
@@ -129,15 +163,22 @@ export class OwnerChain {
       const m = this.dep.markets[id];
       if (!m) throw new OwnerError(400, `no ${id} in deployments/${this.dep.chainId}.json`);
       const desc = `${k === "hsk" ? "HSK" : "BTC"}/USD (Supra pair ${m.supraPair})`;
-      const a = await this.create(`${k.toUpperCase()} price adapter`, `${adapterCode}${encodeAbiParameters([{ type: "address" }, { type: "uint256" }, { type: "string" }], [this.dep.supra.storage as Address, BigInt(m.supraPair), desc]).slice(2)}` as Hex);
-      txs.push(a);
+      const prior = o.prior?.find((p) => p.market === id);
+      const a = prior?.adapter
+        ? { address: prior.adapter }
+        : await this.create(`${k.toUpperCase()} price adapter`, `${adapterCode}${encodeAbiParameters([{ type: "address" }, { type: "uint256" }, { type: "string" }], [this.dep.supra.storage as Address, BigInt(m.supraPair), desc]).slice(2)}` as Hex);
+      if ("hash" in a) txs.push(a as { label: string; hash: Hex });
+      o.onStep?.({ market: id, adapter: a.address });
       const args = [m.quoteToken, m.priceToken, a.address, this.dep.hskdex.router, m.pool, this.dep.hskdex.factory] as Address[];
-      const v = await this.create(`${k.toUpperCase()} vault`, `${vaultCode}${encodeAbiParameters(args.map(() => ({ type: "address" })), args).slice(2)}` as Hex);
-      txs.push(v);
-      txs.push(await this.call(`${k.toUpperCase()} limits`, v.address, "setLimits", [o.limits]));
-      txs.push(await this.call(`${k.toUpperCase()} agent`, v.address, "setAgent", [o.agent]));
+      const v = prior?.vault ? { address: prior.vault } : await this.create(`${k.toUpperCase()} vault`, `${vaultCode}${encodeAbiParameters(args.map(() => ({ type: "address" })), args).slice(2)}` as Hex);
+      if ("hash" in v) txs.push(v as { label: string; hash: Hex });
+      o.onStep?.({ market: id, adapter: a.address, vault: v.address });
+      const st = await this.vault(v.address, id);
       const g = o.guardian ?? (this.dep.guardian as Address);
-      if (g) txs.push(await this.call(`${k.toUpperCase()} guardian`, v.address, "setGuardian", [g]));
+      const sameLimits = (Object.keys(o.limits) as (keyof VaultLimits)[]).every((f) => BigInt(st.limits[f]) === BigInt(o.limits[f]));
+      if (!sameLimits) txs.push(await this.call(`${k.toUpperCase()} limits`, v.address, "setLimits", [o.limits]));
+      if (st.agent.toLowerCase() !== o.agent.toLowerCase()) txs.push(await this.call(`${k.toUpperCase()} agent`, v.address, "setAgent", [o.agent]));
+      if (g && st.guardian.toLowerCase() !== g.toLowerCase()) txs.push(await this.call(`${k.toUpperCase()} guardian`, v.address, "setGuardian", [g]));
       out.push({ market: id, vault: v.address, adapter: a.address });
     }
     return { vaults: out, txs };

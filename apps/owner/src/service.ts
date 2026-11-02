@@ -54,7 +54,7 @@ export class OwnerService {
   private statePath() {
     return join(this.o.home, "owner-state.json");
   }
-  readState(): { deployed: { at: number; vaults: { market: string; vault: Address; adapter: Address }[]; txs: { label: string; hash: Hex }[] }[] } {
+  readState(): { deployed: { at: number; vaults: { market: string; vault: Address; adapter: Address }[]; txs: { label: string; hash: Hex }[] }[]; partial?: { market: string; vault?: Address; adapter?: Address }[] } {
     try {
       return existsSync(this.statePath()) ? JSON.parse(readFileSync(this.statePath(), "utf8")) : { deployed: [] };
     } catch {
@@ -239,10 +239,25 @@ export class OwnerService {
       let result: unknown;
       switch (op.op) {
         case "deploy": {
-          const d = await c.deploy({ markets: op.markets, agent: op.agent, ...(op.guardian ? { guardian: op.guardian } : {}), limits: op.limits ?? DEFAULT_LIMITS, ...(this.o.env ? { env: this.o.env } : {}) });
+          // An interrupted deploy is resumed: contracts already created are reused, settings already applied skipped.
+          const prior = this.readState().partial ?? [];
+          const d = await c.deploy({
+            markets: op.markets,
+            agent: op.agent,
+            ...(op.guardian ? { guardian: op.guardian } : {}),
+            limits: op.limits ?? DEFAULT_LIMITS,
+            ...(this.o.env ? { env: this.o.env } : {}),
+            prior,
+            onStep: (p) => {
+              const st = this.readState();
+              st.partial = [...(st.partial ?? []).filter((x) => x.market !== p.market), p];
+              this.writeState(st);
+            },
+          });
           txs.push(...d.txs);
           const st = this.readState();
           st.deployed.push({ at: this.now(), vaults: d.vaults, txs: d.txs });
+          delete st.partial;
           this.writeState(st);
           if (op.seed) txs.push(...(await c.seed(d.vaults)));
           result = { vaults: d.vaults.map((v) => ({ market: v.market, address: v.vault, adapter: v.adapter })) };
