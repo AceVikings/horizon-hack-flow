@@ -1,7 +1,7 @@
 // 00 Welcome (docs/design/flow 00-welcome): the promise, read from the defaults; "Set up Flow" or connect existing.
 import { worstCase } from "@ate/core";
 import { Btn } from "../../src/ui";
-import { Lights, Logo, go, useSetup, useSetupGet } from "./common";
+import { Logo, go, useSetup, useSetupGet } from "./common";
 
 interface Status {
   state: { step: number; completedAt: number | null };
@@ -31,7 +31,6 @@ export default function Welcome() {
     <div className="welcome" data-shot="00-welcome">
       <div className="wl">
         <div style={{ marginBottom: 44 }}>
-          <Lights />
         </div>
         <Logo size={64} />
         <div style={{ marginTop: "auto" }} />

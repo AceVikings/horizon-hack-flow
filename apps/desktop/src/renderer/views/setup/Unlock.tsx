@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import type { DaemonState } from "@shared/setup-bridge";
 import { Badge, Btn } from "../../src/ui";
-import { CodeInput, CodeShow, ErrLine, Lights, Logo, Spinner, go, useSetup } from "./common";
+import { CodeInput, CodeShow, ErrLine, Logo, Spinner, go, useSetup } from "./common";
 
 const PHASE: Record<DaemonState["phase"], string> = {
   starting: "Starting the Flow daemon…",
@@ -56,7 +56,6 @@ export default function Unlock() {
   return (
     <div className="unlock" data-shot={st ? shot : undefined}>
       <div className="box">
-        <Lights />
         <Logo size={48} />
         <div className="eb" style={{ color: "var(--sage)", marginTop: 34 }}>
           {st?.owned === false ? "Attached to a running daemon" : "Daemon managed by Flow"} · {st?.home ?? ""}

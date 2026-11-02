@@ -38,9 +38,6 @@ p { margin: 0; }
 .frame.norail { grid-template-columns: minmax(0,1fr); }
 
 .rail { background: var(--c); color: #fff; display: flex; flex-direction: column; align-items: center; padding: 14px 0 12px; gap: 2px; border-right: 1px solid rgba(183,198,194,.1); position: relative; }
-.lights { display: flex; gap: 7px; margin: 0 0 18px; align-self: flex-start; padding-left: 14px; }
-.lights i { width: 11px; height: 11px; border-radius: 50%; background: #ff5f57; display: block; }
-.lights i:nth-child(2) { background: #febc2e; } .lights i:nth-child(3) { background: #28c840; }
 .rail .logo { margin: 0 0 16px; }
 .ri { width: 62px; border-radius: 12px; padding: 8px 0 6px; display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--sage); position: relative; }
 .ri svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
@@ -317,7 +314,6 @@ code { font-family: var(--mono); font-size: 11px; background: var(--bg3); border
 .wz { display: grid; grid-template-columns: 328px minmax(0,1fr); min-height: 0; }
 .wz-side { background: var(--c); color: #fff; padding: 22px 30px 26px; display: flex; flex-direction: column; position: relative;
   background-image: linear-gradient(to right, #b7c6c210 1px, transparent 1px), linear-gradient(to bottom, #b7c6c210 1px, transparent 1px); background-size: 40px 40px; }
-.wz-side .lights { padding-left: 0; margin-bottom: 30px; }
 .steps { margin-top: 38px; display: flex; flex-direction: column; gap: 4px; }
 .step { display: grid; grid-template-columns: 34px 1fr; gap: 12px; align-items: center; padding: 10px 12px 10px 10px; border-radius: 12px; color: var(--sage); }
 .step .sn { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; border: 1.5px solid rgba(183,198,194,.35); font: 400 15px/1 var(--disp); }
@@ -530,7 +526,7 @@ input.inp, select.inp { font: 500 13px/1 var(--body); color: var(--c); width: 10
 .foot.slim { justify-content: center; padding: 0 20px; border-top: 1px solid rgba(255,225,124,.6); }
 .foot.slim .frow { gap: 22px; }
 .sbi { display: flex; align-items: center; gap: 7px; font-size: 12px; padding: 2px 0; }
-.mstat { padding: 8px 10px 4px; }
+.mstat { padding: 8px 10px 4px; } .mstat .sbi { color: var(--c); }
 .sbi i { width: 7px; height: 7px; border-radius: 50%; background: #7fdcaa; }
 .sbi.bad i { background: #ff8d95; } .sbi.warn i { background: var(--y); }
 .foot .linkbtn { color: #fff; text-decoration-color: rgba(255,225,124,.55); }

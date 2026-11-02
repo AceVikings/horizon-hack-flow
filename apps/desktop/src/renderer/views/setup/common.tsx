@@ -2,7 +2,7 @@
 // handoff (QR per transaction + live landing poll), one-time-code approval dialog, small form controls.
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Res } from "@shared/bridge";
-import type { SetupBridge, SetupPath } from "@shared/setup-bridge";
+import type { ApprovalPath, SetupBridge, SetupPath } from "@shared/setup-bridge";
 import { useApp } from "../../src/app";
 import { short } from "../../src/format";
 import { Badge, Btn, Dialog, FlowMark, QR } from "../../src/ui";
@@ -64,16 +64,6 @@ export function Logo({ size = 40 }: { size?: number }) {
         FLOW<span className="pd">.</span>
       </span>
     </span>
-  );
-}
-
-export function Lights() {
-  return (
-    <div className="lights" aria-hidden="true">
-      <i />
-      <i />
-      <i />
-    </div>
   );
 }
 
@@ -360,12 +350,12 @@ export function CodeShow({ code }: { code: string | null | undefined }) {
  */
 export function useApproval() {
   const s = useSetup();
-  const [pending, setPending] = useState<{ path: "/setup/config" | "/setup/model/key"; nonce: string; code: string | null; expiresAt: number; resolve(ok: boolean, r?: unknown): void } | null>(null);
+  const [pending, setPending] = useState<{ path: ApprovalPath; nonce: string; code: string | null; expiresAt: number; resolve(ok: boolean, r?: unknown): void } | null>(null);
   const [typed, setTyped] = useState("");
   const [error, setError] = useState<{ message: string; code?: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const run = useCallback(
-    async (path: "/setup/config" | "/setup/model/key", body: unknown): Promise<{ ok: boolean; result?: unknown; error?: { message: string } }> => {
+    async (path: ApprovalPath, body: unknown): Promise<{ ok: boolean; result?: unknown; error?: { message: string } }> => {
       setError(null);
       setBusy(true);
       const r = await s.approveStart(path, body);
