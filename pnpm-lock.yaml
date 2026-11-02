@@ -59,6 +59,9 @@ importers:
 
   apps/cli:
     dependencies:
+      '@ate/approve':
+        specifier: workspace:*
+        version: link:../approve
       '@ate/chat':
         specifier: workspace:*
         version: link:../../agents/chat
@@ -74,6 +77,9 @@ importers:
       '@ate/trader':
         specifier: workspace:*
         version: link:../../agents/trader
+      viem:
+        specifier: ^2.21.0
+        version: 2.57.14(typescript@5.9.3)(zod@3.25.76)
 
   apps/daemon:
     dependencies:
@@ -83,6 +89,9 @@ importers:
       '@ate/chain':
         specifier: workspace:*
         version: link:../../packages/chain
+      '@ate/chat':
+        specifier: workspace:*
+        version: link:../../agents/chat
       '@ate/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -98,6 +107,9 @@ importers:
       '@ate/strategy':
         specifier: workspace:*
         version: link:../../packages/strategy
+      '@ate/trader':
+        specifier: workspace:*
+        version: link:../../agents/trader
       '@ate/venues':
         specifier: workspace:*
         version: link:../../packages/venues
@@ -126,6 +138,9 @@ importers:
 
   apps/desktop:
     dependencies:
+      '@ate/approve':
+        specifier: workspace:*
+        version: link:../approve
       '@ate/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -255,6 +270,15 @@ importers:
       '@ate/core':
         specifier: workspace:*
         version: link:../core
+
+  packages/ui:
+    dependencies:
+      '@fontsource/anton':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/figtree':
+        specifier: ^5.3.0
+        version: 5.3.0
 
   packages/venues:
     dependencies:
@@ -824,6 +848,12 @@ packages:
     engines: {node: '>=18'}
     cpu: [x64]
     os: [win32]
+
+  '@fontsource/anton@5.3.0':
+    resolution: {integrity: sha512-OR1D5n124n2XRs66SbX7IjcOSptljEJE8FcDNnlni2y1/M6KpTx7cU2PIWzTSsBj4WFkHPw24On8qw3qkQZuTw==}
+
+  '@fontsource/figtree@5.3.0':
+    resolution: {integrity: sha512-/iTcTXL1eRBGhvD7NN9dnKzXzWqDLVZVEUFI9xIxAC1G/hXU8tCyYeXCAuPOuvSYPInFUP7H6KLGgygmDfy1SA==}
 
   '@hono/node-server@2.1.5':
     resolution: {integrity: sha512-MgP/I06GdvsilDspMk/qmRzpk8LOUStP6jFAbSRi40W09DhoyUn+Mj7eyKICPqeYKybOjVFLVIAQzvu1bfIa7Q==}
@@ -2593,6 +2623,10 @@ snapshots:
 
   '@esbuild/win32-x64@0.28.2':
     optional: true
+
+  '@fontsource/anton@5.3.0': {}
+
+  '@fontsource/figtree@5.3.0': {}
 
   '@hono/node-server@2.1.5(hono@4.13.16)':
     dependencies:
