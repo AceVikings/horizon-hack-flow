@@ -16,21 +16,68 @@ import {
   type StatusResponse,
   type StrategyGetOutput,
 } from "@ate/core";
-import { FIXTURE_NOW, FIXTURE_PRICES, FIXTURE_STRATEGY, FIXTURE_VAULT_STATES as CORE_VAULT_STATES, FIXTURE_AGENT } from "@ate/core/fixtures";
+import { FIXTURE_CANDIDATES, FIXTURE_NOW, FIXTURE_PRICES, FIXTURE_STRATEGY, FIXTURE_VAULT_STATES as CORE_VAULT_STATES, FIXTURE_AGENT } from "@ate/core/fixtures";
 import type { AteBridge, ChatMessage, JournalFilter, PaymentsList, Res, Settings } from "@shared/bridge";
 import { fmtUnits } from "./format";
 
-/** Deployed defaults (§19 step 3): maxTradeUsd $100, maxEpochUsd $250 per UTC day, maxExposureUsd $150. */
+/**
+ * Screenshot scenario (fixtures only): `?fixtures&state=<s>` or localStorage "flow.fixture".
+ * live (default) · paused · empty · loading · error (status fails after the first read) · stale-oracle · mempty (no
+ * market enabled) · cash (HSK sold to cash).
+ */
+export const SCENARIO: string = (() => {
+  try {
+    return new URLSearchParams(location.search).get("state") ?? localStorage.getItem("flow.fixture") ?? "live";
+  } catch {
+    return "live";
+  }
+})();
+
+/** Testnet 133 deployment (deployments/133.json) and the §19 default limits; balances match the approved v1 board. */
+const TESTNET = {
+  [MARKET_WHSK]: { address: "0xF80A74F4D9C17Db8a2a0F32558a9FC3A63e2Bcd2", quote: "85310000", base: "705800000000000000000", expE8: "6170000000", spentE8: "3750000000" },
+  [MARKET_WBTC]: { address: "0x6Da0c6EF7328d3aD6b0b8781770D941D065a6693", quote: "75000000", base: "32009", expE8: "2521000000", spentE8: "2500000000" },
+} as Record<MarketId, { address: `0x${string}`; quote: string; base: string; expE8: string; spentE8: string }>;
 const FIXTURE_VAULT_STATES = Object.fromEntries(
-  (Object.entries(CORE_VAULT_STATES) as [MarketId, (typeof CORE_VAULT_STATES)[MarketId]][]).map(([m, v]) => [
-    m,
-    { ...v, limits: { ...v.limits, maxTradeUsdE8: "10000000000", maxEpochUsdE8: "25000000000", maxExposureUsdE8: "15000000000", epochDuration: 86_400 } },
-  ]),
-) as typeof CORE_VAULT_STATES;
+  (Object.entries(CORE_VAULT_STATES) as [MarketId, (typeof CORE_VAULT_STATES)[MarketId]][]).map(([m, v]) => {
+    const t = TESTNET[m];
+    const empty = SCENARIO === "empty";
+    const cash = SCENARIO === "cash" && m === MARKET_WHSK;
+    return [
+      m,
+      {
+        ...v,
+        address: t.address,
+        agent: "0xC11CbceE5fDf41aa7175319691aA204eFb164f8a",
+        guardian: "0x8aAcC0D83C22644f76185EF0c082112D80Cdb66B",
+        owner: "0xFF7Df888C4DE9df4c044Fd0C7144AAfd1937569e",
+        paused: SCENARIO === "paused",
+        balanceQuote: cash ? "146860000" : empty ? (m === MARKET_WHSK ? "120000000" : "100000000") : t.quote,
+        balancePrice: cash ? "0" : empty ? (m === MARKET_WHSK ? "686500000000000000000" : "0") : t.base,
+        exposureUsdE8: cash ? "0" : empty ? (m === MARKET_WHSK ? "6000000000" : "0") : t.expE8,
+        epoch: { ...v.epoch, spentUsdE8: empty ? "0" : cash ? "10920000000" : t.spentE8 },
+        limits: { ...v.limits, maxTradeUsdE8: "10000000000", maxEpochUsdE8: "25000000000", maxExposureUsdE8: "15000000000", epochDuration: 86_400, maxOracleAge: 90_000 },
+      },
+    ];
+  }),
+) as unknown as typeof CORE_VAULT_STATES;
 
 export const NOW = FIXTURE_NOW;
 const ok = <T,>(data: T): Res<T> => ({ ok: true, data });
-const delay = <T,>(v: T, ms = 120): Promise<T> => new Promise((r) => setTimeout(() => r(v), ms));
+/** Fixture data is dated at FIXTURE_NOW; shift every unix-seconds field so ages read as on the board, today. */
+const SHIFT = Math.floor(Date.now() / 1000) - FIXTURE_NOW;
+const TIME_KEYS = new Set(["at", "updatedAt", "start", "openedAt", "closedAt", "expiresAt", "createdAt", "lastTradeAt", "lastCycleAt", "startedAt", "resetsAt", "reentryLockUntil", "approvedAt", "consumedAt", "generatedAt"]);
+function shiftTimes<T>(v: T): T {
+  if (Array.isArray(v)) return v.map(shiftTimes) as T;
+  if (v && typeof v === "object") {
+    const o: Record<string, unknown> = {};
+    for (const [k, x] of Object.entries(v)) o[k] = TIME_KEYS.has(k) && typeof x === "number" && x > 1_700_000_000 ? x + SHIFT : shiftTimes(x);
+    return o as T;
+  }
+  return v;
+}
+const delay = <T,>(v: T, ms = 120): Promise<T> => new Promise((r) => setTimeout(() => r(shiftTimes(v)), ms));
+const never = <T,>(): Promise<T> => new Promise(() => {});
 
 // ---- deterministic fake hashes ----
 function hex(seed: string, bytes = 32): `0x${string}` {
@@ -101,40 +148,54 @@ const pG = push(rec(880, { kind: "proposal", market: MARKET_WHSK, engine: "guard
 push(rec(868, { kind: "execution", refId: pG.id, market: MARKET_WHSK, engine: "guard", actor: guard, origin: "guard", rationale: "Guard exit executed.", context: ctx(MARKET_WHSK, 868), verdict: { ok: true, code: "OK", approvedBy: "policy" }, execution: { txHash: hex("tx-hsk-guard"), blockNumber: 12_344_700, gasUsed: "190114", amountOut: "35540000", exitPath: true } }));
 push(rec(120, { kind: "no_trade", market: MARKET_WBTC, engine: "llm", actor: agent, rationale: "No candidate above cost after fees; BTC gap 104 bps vs cost 35 bps but entry interval still open for 11 min.", context: ctx(MARKET_WBTC, 120), verdict: { ok: true, code: "NO_TRADE", message: "no_signal" } }));
 
+if (SCENARIO === "paused") push(rec(-60, { kind: "pause", engine: "human", actor: { kind: "human", via: "ui" }, rationale: "kill switch, by you", context: ctx(MARKET_WHSK, -60), verdict: { ok: true, code: "OK", approvedBy: "human" }, execution: { txHash: hex("tx-pause-hsk"), blockNumber: 12_345_700, gasUsed: "31000", amountOut: "0", exitPath: false } }));
+if (SCENARIO === "empty") entries.splice(0, entries.length);
 export const FIXTURE_JOURNAL = entries;
 
 // ---- state ----
-const mv = (m: MarketId): MarketView => ({ ...FIXTURE_PRICES[m], vault: FIXTURE_VAULT_STATES[m], exitMark: m === MARKET_WBTC ? "7667000000000" : "8735714" });
+const mv = (m: MarketId): MarketView => {
+  const p = FIXTURE_PRICES[m];
+  const ageSec = m === MARKET_WBTC ? (SCENARIO === "stale-oracle" ? 93_600 : 2_460) : 7_920;
+  return { ...p, oracle: { ...p.oracle, ageSec, updatedAt: NOW - ageSec, health: ageSec > 90_000 ? "stale" : ageSec > 3_600 ? "aging" : "fresh" }, vault: FIXTURE_VAULT_STATES[m], exitMark: m === MARKET_WBTC ? "7667000000000" : "8735714" };
+};
 
 const status: StatusResponse = {
-  version: "0.1.0-fixtures", chainId: 177, blockNumber: "12345678", locked: false,
-  uptimeSec: 29_640, startedAt: NOW - 29_640, cycles: 1_482, trades: 4, hskswapTrades: 4, routedUsd: "87.50",
-  trader: { running: true, mode: "autonomous", engine: "llm", lastCycleAt: NOW - 14 },
-  vaults: MARKET_IDS.map((m) => ({ market: m, address: FIXTURE_VAULT_STATES[m].address, paused: false })),
+  version: "0.1.0-fixtures", chainId: 133, blockNumber: "35241906", locked: SCENARIO === "paused",
+  ...(SCENARIO === "empty" ? { uptimeSec: 40, startedAt: NOW - 40, cycles: 1, trades: 0, hskswapTrades: 0, routedUsd: "0" } : { uptimeSec: 29_640, startedAt: NOW - 29_640, cycles: SCENARIO === "paused" ? 1_511 : 1_482, trades: 4, hskswapTrades: 4, routedUsd: "87.50" }),
+  trader: { running: SCENARIO !== "paused", mode: "autonomous", engine: "llm", lastCycleAt: NOW - 14 },
+  vaults: MARKET_IDS.map((m) => ({ market: m, address: FIXTURE_VAULT_STATES[m].address, paused: SCENARIO === "paused" })),
   gas: { agentHsk: "3.412", low: false, attestationsDeferred: 0 },
 };
 
 function pos(m: MarketId): MarketPosition {
   const btc = m === MARKET_WBTC;
   const v = FIXTURE_VAULT_STATES[m];
+  const empty = SCENARIO === "empty";
+  const cash = SCENARIO === "cash" && !btc;
+  const flat = empty || cash || BigInt(v.balancePrice) === 0n;
   return {
     market: m, vault: v.address, balanceQuote: v.balanceQuote, balancePrice: v.balancePrice, qty: v.balancePrice,
-    exposureUsd: btc ? "25.00" : "36.69",
-    avgEntry: btc ? "7714461000000" : "8750000", mark: btc ? "7667000000000" : "8735714", cexMid: FIXTURE_PRICES[m].cex!.mid,
-    realisedUsd: btc ? "0.00" : "0.31",
-    unrealisedExitUsd: btc ? "-0.15" : "-0.01", unrealisedExitBps: btc ? -62 : -16,
-    unrealisedCexUsd: btc ? "0.28" : "0.28", unrealisedCexBps: btc ? 113 : 76,
-    feeDragUsd: btc ? "0.08" : "0.22",
-    lots: btc ? [{ id: "lot_0b5e2c7a", market: m, openFillId: "fill_btc_1", qtyOpen: "32083", qtyRemaining: "32083", entryPrice: "7714461000000", realisedUsd: "0.00", openedAt: NOW - 9_090, closedAt: null }] : [],
+    exposureUsd: (Number(v.exposureUsdE8) / 1e8).toFixed(2),
+    avgEntry: flat && !(empty && !btc) ? null : btc ? "7810200000000" : "8739000", mark: btc ? "7805500000000" : "8721000", cexMid: FIXTURE_PRICES[m].cex!.mid,
+    realisedUsd: empty ? "0.00" : btc ? "0.00" : cash ? "0.18" : "0.31",
+    unrealisedExitUsd: flat ? "0.00" : btc ? "-0.15" : "-0.13", unrealisedExitBps: flat ? 0 : btc ? -60 : -21,
+    unrealisedCexUsd: flat ? "0.00" : btc ? "0.20" : "0.28", unrealisedCexBps: flat ? 0 : btc ? 80 : 45,
+    feeDragUsd: empty ? "0.00" : btc ? "0.08" : "0.22",
+    lots: empty ? [] : btc ? [{ id: "lot_0b5e2c7a", market: m, openFillId: "fill_btc_1", qtyOpen: "32009", qtyRemaining: "32009", entryPrice: "7810200000000", realisedUsd: "0.00", openedAt: NOW - 9_090, closedAt: null }] : [],
     lotsRealisedUsd: "0.00",
-    epoch: { spentUsd: btc ? "25" : "5", capUsd: "250", remainingUsd: btc ? "225" : "245", resetsAt: Math.floor(NOW / 86400) * 86400 + 86400 },
-    exitReserveUsd: "25.00", turnoverRemainingUsd: btc ? "175.00" : "170.00", reentryLockUntil: m === MARKET_WHSK ? NOW + 2_400 : null, paused: false,
+    epoch: { spentUsd: (Number(v.epoch.spentUsdE8) / 1e8).toFixed(2), capUsd: "250", remainingUsd: (250 - Number(v.epoch.spentUsdE8) / 1e8).toFixed(2), resetsAt: Math.floor(NOW / 86400) * 86400 + 86400 },
+    exitReserveUsd: "25.00", turnoverRemainingUsd: btc ? "175.00" : "170.00", reentryLockUntil: null, paused: SCENARIO === "paused",
   };
 }
 const positions: PositionsOutput = {
   markets: MARKET_IDS.map(pos),
-  portfolio: { exposureUsd: "61.69", maxPortfolioExposureUsd: "150", dailyPnlUsd: "0.15", realisedUsd: "0.31", unrealisedExitUsd: "-0.16", unrealisedCexUsd: "0.56", turnoverUsedUsd: "87.50", turnoverRemainingUsd: "212.50", discretionaryUsedToday: 1, breaker: "armed" },
-  scoreboard: { acts: 3, vetoes: 2, sizeDowns: 1, savedBps: 42, savedUsd: "1.05", discretionary: 1 },
+  portfolio:
+    SCENARIO === "empty"
+      ? { exposureUsd: "60.00", maxPortfolioExposureUsd: "200", dailyPnlUsd: "0", realisedUsd: "0.00", unrealisedExitUsd: "0.00", unrealisedCexUsd: "0.00", turnoverUsedUsd: "0", turnoverRemainingUsd: "500", discretionaryUsedToday: 0, breaker: "armed" }
+      : SCENARIO === "cash"
+        ? { exposureUsd: "25.21", maxPortfolioExposureUsd: "200", dailyPnlUsd: "0.03", realisedUsd: "0.18", unrealisedExitUsd: "-0.15", unrealisedCexUsd: "0.20", turnoverUsedUsd: "124.05", turnoverRemainingUsd: "375.95", discretionaryUsedToday: 1, breaker: "armed" }
+        : { exposureUsd: "86.91", maxPortfolioExposureUsd: "200", dailyPnlUsd: "0.03", realisedUsd: "0.31", unrealisedExitUsd: "-0.28", unrealisedCexUsd: "0.48", turnoverUsedUsd: "62.50", turnoverRemainingUsd: "437.50", discretionaryUsedToday: 1, breaker: "armed" },
+  scoreboard: SCENARIO === "empty" ? { acts: 0, vetoes: 0, sizeDowns: 0, savedBps: 0, savedUsd: "0", discretionary: 0 } : { acts: 3, vetoes: 2, sizeDowns: 1, savedBps: 42, savedUsd: "1.05", discretionary: 1 },
   counters: { uptimeSec: status.uptimeSec, startedAt: status.startedAt, cycles: status.cycles, trades: status.trades, hskswapTrades: status.hskswapTrades, routedUsd: status.routedUsd },
 };
 
@@ -144,6 +205,10 @@ const strategy: StrategyGetOutput = (() => {
   // Agent-tuned values (inside ×0.5–×1.5 of the human anchor)
   s.markets[MARKET_WBTC].entrySpreadBps = Math.round(anchors[MARKET_WBTC].entrySpreadBps * 0.8);
   s.markets[MARKET_WHSK].minNetEdgeBps = Math.round(anchors[MARKET_WHSK].minNetEdgeBps * 1.2);
+  s.portfolio.maxDailyTurnoverUsd = "500";
+  s.portfolio.maxPortfolioExposureUsd = "200";
+  if (SCENARIO === "mempty") for (const m of MARKET_IDS) s.markets[m].enabled = false;
+  if (SCENARIO === "cash") s.portfolio.targetAssets = ["WBTC"];
   return { strategy: s, anchors, updatedAt: NOW - 900 };
 })();
 
@@ -236,18 +301,30 @@ function runChat(sessionId: string, turnId: string, text: string): void {
   }
 }
 
+let statusReads = 0;
 export function createFixtureBridge(): AteBridge {
   return {
     fixtures: true,
     connection: () => delay({ mode: "fixtures" as const, detail: "fixtures mode: synthetic data, no daemon" }, 10),
-    markets: { list: () => delay(ok(MARKET_IDS.map(mv))), get: (id) => delay(ok(mv(id))) },
+    markets: { list: () => (SCENARIO === "loading" ? never() : delay(ok(MARKET_IDS.map(mv)))), get: (id) => delay(ok(mv(id))) },
     quote: { get: (r) => delay(ok(quote(r.market, r.side, r.amountIn)), 250) },
     trade: {
       propose: (r) => delay(ok({ proposalId: "prop_" + hex(r.market + Date.now()).slice(2, 18), journalHash: hex("p"), status: "approved" as never, origin: "human" as never, candidateId: null, expiresAt: nowSec() + 120, quote: quote(r.market, r.side, r.amountIn), reservedTurnoverUsd: "25", approvedBy: "policy" as const }), 400),
       approve: () => delay(ok({ approved: true as const })),
       execute: () => delay(ok({ proposalId: "p", executionId: "exec_1", txHash: hex("tx" + Date.now()), blockNumber: "12345690", amountIn: "25000000", amountOut: "32083", minAmountOut: "31121", quoterOut: "32083", notionalUsdE8: "2500000000", exitPath: false, rationaleHash: hex("r"), attestation: { status: "queued" as const } }), 1200),
     },
-    vaults: { status: () => delay(ok({ status, positions })), pause: () => delay(ok({ vaults: [], decisionId: "pause_x", daemonLocked: true as const })) },
+    vaults: {
+      status: () => {
+        if (SCENARIO === "loading") return never();
+        if (SCENARIO === "error" && statusReads++ > 0) return delay({ ok: false as const, error: { code: "ATE_INTERNAL" as const, message: "fetch failed: connect ECONNREFUSED 127.0.0.1 (daemon or RPC unreachable)" } }, 300);
+        return delay(ok({ status, positions }));
+      },
+      pause: () => delay(ok({ vaults: MARKET_IDS.map((m) => ({ market: m, vault: FIXTURE_VAULT_STATES[m].address, txHash: hex("pause" + m), status: "submitted" as const })), decisionId: "pause_x", daemonLocked: true as const }), 1500),
+    },
+    candidates: {
+      get: () => delay(ok({ candidates: SCENARIO === "empty" ? [] : FIXTURE_CANDIDATES, suppressed: SCENARIO === "empty" ? [] : [{ market: MARKET_WBTC, side: "buy" as const, cause: "entry_interval" as const, bps: 0 }], candidateTtlSec: 180, cycle: 1482, generatedAt: NOW })),
+    },
+    cycle: { request: () => delay(ok({ started: true, cycle: 1483 })) },
     strategy: {
       get: () => delay(ok(strategy)),
       set: (patch) => delay(ok({ status: "applied" as const, decisionId: "strat_fixture", changes: [], clamped: false, strategy: { ...strategy.strategy, ...(patch.enabled !== undefined ? { enabled: patch.enabled } : {}) } })),
