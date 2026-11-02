@@ -67,6 +67,8 @@ export interface AiConfig {
   traderEffort: Effort;
   chatEffort: Effort;
   providers: Partial<Record<ProviderId, ProviderSettings>>;
+  /** Ask's own model (persisted per agent); null = chat follows the trader's choice. */
+  chat?: { provider: ProviderId; model: string } | null;
 }
 export type CredentialSource = "keychain" | "file" | "env" | "profile" | "subscription" | "opencode" | "none";
 export interface AiHealth {
@@ -314,6 +316,7 @@ export class AiEngine {
         ...(isEffort(j.traderEffort) ? { traderEffort: j.traderEffort } : {}),
         ...(isEffort(j.chatEffort) ? { chatEffort: j.chatEffort } : {}),
         ...(j.providers && typeof j.providers === "object" ? { providers: j.providers } : {}),
+        ...(j.chat && isProviderId(j.chat.provider) && typeof j.chat.model === "string" ? { chat: { provider: j.chat.provider, model: j.chat.model } } : {}),
       };
       if (j.models) this.models_ = j.models;
       this.providerChosen = !!(j as { providerChosen?: boolean }).providerChosen;
@@ -561,9 +564,31 @@ export class AiEngine {
   }
 
   /** A new, empty conversation on the selected provider and model. */
-  conversation(): Conversation {
+  conversation(kind: "trader" | "chat" = "trader"): Conversation {
+    if (kind === "chat") {
+      const c = this.chatSelection();
+      return { provider: c.provider, protocol: this.protocolOf(c.provider, c.model), model: c.model, items: [] };
+    }
     const model = this.effectiveModel();
     return { provider: this.cfg.provider, protocol: this.protocolOf(this.cfg.provider, model), model, items: [] };
+  }
+
+  /** The chat agent's provider + model: Ask's own choice when it is still usable, else the trader's. */
+  chatSelection(): { provider: ProviderId; model: string; own: boolean } {
+    const c = this.cfg.chat;
+    if (c && this.configured(c.provider) && this.modelInfo(c.provider, c.model)?.tools !== false) return { ...c, own: true };
+    return { provider: this.cfg.provider, model: this.effectiveModel(), own: false };
+  }
+  /** Ask's model picker. null = follow the trader. A model without tool use is refused. */
+  setChatModel(sel: { provider: ProviderId; model: string } | null): AiConfig {
+    if (sel) {
+      if (!isProviderId(sel.provider) || typeof sel.model !== "string" || !sel.model || sel.model.length > 200) throw Object.assign(new Error("pick a provider and a model"), { status: 400, code: "ATE_CONFIG_INVALID" });
+      if (this.modelInfo(sel.provider, sel.model)?.tools === false) throw Object.assign(new ToolsUnsupportedError(sel.provider, sel.model), { status: 400, code: "ATE_CONFIG_INVALID" });
+      if (!this.configured(sel.provider)) throw Object.assign(new Error(`${PROVIDERS[sel.provider].label} is not connected`), { status: 409, code: "ATE_CONFIG_INVALID" });
+    }
+    this.cfg.chat = sel ? { provider: sel.provider, model: sel.model } : null;
+    this.persist();
+    return this.config;
   }
   /** Append a user message in the conversation's native format. */
   pushUser(c: Conversation, text: string): void {

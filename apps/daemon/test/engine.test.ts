@@ -303,3 +303,20 @@ describe("hard per-cycle deadline (the 523 s hang)", () => {
     expect(runner.tick("tick")).toBe("started");
   }, 10_000);
 });
+
+describe("per-agent models", () => {
+  it("Ask keeps its own model (persisted); the trader keeps its own; an unusable chat choice falls back to the trader's", () => {
+    const h = mkdtempSync(join(tmpdir(), "ate-ai-"));
+    const env = { ATE_KEYSTORE: "file", ANTHROPIC_API_KEY: "sk-ant-test", OPENAI_API_KEY: "sk-test-" + "x".repeat(30), ATE_AI_PROVIDER: "anthropic" };
+    const ai = new AiEngine(h, env);
+    expect(ai.chatSelection()).toMatchObject({ provider: "anthropic", model: "claude-opus-5-5", own: false });
+    ai.setChatModel({ provider: "anthropic", model: "claude-haiku-5-5" });
+    expect(ai.conversation("chat")).toMatchObject({ provider: "anthropic", model: "claude-haiku-5-5" });
+    expect(ai.conversation("trader")).toMatchObject({ model: "claude-opus-5-5" });
+    expect(new AiEngine(h, env).chatSelection()).toMatchObject({ model: "claude-haiku-5-5", own: true });
+    expect(() => ai.setChatModel({ provider: "ollama", model: "x" })).not.toThrow(); // ollama needs no key
+    expect(() => ai.setChatModel({ provider: "gemini", model: "g" })).toThrow(/not connected/);
+    ai.setChatModel(null);
+    expect(ai.chatSelection().own).toBe(false);
+  });
+});

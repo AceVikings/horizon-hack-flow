@@ -91,7 +91,8 @@ export async function runSdkChatTurn(o: SdkChatOptions, t: SdkChatTurn): Promise
   let h = histories.get(t.sessionId);
   const cfg = o.ai.config;
   // a provider or model switch starts a fresh conversation (histories are in each provider's native format)
-  if (!h || h.conv.provider !== cfg.provider || h.conv.model !== cfg.model) h = { at: now(), conv: o.ai.conversation() };
+  const sel = o.ai.chatSelection();
+  if (!h || h.conv.provider !== sel.provider || h.conv.model !== sel.model) h = { at: now(), conv: o.ai.conversation("chat") };
   h.at = now();
   histories.set(t.sessionId, h);
   o.ai.pushUser(h.conv, t.text);
@@ -102,7 +103,7 @@ export async function runSdkChatTurn(o: SdkChatOptions, t: SdkChatTurn): Promise
     toolNames: CHAT_TOOL_ALLOWLIST,
     maxTurns: 8,
     maxTokens: 8000,
-    onText: (d: string) => o.emit({ type: "chat.delta", at: now(), data: { sessionId: t.sessionId, turnId: t.turnId, role: "agent", text: d, engine: "llm", model: cfg.model, provider: cfg.provider, done: false } }),
+    onText: (d: string) => o.emit({ type: "chat.delta", at: now(), data: { sessionId: t.sessionId, turnId: t.turnId, role: "agent", text: d, engine: "llm", model: sel.model, provider: sel.provider, done: false } }),
     // opencode runs the tools itself (over Flow's MCP): its calls arrive afterwards as cards
     onToolCall: (name: string, input: unknown, result: unknown) => o.emit({ type: "chat.tool", at: now(), data: { sessionId: t.sessionId, turnId: t.turnId, tool: name, args: input, result } }),
     call: async (name: string, input: unknown) => {
@@ -112,5 +113,5 @@ export async function runSdkChatTurn(o: SdkChatOptions, t: SdkChatTurn): Promise
     },
   });
   const unstreamed = r.stop === "refusal" ? "\n\nI can't help with that request." : r.stop === "max_tokens" || r.stop === "max_turns" ? `\n\n(stopped early: ${r.stop.replace("_", " ")})` : "";
-  return { reply: (r.text + unstreamed).trim(), engine: "llm", streamed: true, unstreamed, model: cfg.model };
+  return { reply: (r.text + unstreamed).trim(), engine: "llm", streamed: true, unstreamed, model: sel.model };
 }

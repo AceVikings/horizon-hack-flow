@@ -556,14 +556,19 @@ export function registerAppRoutes(o: AppRoutesOptions): { trader: TraderSupervis
     const st = trader.state();
     if (st.running && st.engine === "llm" && (before.provider !== ai.config.provider || before.model !== ai.config.model || before.engine !== ai.config.engine)) await trader.start({ mode: st.mode, engine: "llm", cycleSeconds: st.cycleSeconds });
   };
-  r.register({ method: "GET", path: "/engine/providers", scopes: ["ui", "view"], handler: ({ json }) => json(200, { selected: { provider: ai.config.provider, model: ai.effectiveModel(), auto: ai.config.provider === "subscription" && !ai.config.model, engine: ai.config.engine }, providers: ai.providers() }) });
+  r.register({ method: "GET", path: "/engine/providers", scopes: ["ui", "view"], handler: ({ json }) => json(200, { selected: { provider: ai.config.provider, model: ai.effectiveModel(), auto: ai.config.provider === "subscription" && !ai.config.model, engine: ai.config.engine }, chat: ai.chatSelection(), providers: ai.providers() }) });
   r.register({
     method: "POST",
     path: "/engine/select",
     scopes: ["ui"],
     handler: ({ body, json }) =>
       guard(json, async () => {
-        const b = (body ?? {}) as { provider?: unknown; model?: unknown; engine?: unknown };
+        const b = (body ?? {}) as { provider?: unknown; model?: unknown; engine?: unknown; agent?: unknown };
+        // Ask's own model (persisted separately); provider null = follow the trader
+        if (b.agent === "chat") {
+          ai.setChatModel(b.provider === null ? null : isProviderId(b.provider) && typeof b.model === "string" ? { provider: b.provider, model: b.model } : (() => { throw Object.assign(new Error("pick a provider and a model"), { status: 400, code: "ATE_CONFIG_INVALID" }); })());
+          return { selected: { provider: ai.config.provider, model: ai.effectiveModel(), auto: ai.config.provider === "subscription" && !ai.config.model, engine: ai.config.engine }, chat: ai.chatSelection(), providers: ai.providers() };
+        }
         if (!isProviderId(b.provider)) throw Object.assign(new Error("unknown provider"), { status: 400, code: "ATE_CONFIG_INVALID" });
         const before = ai.config;
         ai.setConfig({ provider: b.provider, ...(typeof b.model === "string" ? { model: b.model } : {}), ...(b.engine === "sdk" || b.engine === "claude-code" ? { engine: b.engine } : {}) });
