@@ -25,6 +25,8 @@ import { TOOL_DEFINITIONS } from "@ate/mcp";
 import {
   PROVIDERS,
   PROVIDER_IDS,
+  REQUEST_TIMEOUT_MS,
+  abortable,
   ProviderKeys,
   ToolsUnsupportedError,
   anthropicFor,
@@ -163,7 +165,7 @@ export interface LoopOptions {
 
 /** Minimal client surface the loop needs (the real Anthropic client, or a mock in tests). */
 export interface LoopClient {
-  beta: { messages: { stream(params: Record<string, unknown>, opts?: { signal?: AbortSignal }): { on(ev: "text", f: (d: string) => void): unknown; finalMessage(): Promise<BetaMessage> } } };
+  beta: { messages: { stream(params: Record<string, unknown>, opts?: { signal?: AbortSignal; timeout?: number }): { on(ev: "text", f: (d: string) => void): unknown; finalMessage(): Promise<BetaMessage> } } };
 }
 
 const hasFallback = (m: string) => m !== "claude-haiku-5-5";
@@ -189,9 +191,10 @@ export async function runToolLoop(client: LoopClient, o: LoopOptions): Promise<L
       cache_control: { type: "ephemeral" },
       ...((o.fallbacks ?? true) && hasFallback(o.model) ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" } : {}),
     };
-    const stream = client.beta.messages.stream(params, o.signal ? { signal: o.signal } : undefined);
+    const stream = client.beta.messages.stream(params, { timeout: REQUEST_TIMEOUT_MS, ...(o.signal ? { signal: o.signal } : {}) });
     if (o.onText) stream.on("text", o.onText);
-    const msg = await stream.finalMessage();
+    // hard deadline: a stream that never settles still ends at the cycle kill
+    const msg = await abortable(stream.finalMessage(), o.signal);
     turns++;
     servedBy = msg.model ?? servedBy;
     usage.inputTokens += msg.usage?.input_tokens ?? 0;
@@ -216,9 +219,10 @@ export async function runToolLoop(client: LoopClient, o: LoopOptions): Promise<L
       uses.map(async (u) => {
         toolCalls++;
         try {
-          const r = await o.call(u.name, u.input, u.id);
+          const r = await abortable(o.call(u.name, u.input, u.id), o.signal);
           return { type: "tool_result" as const, tool_use_id: u.id, content: r.content, ...(r.isError ? { is_error: true } : {}) };
         } catch (e) {
+          if (o.signal?.aborted) throw e;
           return { type: "tool_result" as const, tool_use_id: u.id, content: `tool failed: ${(e as Error).message}`, is_error: true };
         }
       }),

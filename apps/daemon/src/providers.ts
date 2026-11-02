@@ -238,10 +238,30 @@ export class ToolsUnsupportedError extends Error {
   }
 }
 
+
+/**
+ * Hard deadline: resolves/rejects with `p`, or rejects as soon as `signal` aborts — even when the underlying request
+ * or tool never settles (an SDK stream that hangs, a stuck RPC). The trader's 90 s cycle kill relies on this.
+ */
+export function abortable<T>(p: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return p;
+  if (signal.aborted) return Promise.reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+  return new Promise<T>((res, rej) => {
+    const on = () => rej(Object.assign(new Error("aborted at the cycle deadline"), { name: "AbortError" }));
+    signal.addEventListener("abort", on, { once: true });
+    p.then(
+      (v) => (signal.removeEventListener("abort", on), res(v)),
+      (e) => (signal.removeEventListener("abort", on), rej(e)),
+    );
+  });
+}
+/** Per-request ceiling handed to every SDK call (the cycle deadline aborts sooner). */
+export const REQUEST_TIMEOUT_MS = 85_000;
+
 // ------------------------------------------------------------------ OpenAI-compatible loop (openai, openrouter, ollama, proxy)
 
 export interface OpenAILike {
-  chat: { completions: { create(body: Record<string, unknown>, opts?: { signal?: AbortSignal }): Promise<unknown> } };
+  chat: { completions: { create(body: Record<string, unknown>, opts?: { signal?: AbortSignal; timeout?: number }): Promise<unknown> } };
   models: { list(): Promise<unknown> };
 }
 
@@ -267,7 +287,7 @@ export async function runOpenAILoop(client: OpenAILike, history: ChatCompletionM
     const calls: { id: string; name: string; args: string }[] = [];
     let refusal: string | null = null;
     if (o.stream) {
-      const s = (await client.chat.completions.create(body, o.signal ? { signal: o.signal } : undefined)) as AsyncIterable<{
+      const s = (await abortable(client.chat.completions.create(body, { timeout: REQUEST_TIMEOUT_MS, ...(o.signal ? { signal: o.signal } : {}) }), o.signal)) as AsyncIterable<{
         model?: string;
         choices: { delta: { content?: string | null; refusal?: string | null; tool_calls?: { index: number; id?: string; function?: { name?: string; arguments?: string } }[] }; finish_reason: string | null }[];
         usage?: { prompt_tokens?: number; completion_tokens?: number; prompt_tokens_details?: { cached_tokens?: number } } | null;
@@ -295,7 +315,7 @@ export async function runOpenAILoop(client: OpenAILike, history: ChatCompletionM
         if (c.finish_reason) finish = c.finish_reason;
       }
     } else {
-      const r = (await client.chat.completions.create(body, o.signal ? { signal: o.signal } : undefined)) as {
+      const r = (await abortable(client.chat.completions.create(body, { timeout: REQUEST_TIMEOUT_MS, ...(o.signal ? { signal: o.signal } : {}) }), o.signal)) as {
         model?: string;
         choices: { message: { content?: string | null; refusal?: string | null; tool_calls?: { id: string; function: { name: string; arguments: string } }[] }; finish_reason: string }[];
         usage?: { prompt_tokens?: number; completion_tokens?: number; prompt_tokens_details?: { cached_tokens?: number } };
@@ -323,8 +343,9 @@ export async function runOpenAILoop(client: OpenAILike, history: ChatCompletionM
       toolCalls++;
       let r: ToolCallResult;
       try {
-        r = await o.call(c.name, dropNulls(JSON.parse(c.args || "{}")), c.id);
+        r = await abortable(o.call(c.name, dropNulls(JSON.parse(c.args || "{}")), c.id), o.signal);
       } catch (e) {
+        if (o.signal?.aborted) throw e;
         r = { content: `tool failed: ${(e as Error).message}`, isError: true };
       }
       history.push({ role: "tool", tool_call_id: c.id, content: r.isError ? `ERROR ${r.content}` : r.content });
@@ -347,11 +368,11 @@ export async function runGeminiLoop(client: GeminiLike, history: Content[], o: G
   const decls = geminiTools(o.toolNames);
   for (;;) {
     if (o.signal?.aborted) return { text, stop: "aborted", turns, toolCalls, usage, servedBy };
-    const r = await client.models.generateContent({
+    const r = await abortable(client.models.generateContent({
       model: o.model,
       contents: history,
-      config: { systemInstruction: o.system, tools: [{ functionDeclarations: decls }], maxOutputTokens: o.maxTokens ?? 16000, ...(o.signal ? { abortSignal: o.signal } : {}) },
-    });
+      config: { systemInstruction: o.system, tools: [{ functionDeclarations: decls }], maxOutputTokens: o.maxTokens ?? 16000, httpOptions: { timeout: REQUEST_TIMEOUT_MS }, ...(o.signal ? { abortSignal: o.signal } : {}) },
+    }), o.signal);
     turns++;
     servedBy = r.modelVersion ?? servedBy;
     usage.inputTokens += r.usageMetadata?.promptTokenCount ?? 0;
@@ -378,8 +399,9 @@ export async function runGeminiLoop(client: GeminiLike, history: Content[], o: G
       toolCalls++;
       let res: ToolCallResult;
       try {
-        res = await o.call(fc.name ?? "", fc.args ?? {}, fc.id ?? fc.name ?? "");
+        res = await abortable(o.call(fc.name ?? "", fc.args ?? {}, fc.id ?? fc.name ?? ""), o.signal);
       } catch (e) {
+        if (o.signal?.aborted) throw e;
         res = { content: `tool failed: ${(e as Error).message}`, isError: true };
       }
       let parsed: unknown = res.content;

@@ -248,3 +248,45 @@ describe("in-app agents", () => {
     expect(events[1]!.data).toMatchObject({ text: "Up $0.31 today.", done: false });
   });
 });
+
+describe("hard per-cycle deadline (the 523 s hang)", () => {
+  const prompt = join(mkdtempSync(join(tmpdir(), "ate-p-")), "PROMPT.md");
+  writeFileSync(prompt, "You are the trader.");
+  const never = <T,>() => new Promise<T>(() => {});
+
+  it("a request that never settles ends at the abort, and the timeout reaches the SDK call", async () => {
+    const opts: unknown[] = [];
+    const client = { beta: { messages: { stream: (_p: unknown, o: unknown) => (opts.push(o), { on() {}, finalMessage: () => never<never>() }) } }, models: { retrieve: async () => ({}) } } as unknown as LoopClient & Anthropic;
+    const ai = new AiEngine(mkdtempSync(join(tmpdir(), "ate-ai-")), { ATE_KEYSTORE: "file", ANTHROPIC_API_KEY: "sk-ant-test" }, { anthropic: () => client });
+    const ex = createSdkTraderExecutor({ ai, service: { callTool: async () => ({ ok: true, data: {} }) } as never, promptFile: prompt, toolNames: ["ate_decide"], dryRun: false, context: [] });
+    const ac = new AbortController();
+    setTimeout(() => ac.abort(), 50);
+    const t0 = Date.now();
+    const r = await ex.run({ cycle: 1, reason: "tick", startedAt: t0, signal: ac.signal });
+    expect(Date.now() - t0).toBeLessThan(1000);
+    expect(r.ok).toBe(false);
+    expect(opts[0]).toMatchObject({ timeout: 85_000, signal: ac.signal });
+  });
+
+  it("a tool call that never settles ends at the abort too (OpenAI-compatible loop)", async () => {
+    const client: OpenAILike = {
+      chat: { completions: { create: async () => ({ choices: [{ message: { content: "", tool_calls: [{ id: "c1", function: { name: "ate_positions", arguments: "{}" } }] }, finish_reason: "tool_calls" }] }) } },
+      models: { list: async () => [] },
+    };
+    const ac = new AbortController();
+    setTimeout(() => ac.abort(), 50);
+    const t0 = Date.now();
+    await expect(runOpenAILoop(client, [], { model: "m", system: "s", toolNames: ["ate_positions"], strict: false, stream: false, signal: ac.signal, call: () => never() })).rejects.toThrow(/abort/);
+    expect(Date.now() - t0).toBeLessThan(1000);
+  });
+
+  it("the runner records the timeout and the next cycle starts on schedule", async () => {
+    const { TraderRunner } = await import("@ate/trader");
+    const timeouts: number[] = [];
+    const runner = new TraderRunner({ executor: { run: () => never() }, timeoutMs: 60, onTimeout: async (c) => void timeouts.push(c) });
+    runner.tick("tick");
+    await new Promise((r) => setTimeout(r, 5_300));
+    expect(timeouts).toEqual([1]);
+    expect(runner.tick("tick")).toBe("started");
+  }, 10_000);
+});
