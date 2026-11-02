@@ -1,0 +1,20 @@
+{
+  "name": "@ate/site",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "description": "Flow landing page (flowverse.cloud): static Vite build, vanilla TS, @ate/ui tokens and fonts",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@ate/ui": "workspace:*"
+  },
+  "devDependencies": {
+    "vite": "^5.4.11"
+  }
+}

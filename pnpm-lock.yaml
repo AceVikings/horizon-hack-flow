@@ -179,6 +179,16 @@ importers:
         specifier: ^5.4.11
         version: 5.4.21(@types/node@22.20.5)
 
+  apps/site:
+    dependencies:
+      '@ate/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+    devDependencies:
+      vite:
+        specifier: ^5.4.11
+        version: 5.4.21(@types/node@22.20.5)
+
   apps/worker:
     dependencies:
       '@ate/approve':
