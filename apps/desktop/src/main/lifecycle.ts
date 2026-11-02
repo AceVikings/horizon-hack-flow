@@ -3,7 +3,7 @@
 // and a stdin pipe for `approval-fallback enable`. If a daemon is already running for this ATE_HOME (started by
 // hand), the app attaches to it instead and leaves its lifecycle alone.
 import { spawn, type ChildProcess } from "node:child_process";
-import { createWriteStream, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, type WriteStream } from "node:fs";
+import { createWriteStream, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync, type WriteStream } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
@@ -17,6 +17,14 @@ export interface CodeLine {
 
 export function ateHome(): string {
   return process.env.ATE_HOME ?? join(homedir(), ".ate");
+}
+
+function readFileSafe(p: string): string {
+  try {
+    return readFileSync(p, "utf8").trim();
+  } catch {
+    return "";
+  }
 }
 
 function alive(pid: number): boolean {
@@ -103,7 +111,19 @@ export class DaemonSupervisor {
   /** Start ours, or adopt one already running for this home. Resolves once runtime.json names a live pid. */
   async start(): Promise<RuntimeJson> {
     const home = ateHome();
-    const existing = readRuntime(home);
+    let existing = readRuntime(home);
+    // A daemon this app spawned in an earlier session (the app was killed before it could stop it): replace it, so
+    // its code pipe and lifecycle are ours again.
+    const mine = Number(readFileSafe(join(home, "flow-daemon.pid")));
+    if (existing && !this.child && existing.pid === mine) {
+      try {
+        process.kill(mine, "SIGTERM");
+      } catch {
+        /* gone */
+      }
+      for (let i = 0; i < 40 && alive(mine); i++) await new Promise((r) => setTimeout(r, 200));
+      existing = null;
+    }
     if (existing && (!this.child || existing.pid !== this.child.pid)) {
       this.owned = false;
       return existing;
@@ -122,6 +142,7 @@ export class DaemonSupervisor {
     const child = spawn(node, args, { cwd: resolve(this.appPath, "../.."), env, stdio: ["pipe", "pipe", "pipe", "pipe"], detached: false });
     this.child = child;
     this.owned = true;
+    if (child.pid) writeFileSync(join(home, "flow-daemon.pid"), String(child.pid), { mode: 0o600 });
     child.stdout?.pipe(this.log, { end: false });
     child.stderr?.on("data", (b: Buffer) => {
       this.log?.write(b);

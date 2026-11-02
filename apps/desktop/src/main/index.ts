@@ -294,6 +294,7 @@ app.whenReady().then(async () => {
   // Lane D2: the app owns the daemon (start/attach/unlock, no CLI); the renderer waits on #/unlock until it is ready.
   const setup = registerSetupIpc({ ipcMain, daemon, appPath: app.getAppPath(), win: () => win, fixtures: FIXTURES });
   app.on("before-quit", () => void (process.env.FLOW_KEEP_DAEMON === "1" ? undefined : setup.shutdown()));
+  for (const sig of ["SIGTERM", "SIGINT"] as const) process.once(sig, () => void setup.shutdown().finally(() => app.exit(0)));
   createWindow();
   if (!FIXTURES) {
     win!.webContents.once("did-finish-load", () => void win?.webContents.executeJavaScript(`location.hash = "#/unlock"`));
