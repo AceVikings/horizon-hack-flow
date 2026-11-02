@@ -13,10 +13,25 @@ Built by team Vikings for the HSK Chain Horizon Hackathon (AI Agent Trading). Ap
 | Item | Status |
 |---|---|
 | Contracts | Done. 148 tests pass. An optional fork test also runs them against the real HSKSwap pools and Supra prices. |
-| Testnet (chain 133) | Deploying now. Addresses go in `deployments/133.json`. |
+| Testnet (chain 133) | Live. Two vaults, test tokens and pools. Addresses are in `deployments/133.json`. |
+| AI trader on testnet | Ran on 2 Nov. Claude made trades, skipped trades and one veto. All are in the journal. |
+| Rogue test on testnet | Done. Every attack with the stolen agent key reverted on-chain. |
 | Mainnet (chain 177) | Next. The same scripts deploy it. |
 | AI trader | Claude (Sonnet) through Claude Code. You can plug in any MCP agent. |
 | Profit | Not promised. The pools are thin. What ATE gives you is a hard limit on loss. |
+
+### Proof on testnet
+
+These links are on the HashKey Chain **testnet** (chain 133), with test tokens.
+
+- Vaults: [Vault-HSK](https://testnet-explorer.hskchain.net/address/0xF80A74F4D9C17Db8a2a0F32558a9FC3A63e2Bcd2?tab=contract) and [Vault-BTC](https://testnet-explorer.hskchain.net/address/0x6Da0c6EF7328d3aD6b0b8781770D941D065a6693?tab=contract).
+- A trade that Claude decided: [WBTC buy](https://testnet-explorer.hskchain.net/tx/0x4ff2ad5176975fed3b45e5242894cce949b68b626051e82ec3d270474fde9c0d). The pool price gap was staged by us, because nobody else trades on the test pools.
+- The EAS attestation for that trade: [attest tx](https://testnet-explorer.hskchain.net/tx/0x1f042937320537b9e3b749d327eb2648613aeb1c6319a476f48341bba0a798f8).
+- Skipped trades and the veto: in the [journal export](docs/testnet-133-journal.json) (`no_trade` records, head hash `0x5e72…ad85`).
+- Rogue agent reverts: [trade too big](https://testnet-explorer.hskchain.net/tx/0x7213dfc80d876804e3232bc572b2ecc99faae25f75e4457da71b8616ca091e24), [bad price](https://testnet-explorer.hskchain.net/tx/0x0677fb8896195c736201374805876d0aa0122b0ea57ecdf08b5f78f40b531558), [withdraw](https://testnet-explorer.hskchain.net/tx/0x6f5d929c9591a028c811eb7f841cc77bf435619f799b344f8ff4881cfb139a8c).
+- Kill switch: [guardian pause](https://testnet-explorer.hskchain.net/tx/0xaba62b83fd096241a703c4f4ced8b7a7eb4a3e9101a127c71c60e1c11c4a221a), [trade refused while paused](https://testnet-explorer.hskchain.net/tx/0x62f96834dfa5ff64bb0ddd378c56f2a42d5b83b96d951f7a0803ca6029b31a8b), [owner unpause](https://testnet-explorer.hskchain.net/tx/0x530bafc2456b50dd35ee58359f02b1c4b8e44c9719f154caff7e599680f9e949).
+
+All links, with what each one shows: [`docs/JUDGE.md`](docs/JUDGE.md).
 
 ## Why a vault, and not a normal wallet
 
@@ -362,7 +377,7 @@ flowchart LR
 | WBTC/USDT pool | `0xd9EA2cE468957Ba49cCC38C4758Ed6ecD561449A` |
 | Supra storage | `0x58e158c74DF7Ad6396C0dcbadc4878faC9e93d57` (HSK = pair 517, BTC = pair 0) |
 | EAS | `0x4200000000000000000000000000000000000021` |
-| Vaults | Refer to `deployments/177.json` and `deployments/133.json` after deployment. |
+| Vaults | Testnet: `deployments/133.json`. Mainnet: `deployments/177.json` after deployment. |
 
 ---
 
