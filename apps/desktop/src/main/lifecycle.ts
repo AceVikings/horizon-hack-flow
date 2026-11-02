@@ -15,6 +15,12 @@ export interface CodeLine {
   at: number;
 }
 
+/** Latest one-time code the daemon issued for a pending strategy change ("strategy change <changeId>: …"). */
+export function findStrategyCode(codes: readonly CodeLine[], changeId: string, now = Math.floor(Date.now() / 1000), ttl = 60): { code: string; expiresAt: number } | null {
+  const c = [...codes].reverse().find((x) => x.code && x.line.includes(`strategy change ${changeId}:`));
+  return c && c.code && now - c.at < ttl ? { code: c.code, expiresAt: c.at + ttl } : null;
+}
+
 export function ateHome(): string {
   return process.env.ATE_HOME ?? join(homedir(), ".ate");
 }

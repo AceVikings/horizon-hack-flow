@@ -12,7 +12,7 @@ import type { Res } from "../shared/bridge";
 import { APPROVAL_RE, SETUP_GET_RE, SETUP_POST_RE, type ApprovalStart, type DaemonState, type SetupIpc, type SetupPath } from "../shared/setup-bridge";
 import { signApproval } from "./approve";
 import type { DaemonClient } from "./daemon";
-import { DaemonSupervisor, ateHome } from "./lifecycle";
+import { DaemonSupervisor, ateHome, findStrategyCode } from "./lifecycle";
 
 const err = <T>(message: string, code = "ATE_INTERNAL"): Res<T> => ({ ok: false, error: { code: code as never, message } });
 const PK = /^0x[0-9a-fA-F]{64}$/;
@@ -271,6 +271,17 @@ export function registerSetupIpc(o: { ipcMain: IpcMain; daemon: DaemonClient; ap
       writeFileSync(r.filePath, JSON.stringify(data, null, 2));
       return { ok: true, data: { path: r.filePath } };
     },
+  };
+  /** D3: the one-time code for a pending loosening change when Touch ID (ate-approve) is unavailable. */
+  handlers["setup.strategyCode"] = async (changeId: string) => {
+    if (typeof changeId !== "string" || !/^[A-Za-z0-9_-]{1,80}$/.test(changeId)) return null;
+    ensureFallback();
+    for (let i = 0; i < 30; i++) {
+      const c = findStrategyCode(sup.codes, changeId);
+      if (c) return c;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    return null;
   };
   /** User-run local proxy management API (CLIProxyAPI-style). Loopback or https only; the key stays in main. */
   handlers["setup.proxy"] = async (q: { baseURL?: string; mgmtKey?: string; op?: string; provider?: string; state?: string }) => {

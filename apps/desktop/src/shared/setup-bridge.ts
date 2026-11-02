@@ -82,10 +82,12 @@ export interface SetupBridge {
    * Local proxy (advanced, user-run, never bundled): its management API, called from main with the management key.
    * op: "accounts" | "auth-url" (opens the provider's login page in the browser) | "status".
    */
+  /** One-time code for a pending loosening change (Touch ID not set up): null when none was issued. */
+  strategyCode(changeId: string): Promise<{ code: string; expiresAt: number } | null>;
   proxy(o: { baseURL: string; mgmtKey: string; op: "accounts" | "auth-url" | "status"; provider?: string; state?: string }): Promise<Res<unknown>>;
 }
 
-export const SETUP_IPC = ["setup.daemon", "setup.start", "setup.stop", "setup.submitCode", "setup.unlock", "setup.get", "setup.post", "setup.keygen", "setup.approveStart", "setup.approveFinish", "setup.open", "setup.saveJson", "setup.proxy"] as const;
+export const SETUP_IPC = ["setup.daemon", "setup.start", "setup.stop", "setup.submitCode", "setup.unlock", "setup.get", "setup.post", "setup.keygen", "setup.approveStart", "setup.approveFinish", "setup.open", "setup.saveJson", "setup.proxy", "setup.strategyCode"] as const;
 export type SetupIpc = (typeof SETUP_IPC)[number];
 
 const PROV = "(anthropic|openai|gemini|openrouter|ollama|proxy)";

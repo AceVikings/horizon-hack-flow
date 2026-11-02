@@ -11,7 +11,8 @@
     "build": "electron-vite build",
     "start": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "screens": "electron-vite build && ATE_FIXTURES=1 ATE_SCREENSHOT_DIR=../../.context/screens electron ."
+    "screens": "electron-vite build && ATE_FIXTURES=1 ATE_SCREENSHOT_DIR=../../.context/screens electron .",
+    "test": "vitest run"
   },
   "dependencies": {
     "@ate/approve": "workspace:*",
