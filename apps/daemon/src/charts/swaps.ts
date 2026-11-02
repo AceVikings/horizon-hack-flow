@@ -6,6 +6,11 @@
 import type Database from "better-sqlite3";
 import { poolPriceFromSqrtPriceX96, type Candle } from "@ate/core";
 
+/** Known eth_getLogs block-range limits of the public RPCs (mainnet 100 000; testnet ≈ 5 000). */
+export const KNOWN_RANGE: Record<number, number> = { 177: 99_000, 133: 5_000 };
+const MIN_RANGE = 500;
+const RANGE_ERR = /range|too large|too many|limit exceeded|exceed/i;
+
 export const SWAP_TOPIC = "0xc42079f94a6350d7e6235f29174924f928cc2ac818eb64fed8004e115fbcca67";
 
 export interface Rpc {
@@ -43,6 +48,9 @@ export interface SwapIndexOptions {
   gapMs?: number;
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
+  /** Wall-clock budget per sync, ms (default 8 000): the app's chart request must answer well inside 15 s. */
+  budgetMs?: number;
+  clockMs?: () => number;
 }
 
 const hexn = (n: number) => `0x${n.toString(16)}`;
@@ -80,17 +88,21 @@ export class SwapIndex {
   /** Per-chain block range learned from "range too large" errors (load-balanced RPCs differ). */
   private range = new Map<number, number>();
   private inflight = new Map<string, Promise<SyncResult>>();
+  private readonly explicitRange: boolean;
 
   constructor(
     private readonly db: Database.Database,
     opts: SwapIndexOptions = {},
   ) {
+    this.explicitRange = opts.maxRange !== undefined;
     this.o = {
       maxRange: opts.maxRange ?? 99_000,
       maxCalls: opts.maxCalls ?? 40,
       gapMs: opts.gapMs ?? 120,
       sleep: opts.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms))),
       now: opts.now ?? (() => Math.floor(Date.now() / 1000)),
+      budgetMs: opts.budgetMs ?? 8000,
+      clockMs: opts.clockMs ?? Date.now,
     };
     db.exec(`CREATE TABLE IF NOT EXISTS chart_swaps (
       chain_id INTEGER NOT NULL, pool TEXT NOT NULL, block INTEGER NOT NULL, log_index INTEGER NOT NULL,
@@ -132,42 +144,48 @@ export class SwapIndex {
     const tsOf = (b: number) => Math.round(head.t - (head.n - b) * spb);
     const wantLo = Math.max(0, head.n - Math.ceil((head.t - fromT) / spb));
     const row = this.db.prepare("SELECT lo, hi FROM chart_sync WHERE chain_id = ? AND pool = ?").get(ref.chainId, pool) as { lo: number; hi: number } | undefined;
-    // ranges still to fetch: forward (hi, head] first (fresh data matters most), then backward [wantLo, lo)
-    const todo: [number, number][] = [];
-    const R = this.range.get(ref.chainId) ?? this.o.maxRange;
+    // fetch forward (hi, head] first (fresh data matters most), then backward [wantLo, lo); chunks of the chain's
+    // block range, halved in place on "range too large"; bounded by maxCalls and a time budget (partial is fine:
+    // coverage stays one contiguous range and the next request continues).
+    let R = this.range.get(ref.chainId) ?? (this.explicitRange ? this.o.maxRange : (KNOWN_RANGE[ref.chainId] ?? this.o.maxRange));
     let lo = row?.lo ?? head.n + 1;
     let hi = row?.hi ?? head.n;
-    if (row) for (let a = hi + 1; a <= head.n; a += R) todo.push([a, Math.min(head.n, a + R - 1)]);
-    for (let b = lo - 1; b >= wantLo; b -= R) todo.push([Math.max(wantLo, b - R + 1), b]);
     const ins = this.db.prepare("INSERT OR IGNORE INTO chart_swaps (chain_id, pool, block, log_index, t, price, base, quote, side, tx, sender) VALUES (?,?,?,?,?,?,?,?,?,?,?)");
+    const save = this.db.prepare("INSERT INTO chart_sync (chain_id, pool, lo, hi, updated_at) VALUES (?,?,?,?,?) ON CONFLICT(chain_id, pool) DO UPDATE SET lo = excluded.lo, hi = excluded.hi, updated_at = excluded.updated_at");
+    const deadline = this.o.clockMs() + this.o.budgetMs;
     let calls = 0;
     let added = 0;
-    const getLogs = async (a: number, b: number): Promise<Parameters<typeof decodeSwap>[0][]> => {
+    let stopped = false;
+    while (!stopped) {
+      const forward = !!row && hi < head.n;
+      if (!forward && lo - 1 < wantLo) break;
+      const a = forward ? hi + 1 : Math.max(wantLo, lo - R);
+      const b = forward ? Math.min(head.n, hi + R) : lo - 1;
+      if (calls >= this.o.maxCalls || this.o.clockMs() > deadline) break;
       if (calls > 0) await this.o.sleep(this.o.gapMs);
       calls++;
+      let logs: Parameters<typeof decodeSwap>[0][];
       try {
-        return (await rpc.request("eth_getLogs", [{ address: ref.pool, fromBlock: hexn(a), toBlock: hexn(b), topics: [SWAP_TOPIC] }])) as Parameters<typeof decodeSwap>[0][];
+        logs = (await rpc.request("eth_getLogs", [{ address: ref.pool, fromBlock: hexn(a), toBlock: hexn(b), topics: [SWAP_TOPIC] }])) as Parameters<typeof decodeSwap>[0][];
       } catch (e) {
-        if (!/range|too large|too many|limit/i.test(String((e as Error).message)) || b - a < 1000) throw e;
-        const mid = a + Math.floor((b - a) / 2);
-        this.range.set(ref.chainId, Math.max(1000, mid - a + 1));
-        return [...(await getLogs(a, mid)), ...(await getLogs(mid + 1, b))];
+        if (!RANGE_ERR.test(String((e as Error).message)) || R <= MIN_RANGE) {
+          if (calls === 1 && !row) throw e;
+          stopped = true; // keep what we have; the caller still gets cached rows
+          break;
+        }
+        R = Math.max(MIN_RANGE, Math.floor(R / 2));
+        this.range.set(ref.chainId, R);
+        continue;
       }
-    };
-    for (const [a, b] of todo) {
-      if (calls >= this.o.maxCalls) break;
-      const logs = await getLogs(a, b);
       this.db.transaction(() => {
         for (const l of logs) {
           const s = decodeSwap(l, ref, tsOf(Number(big(l.blockNumber))));
           added += ins.run(ref.chainId, pool, s.block, s.logIndex, s.t, s.price, s.base, s.quote, s.side, s.tx, s.sender).changes;
         }
       })();
-      if (a > hi) hi = b;
+      if (forward) hi = b;
       else lo = a;
-      this.db
-        .prepare("INSERT INTO chart_sync (chain_id, pool, lo, hi, updated_at) VALUES (?,?,?,?,?) ON CONFLICT(chain_id, pool) DO UPDATE SET lo = excluded.lo, hi = excluded.hi, updated_at = excluded.updated_at")
-        .run(ref.chainId, pool, lo, hi, this.o.now());
+      save.run(ref.chainId, pool, lo, hi, this.o.now());
     }
     const coveredFromT = tsOf(lo);
     return { calls, added, complete: lo <= wantLo, coveredFromT, headT: head.t, secondsPerBlock: spb, cached: calls === 0 };

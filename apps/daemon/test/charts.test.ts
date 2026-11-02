@@ -1,6 +1,6 @@
 import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
-import { atr, bollinger, bucketCandles, ema, indicatorSeries, macd, rsi, sma, SwapIndex, vwap, decodeSwap } from "../src/charts/index.js";
+import { atr, bollinger, bucketCandles, ChartService, ema, indicatorSeries, macd, rsi, sma, SwapIndex, vwap, decodeSwap } from "../src/charts/index.js";
 import { SWAP_TOPIC, type SwapRow } from "../src/charts/swaps.js";
 
 const close = Array.from({ length: 40 }, (_, i) => 100 + Math.sin(i / 3) * 5 + i * 0.2);
@@ -112,5 +112,88 @@ describe("Swap logs", () => {
     calls.length = 0;
     await idx.sync(rpc, ref, from);
     expect(calls).toEqual([]); // nothing new
+  });
+
+  const limitedRpc = (limit: number, head: number, calls: [number, number][], rejects: { n: number }) => ({
+    async request(method: string, params: unknown[] = []) {
+      if (method === "eth_getBlockByNumber") {
+        const n = params[0] === "latest" ? head : Number(params[0] as string);
+        return { number: `0x${n.toString(16)}`, timestamp: `0x${(1_000_000 + n * 2).toString(16)}` };
+      }
+      const f = params[0] as { fromBlock: string; toBlock: string };
+      const a = Number(f.fromBlock);
+      const b = Number(f.toBlock);
+      if (b - a + 1 > limit) {
+        rejects.n++;
+        throw new Error('HTTP 400: {"error":{"code":-32602,"message":"block range too large"}}');
+      }
+      calls.push([a, b]);
+      return [head - 10].filter((x) => x >= a && x <= b).map((x) => log(x, -(10n ** 18n), 87_500n));
+    },
+  });
+
+  it("testnet 133: starts at the known 5 000-block range, so no request is rejected", async () => {
+    const calls: [number, number][] = [];
+    const rejects = { n: 0 };
+    const idx = new SwapIndex(new Database(":memory:"), { gapMs: 0 });
+    const head = 200_000;
+    const r = await idx.sync(limitedRpc(5000, head, calls, rejects), { ...ref, chainId: 133 }, 1_000_000 + (head - 30_000) * 2);
+    expect(rejects.n).toBe(0);
+    expect(r.complete).toBe(true);
+    expect(calls.length).toBe(7); // 30 001 blocks inclusive
+    expect(idx.rows({ ...ref, chainId: 133 }, 0).rows).toHaveLength(1);
+  });
+
+  it("unknown chain: halves the range in place on 'range too large' (few rejects, still completes)", async () => {
+    const calls: [number, number][] = [];
+    const rejects = { n: 0 };
+    const idx = new SwapIndex(new Database(":memory:"), { gapMs: 0 });
+    const r = await idx.sync(limitedRpc(5000, 300_000, calls, rejects), { ...ref, chainId: 999 }, 1_000_000 + (300_000 - 40_000) * 2);
+    expect(rejects.n).toBeLessThanOrEqual(5); // 99 000 → 49 500 → … → 3 093
+    expect(r.complete).toBe(true);
+    expect(calls.every(([a, b]) => b - a + 1 <= 5000)).toBe(true);
+  });
+
+  it("stops at the time budget with partial coverage instead of hanging", async () => {
+    let clock = 0;
+    const calls: [number, number][] = [];
+    const idx = new SwapIndex(new Database(":memory:"), { gapMs: 0, budgetMs: 1000, clockMs: () => (clock += 300) });
+    const r = await idx.sync(limitedRpc(5000, 500_000, calls, { n: 0 }), { ...ref, chainId: 133 }, 1_000_000);
+    expect(r.complete).toBe(false);
+    expect(calls.length).toBeLessThan(5);
+    const again = await idx.sync(limitedRpc(5000, 500_000, calls, { n: 0 }), { ...ref, chainId: 133 }, 1_000_000);
+    expect(again.coveredFromT).toBeLessThan(r.coveredFromT); // continues backward next time
+  });
+});
+
+describe("price chart fallback", () => {
+  const now = 2_000_000;
+  const emptyRpc = (fail = false) => ({
+    async request(method: string, params: unknown[] = []) {
+      if (method === "eth_getBlockByNumber") {
+        const n = params[0] === "latest" ? 50_000 : Number(params[0] as string);
+        return { number: `0x${n.toString(16)}`, timestamp: `0x${(now - (50_000 - n) * 2).toString(16)}` };
+      }
+      if (fail) throw new Error("HTTP 500 from rpc");
+      return [];
+    },
+  });
+  const klines = Array.from({ length: 24 }, (_, i) => [(now - (23 - i) * 3600) * 1000, "100", "101", "99", String(100 + i), "1", 0, "100"]);
+  const svc = (fail: boolean) => {
+    const db = new Database(":memory:");
+    db.exec("CREATE TABLE fills (id TEXT, market TEXT, side TEXT, base_qty TEXT, quote_qty TEXT, generator TEXT, at INTEGER)");
+    const h = { chainId: 133, rpc: emptyRpc(fail), client: {} as never };
+    return new ChartService({ db, journal: { list: () => [] }, vaultChain: h, mainnet: () => h, cex: { klines: async () => klines, depth: async () => ({ bids: [], asks: [], t: 0 }) } as never, snapshot: async () => null, strategy: () => ({}) as never, now: () => now, swaps: new SwapIndex(db, { gapMs: 0 }) });
+  };
+  it("uses HashKey Global candles when the pool has no trades yet", async () => {
+    const s = await svc(false).chart({ kind: "price", market: "hsk-dex:WBTC/USDT:3000", interval: "1h", bars: 24 });
+    expect(s.series[0]!.id).toBe("cex");
+    expect(s.series[0]!.candles!.at(-1)!.c).toBe(123);
+    expect(s.caption).toMatch(/no trades in this window/);
+  });
+  it("uses HashKey Global candles when the pool read fails", async () => {
+    const s = await svc(true).chart({ kind: "price", market: "hsk-dex:WBTC/USDT:3000", interval: "1h", bars: 24 });
+    expect(s.series[0]!.id).toBe("cex");
+    expect(s.notes[0]).toMatch(/could not be read/);
   });
 });

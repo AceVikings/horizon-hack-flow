@@ -305,15 +305,35 @@ export class ChartService {
     return { candles, source: this.src(`HashKey Global ${sym} klines`, candles.map((c) => c.t), undefined, !!hit && hit.candles === candles) };
   }
 
+  /** Pool candles; when the pool has no history in the window (new test pool) or the pool read fails, the exchange
+   * (HashKey Global) price stands in, said plainly in the caption and notes. Throws only if both fail. */
   private async priceChart(base: Base, m: MarketId, iv: ChartInterval, bars: number, input: ChartInput): Promise<ChartSpec> {
-    const p = await this.poolCandles(m, iv, bars, input.network);
+    let p: Awaited<ReturnType<ChartService["poolCandles"]>> | null = null;
+    let poolErr: unknown = null;
+    try {
+      p = await this.poolCandles(m, iv, bars, input.network);
+    } catch (e) {
+      poolErr = e;
+    }
+    if (p && p.candles.length > 0)
+      return {
+        ...base,
+        title: `${LABEL[m]} price`,
+        caption: `${LABEL[m]} price on the HSKSwap pool, ${iv} bars.`,
+        series: [{ id: "pool", label: `${LABEL[m]} pool price`, type: "candles", unit: "usd", pane: 0, role: "primary", candles: p.candles }],
+        sources: [p.source],
+        notes: p.notes,
+      };
+    const k = await this.cexCandles(m, iv, bars).catch((e) => {
+      throw poolErr ?? e;
+    });
     return {
       ...base,
       title: `${LABEL[m]} price`,
-      caption: `${LABEL[m]} price on the HSKSwap pool, ${iv} bars.`,
-      series: [{ id: "pool", label: `${LABEL[m]} pool price`, type: "candles", unit: "usd", pane: 0, role: "primary", candles: p.candles }],
-      sources: [p.source],
-      notes: p.notes,
+      caption: `${LABEL[m]} price on HashKey Global, ${iv} bars. The pool has no trades in this window yet.`,
+      series: [{ id: "cex", label: `${MARKETS[m].cexSymbol} (exchange)`, type: "candles", unit: "usd", pane: 0, role: "primary", candles: k.candles }],
+      sources: [k.source, ...(p ? [p.source] : [])],
+      notes: [poolErr ? "Pool history could not be read right now; showing the exchange price." : "No pool trades yet: showing the exchange price. Pool trades will appear here.", ...(p?.notes.filter((n) => !n.startsWith("No swaps")) ?? [])],
     };
   }
 
