@@ -157,7 +157,7 @@ importers:
         specifier: workspace:*
         version: link:../../packages/ui
       lightweight-charts:
-        specifier: ^5
+        specifier: ^5.2.1
         version: 5.2.1
       ws:
         specifier: ^8.18.0
