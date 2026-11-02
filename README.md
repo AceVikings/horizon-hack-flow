@@ -37,9 +37,9 @@ More detail: [`SPEC.md`](SPEC.md) (full design) · [`docs/JUDGE.md`](docs/JUDGE.
 
 | Decisions: every trade and every skipped trade, with the reason | Chat: control the agent in plain language |
 |---|---|
-| ![Decisions view](docs/img/decisions.png) | ![Chat view](docs/img/chat.png) |
+| ![Decisions view](docs/img/decisions.jpg) | ![Chat view](docs/img/chat.jpg) |
 | **Trade: quote, policy checks and the oracle price** | **Agents: trader status, budgets and the kill switch** |
-| ![Trade view](docs/img/trade.png) | ![Agents view](docs/img/agents.png) |
+| ![Trade view](docs/img/trade.jpg) | ![Agents view](docs/img/agents.jpg) |
 
 *Screens show the desktop app in fixtures mode (sample data).*
 

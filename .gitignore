@@ -1,17 +1,40 @@
+# Dependencies and build output
 node_modules/
 dist/
 out/
+build/
+cache/
+coverage/
+.turbo/
+*.tsbuildinfo
+
+# Solidity: libraries are installed by scripts/bootstrap.sh, never committed
+contracts/lib/
+contracts/out/
+contracts/cache/
+contracts/broadcast/
+
+# Local state, secrets and logs
 .env
 .env.*
 *.log
-.DS_Store
-contracts/out/
-contracts/cache/
-contracts/broadcast/*/dry-run/
-infra/aws/
-.context/
-.tokensave/
 *.db
 *.db-wal
 *.db-shm
+*.sqlite
+*.pem
+*.key
+deployer.json
+keystore*/
+.DS_Store
+
+# Built native helper
 apps/approve/bin/
+
+# Agent / tooling workspaces and private infra
+.context/
+.tokensave/
+infra/aws/
+
+# Fork-only deployment records
+deployments/*-fork.json
