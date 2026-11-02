@@ -119,8 +119,8 @@ export function dayName(at: number): string {
 }
 export const hm = (at: number): string => clock(at).slice(0, 5);
 
-/** Display a token balance (not a signable value): truncated to `dp` (default 8 for 8-dp tokens, else 2), grouped. */
-export function tokenAmt(raw: string | bigint | null | undefined, decimals: number, dp = decimals <= 8 ? Math.min(decimals, 8) : 2): string {
+/** Display a token balance (not a signable value): truncated to `dp` (default 8 for WBTC's 8 dp, else 2), grouped. */
+export function tokenAmt(raw: string | bigint | null | undefined, decimals: number, dp = decimals === 8 ? 8 : 2): string {
   if (raw === null || raw === undefined || raw === "") return "—";
   let v = BigInt(raw);
   const neg = v < 0n;
@@ -129,3 +129,10 @@ export function tokenAmt(raw: string | bigint | null | undefined, decimals: numb
   const s = fmtUnits(v, dp, dp === 8 ? 8 : 2);
   return neg ? "−" + s : s;
 }
+
+/** 8-dp price for display: 2 dp at ≥ $1 (BTC), 5 dp below (HSK ≈ $0.087). */
+export const price8 = (raw: string | null | undefined): string => {
+  if (!raw) return "—";
+  const v = BigInt(raw);
+  return "$" + (v >= 100_000_000n ? fmtUnits((v / 1_000_000n) * 1_000_000n, 8, 2) : fmtUnits((v / 1000n) * 1000n, 8, 5));
+};
