@@ -169,7 +169,9 @@ describe("AiEngine", () => {
     writeFileSync(bin, "#!/bin/sh\n", { mode: 0o755 });
     const ai = new AiEngine(h, { ATE_KEYSTORE: "file", ATE_CLAUDE_BIN: bin, PATH: "", ATE_AI_PROVIDER: "anthropic" });
     expect(ai.health()).toMatchObject({ credential: "none", claudeCli: bin });
+    ai.setConfig({ provider: "openai", model: "gpt-x" });
     ai.setConfig({ engine: "claude-code" });
+    expect(ai.config).toMatchObject({ provider: "anthropic", engine: "claude-code" });
     expect((await ai.check()).lastCheck).toMatchObject({ reachable: true });
   });
 });

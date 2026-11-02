@@ -335,7 +335,8 @@ export class AiEngine {
   }
 
   setConfig(p: Partial<Omit<AiConfig, "providers">> & { providerSettings?: { id: ProviderId } & ProviderSettings }): AiConfig {
-    const provider = p.provider === undefined ? this.cfg.provider : p.provider;
+    // the Claude Code CLI engine runs Anthropic models only: choosing it alone switches the provider too
+    const provider = p.provider === undefined ? (p.engine === "claude-code" ? "anthropic" : this.cfg.provider) : p.provider;
     if (!isProviderId(provider)) throw Object.assign(new Error(`unknown provider ${String(provider)}`), { status: 400, code: "ATE_CONFIG_INVALID" });
     let model = p.model ?? (provider !== this.cfg.provider ? (provider === "anthropic" ? DEFAULT_MODEL : (this.models_[provider]?.find((m) => m.tools !== false)?.id ?? "")) : this.cfg.model);
     if (typeof model !== "string" || model.length > 200 || (provider === "anthropic" && p.model !== undefined && !/^claude-[a-z0-9.-]+$/.test(model))) throw Object.assign(new Error(`unknown model ${String(model)}`), { status: 400, code: "ATE_CONFIG_INVALID" });
