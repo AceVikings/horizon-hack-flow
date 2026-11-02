@@ -34,6 +34,7 @@ import {
   type LimitsInput,
 } from "./handoff.js";
 import { patchSetup, readSetup, writeSetup } from "./state.js";
+import { API_KEY_RE, DEFAULT_MODEL, checkModel, modelCredentials, removeApiKey, storeApiKey } from "./model.js";
 
 export interface SetupTty {
   issue(purpose: "config", bindTo: string, label: string): string | null;
@@ -365,13 +366,60 @@ export function registerSetupRoutes(d: SetupRouteDeps): void {
 
   reg("GET", "/setup/doctor", async (_b, q) => {
     if (q.get("cached") === "1" && lastDoctor) return { groups: DOCTOR_GROUPS, report: lastDoctor };
-    doctorRun ??= runDoctor({ cfg, service, client, env, onCheck: (c: DoctorCheck) => d.broadcast({ type: "setup.check", at: now(), data: c }) }).finally(() => (doctorRun = null));
+    doctorRun ??= runDoctor({ cfg, home, model: readSetup(home).model ?? DEFAULT_MODEL, service, client, env, onCheck: (c: DoctorCheck) => d.broadcast({ type: "setup.check", at: now(), data: c }) }).finally(() => (doctorRun = null));
     lastDoctor = await doctorRun;
     if (lastDoctor.fail === 0) {
       const s = readSetup(home);
       writeSetup(home, { ...s, healthPassedAt: now() });
     }
     return { groups: DOCTOR_GROUPS, report: lastDoctor };
+  });
+
+  // ------------------------------------------------------------------ AI model (step 04 + Settings): SDK, no CLI
+
+  const MODELS = ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-1"];
+  const pendingKey = new Map<string, { expiresAt: number; action: "set" | "remove"; key: string | null; payload: ConfigApproval }>();
+  reg("GET", "/setup/model", () => ({ ...modelCredentials(home, env), model: readSetup(home).model ?? DEFAULT_MODEL, models: MODELS }));
+  reg("GET", "/setup/model/check", async () => checkModel(home, env, readSetup(home).model ?? DEFAULT_MODEL));
+  reg("POST", "/setup/model", (b) => {
+    const m = (b as { model?: string } | undefined)?.model;
+    if (!m || !MODELS.includes(m)) throw bad(`model must be one of ${MODELS.join(", ")}`);
+    const s = readSetup(home);
+    return writeSetup(home, { ...s, model: m }).model;
+  });
+  /**
+   * Set / replace / remove the stored API key. The first key during setup needs only the attached ui token; any
+   * later change is two-step like a Settings save (Touch ID signature over a `config` payload, or a one-time code).
+   */
+  reg("POST", "/setup/model/key", (b) => {
+    const o = (b ?? {}) as { action?: string; apiKey?: string; nonce?: string; approval?: string };
+    const apply = (action: "set" | "remove", key: string | null) => {
+      if (action === "remove") removeApiKey(home, env);
+      else storeApiKey(home, key!, env);
+      d.log?.(`setup: Anthropic API key ${action === "remove" ? "removed" : "stored"}`);
+      return { saved: true, ...modelCredentials(home, env) };
+    };
+    if (o.nonce) {
+      const p = pendingKey.get(o.nonce);
+      if (!p || p.expiresAt < now()) throw new HttpErr(401, "unknown or expired nonce");
+      const a = String(o.approval ?? "");
+      const ok = /^[0-9]{8}$/.test(a) ? d.approval?.tty.redeem("config", o.nonce, a).ok : d.approval?.verifier?.verify(p.payload, a).ok;
+      if (!ok) throw new HttpErr(401, "approval rejected");
+      pendingKey.delete(o.nonce);
+      return apply(p.action, p.key);
+    }
+    const action = o.action === "remove" ? "remove" : o.action === "set" ? "set" : null;
+    if (!action) throw bad("action must be set or remove");
+    if (action === "set" && (typeof o.apiKey !== "string" || !API_KEY_RE.test(o.apiKey.trim()))) throw bad("that does not look like an Anthropic API key (sk-ant-…)");
+    const key = action === "set" ? o.apiKey!.trim() : null;
+    const creds = modelCredentials(home, env);
+    if (action === "set" && !creds.stored && !readSetup(home).completedAt) return apply("set", key);
+    const nonce = randomBytes(16).toString("hex");
+    const expiresAt = now() + 60;
+    const payload = configPayload({ nonce, expiresAt, changes: [{ key: "anthropic.apiKey", before: creds.stored ? `stored ${creds.hint ?? ""}`.trim() : "none", after: action === "remove" ? "none" : `…${key!.slice(-4)}` }] });
+    pendingKey.set(nonce, { expiresAt, action, key, payload });
+    const code = d.approval?.tty.issue("config", nonce, `Anthropic API key ${action}`);
+    return { nonce, expiresAt, payload, codeIssued: !!code };
   });
 
   // ------------------------------------------------------------------ 05 limits

@@ -1,9 +1,7 @@
 // Doctor as data (setup step 04, docs/design/flow 04-setup-health): the §19 pre-flight checks the CLI `doctor`
 // prints, returned as three groups the desktop renders live. Each finished check is also reported through
 // `onCheck` (the routes broadcast it on /events as `setup.check`) so the checklist fills in as it runs.
-import { execFile } from "node:child_process";
-import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { checkModel, DEFAULT_MODEL } from "./model.js";
 import { parseAbi, type Address, type PublicClient } from "viem";
 import { MARKETS, policyVaultAbi, reasonName, type AteConfig, type MarketId } from "@ate/core";
 import { probeRpcs } from "@ate/chain";
@@ -43,21 +41,6 @@ export const fmtAge = (s: number) => (s >= 3600 ? `${Math.floor(s / 3600)}h ${Ma
 const schemaRegistryAbi = parseAbi(["function getSchema(bytes32 uid) view returns ((bytes32 uid, address resolver, bool revocable, string schema))"]);
 const SCHEMA_REGISTRY: Address = "0x4200000000000000000000000000000000000020";
 
-/** Locate the chat/trader model runner binary (`claude`) the way a GUI-launched app must: PATH plus the usual dirs. */
-export function findRunner(cmd: string, env: NodeJS.ProcessEnv = process.env): string | null {
-  if (cmd.includes("/")) return existsSync(cmd) ? cmd : null;
-  const dirs = [...(env.PATH ?? "").split(":"), "/opt/homebrew/bin", "/usr/local/bin", join(env.HOME ?? "", ".local/bin"), join(env.HOME ?? "", ".claude/local")];
-  for (const d of dirs) if (d && existsSync(join(d, cmd))) return join(d, cmd);
-  return null;
-}
-
-function runVersion(bin: string, timeoutMs = 8000): Promise<{ ok: boolean; out: string; ms: number }> {
-  const t0 = Date.now();
-  return new Promise((res) => {
-    execFile(bin, ["--version"], { timeout: timeoutMs }, (err, stdout) => res({ ok: !err, out: String(stdout).trim().split("\n")[0] ?? "", ms: Date.now() - t0 }));
-  });
-}
-
 export async function verifiedOnExplorer(explorer: string, address: string, fetchImpl: typeof fetch = fetch): Promise<boolean | null> {
   try {
     const r = await fetchImpl(`${explorer.replace(/\/$/, "")}/api/v2/smart-contracts/${address}`, { signal: AbortSignal.timeout(6000) });
@@ -71,6 +54,8 @@ export async function verifiedOnExplorer(explorer: string, address: string, fetc
 
 export interface DoctorDeps {
   cfg: AteConfig;
+  home: string;
+  model?: string;
   service: AteService;
   client: PublicClient;
   env?: NodeJS.ProcessEnv;
@@ -183,11 +168,10 @@ export async function runDoctor(d: DoctorDeps): Promise<DoctorReport> {
       const r = await (d.fetchImpl ?? fetch)(`${cfg.oracle.cex.baseUrl.replace(/\/$/, "")}/quote/v1/depth?symbol=BTCUSDT&limit=1`, { signal: AbortSignal.timeout(6000) }).catch(() => null);
       return r?.ok ? { status: "pass", value: `${Date.now() - t0} ms` } : { status: "warn", value: "unreachable", detail: "CEX marks unavailable; trading still works on Supra" };
     });
-    await guard("model", "services", "AI model · Claude", async () => {
-      const bin = findRunner(cfg.chat.runner.split(/\s+/)[0] ?? "claude", d.env);
-      if (!bin) return { status: "fail", value: "not found", fix: "Install Claude Code and sign in; Flow runs the trader through it." };
-      const v = await runVersion(bin);
-      return v.ok ? { status: "pass", value: `${(v.ms / 1000).toFixed(1)} s`, detail: v.out } : { status: "fail", value: "error", detail: v.out || "runner did not answer --version" };
+    await guard("model", "services", `AI model · ${d.model ?? DEFAULT_MODEL}`, async () => {
+      const m = await checkModel(d.home, d.env ?? process.env, d.model ?? DEFAULT_MODEL);
+      if (!m.source) return { status: "fail", value: "no key", fix: "Add an Anthropic API key above (stored in your keychain)." };
+      return m.ok ? { status: "pass", value: `${(m.ms / 1000).toFixed(1)} s`, detail: `${m.model} via ${m.source}` } : { status: "fail", value: "error", detail: m.detail, fix: "Check the API key in Settings → AI & data." };
     });
     await guard("eas", "services", "EAS schema registered", async () => {
       const s = (await client.readContract({ address: SCHEMA_REGISTRY, abi: schemaRegistryAbi, functionName: "getSchema", args: [cfg.eas.schemaUid as `0x${string}`] })) as { uid: string };

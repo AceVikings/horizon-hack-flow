@@ -178,3 +178,20 @@ describe("/setup/* routes", () => {
     expect((await req("POST", "/setup/config", T.ui, { changes: [{ key: "chain.id", after: 177 }] })).status).toBe(400);
   });
 });
+
+describe("AI model credentials (SDK, no CLI)", () => {
+  it("prefers env, then the stored key; never returns the key itself", async () => {
+    const { modelCredentials, storeApiKey, loadStoredApiKey, removeApiKey } = await import("../src/setup/model.js");
+    const home = mkdtempSync(join(tmpdir(), "flow-model-"));
+    const e = { HOME: home, ATE_KEYSTORE: "file" } as NodeJS.ProcessEnv;
+    expect(modelCredentials(home, e).source).toBeNull();
+    expect(() => storeApiKey(home, "nope", e)).toThrow();
+    const key = `sk-ant-api03-${"a".repeat(40)}wxyz`;
+    storeApiKey(home, key, e);
+    expect(loadStoredApiKey(home, e)).toBe(key);
+    expect(modelCredentials(home, e)).toMatchObject({ source: "keychain", hint: "…wxyz", stored: true });
+    expect(modelCredentials(home, { ...e, ANTHROPIC_API_KEY: `sk-ant-x-${"b".repeat(30)}1234` })).toMatchObject({ source: "env", hint: "…1234" });
+    removeApiKey(home, e);
+    expect(modelCredentials(home, e).source).toBeNull();
+  });
+});

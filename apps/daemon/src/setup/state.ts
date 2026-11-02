@@ -27,6 +27,8 @@ export interface SetupState {
   limitsAckAt: number | null;
   plannedDepositUsd: number | null;
   traderMode: TraderMode | null;
+  /** Default model for the in-app agents (Settings → AI & data). */
+  model: string | null;
   completedAt: number | null;
   handoffs: Record<string, HandoffRecord>;
   updatedAt: number;
@@ -43,6 +45,7 @@ export const EMPTY_SETUP: SetupState = {
   limitsAckAt: null,
   plannedDepositUsd: null,
   traderMode: null,
+  model: null,
   completedAt: null,
   handoffs: {},
   updatedAt: 0,
