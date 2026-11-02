@@ -27,7 +27,41 @@ Every function, event and error matches by name, argument order, types and param
    (→ `ERR_TRADE_CAP`) rather than overflowing, so `check()` never reverts for a policy reason.
 8. **Before `setLimits`** all limits are 0: every trade is rejected and `epoch()` returns zeros.
 
-## BLOCKER: APRO read access on chain 177
+## Oracle source: Supra adapter (APRO is display / doctor cross-check only)
+
+The vault's bytecode and ABI are unchanged. `oracle` is still an immutable AggregatorV3-like address, but it now
+points at a `SupraAggregatorAdapter` (`src/oracles/SupraAggregatorAdapter.sol`). Each adapter is a stateless,
+ownerless view over one pair in Supra's S-Value storage proxy `0x58e158c74DF7Ad6396C0dcbadc4878faC9e93d57`, which
+has no read access control. HSK/USD uses pair **517**; BTC/USD uses pair **0**.
+
+Adapter semantics:
+- `decimals() = 8`.
+- `answer` = Supra price rescaled from the feed's decimals (18 on 177) to 8 dp, rounding down.
+- `updatedAt = startedAt = time / 1000` (Supra time is in ms), clamped to `block.timestamp` because Supra accepts
+  proofs up to 3 s ahead.
+- `roundId = answeredInRound = uint80(round)`, so the step-6 `answeredInRound < roundId` clause never fires on
+  this source.
+- An unpopulated pair, or a price that rounds to 0 at 8 dp, returns all zeros. The vault then reports
+  `ERR_ORACLE_INVALID` / `OracleInvalid(0, 0)`.
+- `description()` and `version() = 1`.
+
+**Freshness.** Supra pushes on 177 every ~6 h or on a 0.5 % move, so `maxOracleAge = 90000` is ample. Anyone can
+refresh with a pull, because `SupraOraclePull` proxy `0x16f70cAD28dd621b0072B5A8a8c392970E87C3dD` has no
+modifier on `verifyOracleProof(bytes)`. It checks the committee signature and Merkle proof, then writes a pair
+only if `round > storedRound && round <= block.timestamp*1000 + 3000`. An older or equal round is a silent no-op;
+a round in the future reverts `IncorrectFutureUpdate`.
+
+Daemon refresh path:
+1. `POST https://rpc-mainnet-dora-2.supra.com/get_proof` with body
+   `{"pair_indexes":[0,517],"chain_type":"evm"}` returns `{proof_bytes}`.
+2. Send `SupraOraclePull.verifyOracleProof(0x<proof_bytes>)` from any EOA (e.g. the agent) before `execute`.
+3. Gas is ~330k for both pairs (measured on the fork), ≈ 0.17 HSK at 500 gwei.
+
+**Peg / trust delta vs APRO.** The pricing trust root becomes Supra's committee. APRO HSK/USD and BTC/USD stay
+EOA-readable for `doctor`, the UI and a cross-check. If APRO later allow-lists an address, deploy a new vault
+with `ORACLE_SOURCE=apro` (same bytecode).
+
+## APRO read access on chain 177 (why the adapter exists)
 
 Both APRO proxies are `EACAggregatorProxy` with a `SimpleReadAccessController` and `checkEnabled = true`:
 
@@ -45,7 +79,5 @@ controller has ever emitted `AddedAccess`. `decimals()` has no access check, so 
 The fork smoke shows both sides: before access, `check()` returns 6. After `addAccess(vault)` (pranked as the
 controller owner), the $5 buy, $5 sell and 7b exit sell all execute on both vaults.
 
-**To trade on mainnet, APRO (controller owner `0x9876…c7A7`) must call `addAccess(<vault>)` on both
-controllers.** Vault addresses can be computed before deploy from the owner's address and nonce
-(`cast compute-address <owner> --nonce N`), so the request can go out first. The fallback (Supra or another
-on-chain source) changes the spec and the bytecode. This is a lead decision.
+Resolved by the Supra adapter above, with no vault change. The fork tests `test_fork_apro_*` still show the APRO
+failure: `check()` returns 6 until `addAccess(vault)` is called.

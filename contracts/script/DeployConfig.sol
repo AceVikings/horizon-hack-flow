@@ -17,23 +17,34 @@ library DeployConfig {
     address internal constant POOL_WHSK_USDT = 0x4ff515761864e7838B0AdB8b5b2B8B7A068905dC; // fee 3000
     address internal constant POOL_WBTC_USDT = 0xd9EA2cE468957Ba49cCC38C4758Ed6ecD561449A; // fee 3000
     address internal constant QUOTER_V2 = 0x603f70466fDdbE3F238220B9a74FFF419a2BbFDD;
+    // Supra (no read access control): S-Value storage proxy (push + pull write here) and pull verifier proxy
+    address internal constant SUPRA_STORAGE = 0x58e158c74DF7Ad6396C0dcbadc4878faC9e93d57;
+    address internal constant SUPRA_PULL = 0x16f70cAD28dd621b0072B5A8a8c392970E87C3dD;
+    uint256 internal constant SUPRA_PAIR_BTC_USD = 0;
+    uint256 internal constant SUPRA_PAIR_HSK_USD = 517;
 
     struct Market {
         string name;
         address quoteToken;
         address priceToken;
-        address oracle;
+        address oracle; // APRO feed (display / doctor cross-check; vault oracle only if APRO grants access)
         address router;
         address pool;
         address factory;
+        uint256 supraPair; // vault oracle = SupraAggregatorAdapter(SUPRA_STORAGE, supraPair)
+        string supraDescription;
     }
 
     function hsk() internal pure returns (Market memory) {
-        return Market("hsk-dex:WHSK/USDT:3000", USDT, WHSK, APRO_HSK_USD, SWAP_ROUTER02, POOL_WHSK_USDT, FACTORY);
+        return Market(
+            "hsk-dex:WHSK/USDT:3000", USDT, WHSK, APRO_HSK_USD, SWAP_ROUTER02, POOL_WHSK_USDT, FACTORY, SUPRA_PAIR_HSK_USD, "HSK/USD (Supra pair 517)"
+        );
     }
 
     function btc() internal pure returns (Market memory) {
-        return Market("hsk-dex:WBTC/USDT:3000", USDT, WBTC, APRO_BTC_USD, SWAP_ROUTER02, POOL_WBTC_USDT, FACTORY);
+        return Market(
+            "hsk-dex:WBTC/USDT:3000", USDT, WBTC, APRO_BTC_USD, SWAP_ROUTER02, POOL_WBTC_USDT, FACTORY, SUPRA_PAIR_BTC_USD, "BTC/USD (Supra pair 0)"
+        );
     }
 
     /// @notice §19 step 3 defaults (identical for both vaults).

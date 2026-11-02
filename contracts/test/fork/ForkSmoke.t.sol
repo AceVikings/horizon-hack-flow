@@ -8,6 +8,7 @@ import {PolicyVault} from "../../src/PolicyVault.sol";
 import "../../src/PolicyVaultTypes.sol";
 import {IAggregatorV3, IUniswapV3PoolLike} from "../../src/interfaces/IExternal.sol";
 import {DeployConfig} from "../../script/DeployConfig.sol";
+import {SupraAggregatorAdapter, ISupraSValueFeed} from "../../src/oracles/SupraAggregatorAdapter.sol";
 
 interface IQuoterV2 {
     struct QuoteExactInputSingleParams {
@@ -78,26 +79,80 @@ contract ForkSmokeTest is Test {
         _;
     }
 
-    function test_fork_vaultHsk() public onlyFork {
-        _smoke(DeployConfig.hsk(), 18);
+    /// @dev Production path: vault oracle = SupraAggregatorAdapter. NO APRO access is granted anywhere.
+    function test_fork_supra_vaultHsk() public onlyFork {
+        _smoke(DeployConfig.hsk(), 18, true);
     }
 
-    function test_fork_vaultBtc() public onlyFork {
-        _smoke(DeployConfig.btc(), 8);
+    function test_fork_supra_vaultBtc() public onlyFork {
+        _smoke(DeployConfig.btc(), 8, true);
+    }
+
+    /// @dev Pull refresh (daemon path): submit a real DORA proof to SupraOraclePull.verifyOracleProof (permissionless),
+    /// which writes the newer round into the same storage the adapter reads. Opt-in: SUPRA_PROOF_HEX (proof_bytes from
+    /// POST https://rpc-mainnet-dora-2.supra.com/get_proof {"pair_indexes":[0,517],"chain_type":"evm"}) and
+    /// SUPRA_PROOF_NOW (unix time when fetched; the fork is warped there because the pull contract rejects rounds
+    /// more than 3 s in the future of block.timestamp).
+    function test_fork_supra_pullRefresh() public onlyFork {
+        bytes memory proof = vm.envOr("SUPRA_PROOF_HEX", bytes(""));
+        if (proof.length == 0) {
+            vm.skip(true);
+            return;
+        }
+        uint256 nowTs = vm.envUint("SUPRA_PROOF_NOW");
+        if (nowTs > block.timestamp) vm.warp(nowTs);
+        DeployConfig.Market memory m = DeployConfig.hsk();
+        SupraAggregatorAdapter a = new SupraAggregatorAdapter(DeployConfig.SUPRA_STORAGE, m.supraPair, m.supraDescription);
+        (uint80 r0,,, uint256 u0,) = a.latestRoundData();
+        console2.log("  before: round", uint256(r0), "age (s)", block.timestamp - u0);
+        address caller = makeAddr("anyone"); // permissionless
+        vm.prank(caller);
+        uint256 g = gasleft();
+        (bool ok, bytes memory ret) =
+            DeployConfig.SUPRA_PULL.call(abi.encodeWithSignature("verifyOracleProof(bytes)", proof));
+        g -= gasleft();
+        if (!ok) {
+            console2.log("  verifyOracleProof reverted (committee rotated since fork block, or stale proof)");
+            console2.logBytes(ret);
+        }
+        assertTrue(ok, "verifyOracleProof");
+        (uint80 r1, int256 p1,, uint256 u1,) = a.latestRoundData();
+        console2.log("  after:  round", uint256(r1), "age (s)", block.timestamp - u1);
+        console2.log("  after:  HSK price (8dp)", uint256(p1), "pull gas", g);
+        assertGt(r1, r0, "round advanced");
+        // re-submitting an older/equal proof is a no-op (round must be > stored), not a revert
+        vm.prank(caller);
+        (ok,) = DeployConfig.SUPRA_PULL.call(abi.encodeWithSignature("verifyOracleProof(bytes)", proof));
+        assertTrue(ok, "resubmit is a no-op");
+        (uint80 r2,,,,) = a.latestRoundData();
+        assertEq(r2, r1);
+    }
+
+    /// @dev APRO path: shows "No access" -> ORACLE_INVALID, then works once APRO's owner calls addAccess(vault).
+    function test_fork_apro_vaultHsk() public onlyFork {
+        _smoke(DeployConfig.hsk(), 18, false);
+    }
+
+    function test_fork_apro_vaultBtc() public onlyFork {
+        _smoke(DeployConfig.btc(), 8, false);
     }
 
     // ------------------------------------------------------------------------------------------------
 
-    function _smoke(DeployConfig.Market memory m, uint8 d) internal {
+    function _smoke(DeployConfig.Market memory m, uint8 d, bool supra) internal {
         assertEq(block.chainid, 177, "not chain 177");
-        console2.log("=== market", m.name, "block", block.number);
-        (PolicyVault v, uint256 P, uint80 rid) = _deployAndFund(m, d);
+        console2.log("=== market", m.name, supra ? "oracle: Supra adapter" : "oracle: APRO", block.number);
+        if (supra) {
+            m.oracle = address(new SupraAggregatorAdapter(DeployConfig.SUPRA_STORAGE, m.supraPair, m.supraDescription));
+        }
+        (PolicyVault v, uint256 P, uint80 rid) = _deployAndFund(m, d, supra);
         _buy(v, m);
         vm.warp(block.timestamp + 61);
         uint256 sellAmt = (5e8 * 10 ** d) / P;
         _sell(v, m, sellAmt);
         vm.warp(block.timestamp + 61);
-        _exitSell(v, m, sellAmt, P, rid);
+        if (supra) _exitSellSupra(v, m, sellAmt);
+        else _exitSell(v, m, sellAmt, P, rid);
         // pause blocks
         vm.prank(guardian);
         v.pause();
@@ -105,13 +160,21 @@ contract ForkSmokeTest is Test {
         assertEq(r, ERR_PAUSED);
     }
 
-    function _deployAndFund(DeployConfig.Market memory m, uint8 d)
+    function _deployAndFund(DeployConfig.Market memory m, uint8 d, bool supra)
         internal
         returns (PolicyVault v, uint256 P, uint80 rid)
     {
         uint256 upd;
         IReadAccessController ac;
-        (P, rid, upd, ac) = _readApro(m);
+        if (supra) {
+            int256 a;
+            (rid, a,, upd,) = IAggregatorV3(m.oracle).latestRoundData(); // no allow-list needed
+            P = uint256(a);
+            console2.log("  Supra pair", m.supraPair, "price (8dp)", P);
+            console2.log("  Supra age (s)", block.timestamp - upd);
+        } else {
+            (P, rid, upd, ac) = _readApro(m);
+        }
 
         // observe([300, 0]) succeeds on the real pool
         uint32[] memory ago = new uint32[](2);
@@ -122,13 +185,15 @@ contract ForkSmokeTest is Test {
         vm.prank(owner);
         v = new PolicyVault(m.quoteToken, m.priceToken, m.oracle, m.router, m.pool, m.factory);
         assertEq(v.priceDecimals(), d);
-        // without APRO access the vault sees ERR_ORACLE_INVALID ("No access" is caught by step 6)
-        vm.prank(owner);
-        v.setAgent(agent);
-        (uint8 r0,,,,) = v.check(agent, _p(m.quoteToken, 5e6, 1));
-        console2.log("  check() before APRO addAccess(vault):", r0);
-        assertEq(r0, ERR_ORACLE_INVALID, "expected No access -> ORACLE_INVALID");
-        _grantAprAccess(ac, address(v));
+        if (!supra) {
+            // without APRO access the vault sees ERR_ORACLE_INVALID ("No access" is caught by step 6)
+            vm.prank(owner);
+            v.setAgent(agent);
+            (uint8 r0,,,,) = v.check(agent, _p(m.quoteToken, 5e6, 1));
+            console2.log("  check() before APRO addAccess(vault):", r0);
+            assertEq(r0, ERR_ORACLE_INVALID, "expected No access -> ORACLE_INVALID");
+            _grantAprAccess(ac, address(v));
+        }
         Limits memory l = DeployConfig.defaultLimits();
         if (block.timestamp - upd > l.maxOracleAge) {
             console2.log("  NOTE: APRO older than 90000 s at this block; smoke uses maxOracleAge = 172800");
@@ -226,6 +291,33 @@ contract ForkSmokeTest is Test {
         console2.log("  APRO answer", P);
         console2.log("  APRO age (s)", block.timestamp - u);
         console2.log("  APRO answeredInRound == roundId", air == roundId);
+    }
+
+    /// @dev forced deviation on the Supra path: Supra storage mocked 3% above the pool (fresh) -> 7b exit sell
+    function _exitSellSupra(PolicyVault v, DeployConfig.Market memory m, uint256 sellAmt) internal {
+        ISupraSValueFeed.priceFeed memory f = ISupraSValueFeed(DeployConfig.SUPRA_STORAGE).getSvalue(m.supraPair);
+        f.price = (f.price * 10_300) / 10_000;
+        f.time = block.timestamp * 1000;
+        f.round = block.timestamp * 1000;
+        vm.mockCall(
+            DeployConfig.SUPRA_STORAGE,
+            abi.encodeWithSelector(ISupraSValueFeed.getSvalue.selector, m.supraPair),
+            abi.encode(f)
+        );
+        (uint8 r,,,,) = v.check(agent, _p(m.quoteToken, 5e6, type(uint256).max));
+        assertEq(r, ERR_ORACLE_DEVIATION, "buy blocked under deviation");
+        SwapParams memory s = _p(m.priceToken, sellAmt, 0);
+        (,,, uint256 floor,) = v.check(agent, s);
+        s.minAmountOut = floor;
+        bool ex;
+        (r,,,, ex) = v.check(agent, s);
+        assertEq(r, OK, "exit sell check");
+        assertTrue(ex, "exit path");
+        vm.prank(agent);
+        uint256 out = v.execute(s, keccak256("fork-smoke-exit"));
+        console2.log("  exit sell (7b): out", out, "floor", floor);
+        assertGe(out, floor);
+        vm.clearMockedCalls();
     }
 
     function _grantAprAccess(IReadAccessController ac, address who) internal {

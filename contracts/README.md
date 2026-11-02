@@ -7,13 +7,15 @@ src/PolicyVault.sol            the vault (one per market; immutable pair/oracle/
 src/PolicyVaultTypes.sol       Limits, SwapParams, reason codes, IPolicyVault (events + custom errors)
 src/interfaces/IExternal.sol   AggregatorV3, V3 pool/factory subset, SwapRouter02 (7-field, no deadline)
 src/libraries/TickMath.sol     getSqrtPriceAtTick, vendored from Uniswap v4-core (MIT)
+src/oracles/SupraAggregatorAdapter.sol  AggregatorV3 view over a Supra S-Value pair (the vault's oracle on 177)
 script/DeployConfig.sol        chain-177 addresses (§0.2) + §19 step 3 default limits
 script/Deploy.s.sol            deploys Vault-HSK and Vault-BTC, setLimits, setAgent, setGuardian
 test/PolicyVault.t.sol         reason codes 1–15 × both directions × both shapes, parity, exit path, rounding
+test/SupraAdapter.t.sol        adapter scaling (18/8/6 dp), ms->s, unpopulated pair -> ORACLE_INVALID, vault on adapter
 test/Admin.t.sol               I5 owner-only matrix, two-step ownership, pause roles, bounds, constructor checks, TickMath
 test/invariant/                I1–I7, I9–I13 handler fuzzing (6 actors), both shapes
-test/fork/ForkSmoke.t.sol      real factory/pools/SwapRouter02/APRO on a fork of 177 (opt-in)
-ABI-NOTES.md                   ABI vs packages/core/src/abi/policyVault.ts, plus the APRO access blocker
+test/fork/ForkSmoke.t.sol      real factory/pools/SwapRouter02/Supra/APRO on a fork of 177 (opt-in)
+ABI-NOTES.md                   ABI vs packages/core/src/abi/policyVault.ts; oracle source (Supra adapter, APRO access)
 ```
 
 ## Build and test
@@ -41,19 +43,28 @@ FORK_SMOKE=true FOUNDRY_COMPUTE_UNITS_PER_SECOND=60 \
 # env: HSK_RPC (default https://mainnet.hsk.xyz), FORK_BLOCK (default 29623000; 0 = latest)
 ```
 
-For each vault the test:
+The test functions:
 
-1. Runs the constructor asserts against the real contracts.
-2. Logs APRO's `answeredInRound`.
-3. Calls `observe([300,0])`.
-4. Checks that `check()` returns 6 (ORACLE_INVALID) before APRO read access is granted.
-5. Calls `addAccess(vault)` on the fork (see ABI-NOTES).
-6. Funds the vault with `deal()`.
-7. Checks a $5,000 buy (`TRADE_CAP`).
-8. Executes a $5 buy, comparing it with QuoterV2.
-9. Executes a $5 sell.
-10. Executes a forced-deviation exit sell (7b).
-11. Pauses the vault.
+- `test_fork_supra_vault{Hsk,Btc}` (the production path). Each vault runs on a `SupraAggregatorAdapter`
+  (HSK pair 517, BTC pair 0), with no APRO access granted. The test:
+  1. Runs the constructor asserts against the real contracts.
+  2. Calls `observe([300,0])`.
+  3. Funds the vault with `deal()`.
+  4. Checks a $5,000 buy (`TRADE_CAP`).
+  5. Executes a $5 buy, comparing it with QuoterV2.
+  6. Executes a $5 sell.
+  7. Executes a forced-deviation exit sell (7b), with Supra mocked 3 % above the pool.
+  8. Pauses the vault.
+- `test_fork_apro_vault{Hsk,Btc}` runs the same flow on APRO. It shows `check()` returning 6 before `addAccess`.
+- `test_fork_supra_pullRefresh` submits a real DORA proof through the permissionless `verifyOracleProof`. It is
+  opt-in:
+
+```sh
+P=$(curl -s -X POST https://rpc-mainnet-dora-2.supra.com/get_proof -H 'Content-Type: application/json' \
+      -d '{"pair_indexes":[0,517],"chain_type":"evm"}' | python3 -c 'import json,sys;print("0x"+json.load(sys.stdin)["proof_bytes"])')
+FORK_SMOKE=true SUPRA_PROOF_HEX=$P SUPRA_PROOF_NOW=$(date +%s) \
+  forge test --match-path test/fork/ForkSmoke.t.sol --mt pullRefresh -vv
+```
 
 If `FORK_SMOKE` is unset or the RPC is unreachable, the test is skipped.
 
@@ -65,6 +76,9 @@ AGENT=0x… GUARDIAN=0x… forge script script/Deploy.s.sol:Deploy \
 ```
 
 ## Deploy (mainnet 177, §19 steps 1, 3, 4)
+
+For each market the script deploys a `SupraAggregatorAdapter`, then the vault with `oracle = adapter`. Set
+`ORACLE_SOURCE=apro` to use the APRO feed directly, but only if APRO has allow-listed the vault address.
 
 Run this from the owner's second device, signing with a Ledger or an encrypted keystore. Never use
 `--private-key`.
@@ -83,12 +97,13 @@ slippage 250 bps, deviation 250 bps, exit discount 500 bps, `maxOracleAge = 9000
 The script prints each vault address and its ABI-encoded constructor args. Record both in
 `deployments/177.json`.
 
-**Before trading, APRO must whitelist both vaults** (`addAccess(vault)` on each feed's access controller;
-details in ABI-NOTES.md). Until then every `check()` returns `ERR_ORACLE_INVALID`.
+No allow-listing is needed. If a Supra pair gets stale, the daemon refreshes it with a pull proof (ABI-NOTES.md,
+"Daemon refresh path").
 
 ## Verify on Blockscout
 
-Verify each vault separately. The immutables differ, so Blockscout may label the second one a "similar match".
+Verify each adapter (`src/oracles/SupraAggregatorAdapter.sol:SupraAggregatorAdapter`, using the adapter
+constructor-args the script prints) and each vault separately. The immutables differ, so Blockscout may label the second one a "similar match".
 
 ```sh
 forge verify-contract <vault> src/PolicyVault.sol:PolicyVault \
@@ -97,7 +112,7 @@ forge verify-contract <vault> src/PolicyVault.sol:PolicyVault \
   --constructor-args <hex printed by Deploy.s.sol>
 # or rebuild the args:
 #   cast abi-encode "c(address,address,address,address,address,address)" \
-#     <USDT> <WHSK|WBTC> <APRO feed> <SwapRouter02> <pool> <factory>
+#     <USDT> <WHSK|WBTC> <adapter> <SwapRouter02> <pool> <factory>
 ```
 
 `foundry.toml` has `[etherscan] hsk` without `chain = 177`; with that key, forge fails with

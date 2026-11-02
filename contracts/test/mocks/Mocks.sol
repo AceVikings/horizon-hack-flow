@@ -241,3 +241,23 @@ contract MockSwapRouterV1 {
         factory = f;
     }
 }
+
+/// @notice SupraSValueFeedStorage.getSvalue mock.
+contract MockSupraStorage {
+    struct priceFeed {
+        uint256 round;
+        uint256 decimals;
+        uint256 time;
+        uint256 price;
+    }
+
+    mapping(uint256 => priceFeed) internal feeds;
+
+    function set(uint256 pair, uint256 round, uint256 decimals_, uint256 timeMs, uint256 price) external {
+        feeds[pair] = priceFeed(round, decimals_, timeMs, price);
+    }
+
+    function getSvalue(uint256 pair) external view returns (priceFeed memory) {
+        return feeds[pair];
+    }
+}
