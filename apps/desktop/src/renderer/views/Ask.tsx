@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MARKETS, type MarketId, type PositionsOutput } from "@ate/core";
 import type { AiHealth, ChatMessage, PendingChange, Res } from "@shared/bridge";
+import { aiMissing } from "@shared/bridge";
 import { useApp, useNow, useRemote } from "../src/app";
 import { baseDecimals, fmtUnits } from "../src/format";
 import { PageHead, useNav } from "../src/shell";
@@ -141,7 +142,7 @@ export default function Ask(_: ViewProps) {
         }}
       />
     ) : null;
-  const engine = ai.last ? (ai.last.credential === "none" ? "simple answers until you connect a subscription" : ai.last.modelLabel) : null;
+  const engine = ai.last ? (aiMissing(ai.last) ? "simple answers until you connect a subscription" : ai.last.engine === "claude-code" ? `${ai.last.modelLabel} · Claude Code` : ai.last.modelLabel) : null;
 
   return (
     <div className="page1" style={{ display: "flex", flexDirection: "column", minHeight: "100%" }}>
@@ -151,7 +152,7 @@ export default function Ask(_: ViewProps) {
         {blocks.length === 0 && !waiting && (
           <div style={{ padding: "8px 0 4px" }}>
             <div className="sentence" style={{ fontSize: 20 }}>What would you like to know?</div>
-            {ai.last?.credential === "none" && (
+            {ai.last && aiMissing(ai.last) && (
               <div className="sm fg2" style={{ marginTop: 8 }}>
                 Answers are simple until you connect your Claude or ChatGPT subscription.{" "}
                 <button className="disclose" style={{ padding: 0 }} onClick={() => go("accounts")}>

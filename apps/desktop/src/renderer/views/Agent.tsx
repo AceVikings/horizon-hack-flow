@@ -4,6 +4,7 @@
 import { useState } from "react";
 import { MARKETS, RISK_PROFILES, type MarketId, type RiskProfile, type StrategyGetOutput, type StrategyParams } from "@ate/core";
 import type { AiHealth, EngineProviders, PendingChange, Res, TraderStatus } from "@shared/bridge";
+import { aiMissing } from "@shared/bridge";
 import { useApp, useNow, useRemote } from "../src/app";
 import { ago, int } from "../src/format";
 import { PageHead, useNav } from "../src/shell";
@@ -87,7 +88,7 @@ export default function Agent(_: ViewProps) {
     if (!ate.trader || m === mode) return;
     if (m === "watch") return void act("mode", () => ate.trader!.stop(), "Agent paused. The vault still sells to protect you.");
     // without an AI account the agent runs on simple rules (same guard, same limits) until one is connected
-    const engine = ai.last?.credential === "none" ? "rules" : "llm";
+    const engine = ai.last && aiMissing(ai.last) ? "rules" : "llm";
     void act("mode", () => ate.trader!.start({ mode: m, engine }), `${m === "propose" ? "The agent now only suggests trades" : "The agent is trading"}${engine === "rules" ? " on simple rules until you connect a subscription" : ""}`);
   };
   const setPreset = async (p: RiskProfile) => {
@@ -215,7 +216,7 @@ export default function Agent(_: ViewProps) {
           </button>
         </span>
       </div>
-      {ai.last && ai.last.credential === "none" && (
+      {ai.last && aiMissing(ai.last) && (
         <div className="sm" style={{ marginTop: 8 }}>
           <span aria-hidden="true">ⓘ </span>
           {sel?.id === "subscription" ? "Connect your Claude or ChatGPT subscription in Accounts to let the AI decide. Until then the agent uses simple rules." : `${ai.last.providerLabel} is not connected. Open Accounts to connect it.`}

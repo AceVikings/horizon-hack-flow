@@ -181,6 +181,9 @@ export interface AiHealth {
   /** Claude Code CLI found on this Mac (the optional "claude-code" engine runs it with its own login). */
   claudeCli?: string | null;
 }
+/** No AI to run the agents: no credential, and not the Claude Code CLI engine with the CLI installed. */
+export const aiMissing = (h: Pick<AiHealth, "credential" | "engine" | "claudeCli">): boolean => h.credential === "none" && !(h.engine === "claude-code" && !!h.claudeCli);
+
 export interface AiConfigPatch {
   model?: string;
   engine?: "sdk" | "claude-code";
