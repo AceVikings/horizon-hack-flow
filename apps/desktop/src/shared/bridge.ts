@@ -244,7 +244,12 @@ export interface AteBridge {
   /** Additive (lane D3): the daemon-supervised trader runner. Optional: absent in fixture bridges. */
   trader?: { status(): Promise<Res<TraderStatus>>; start(o: TraderStartInput): Promise<Res<TraderStatus>>; stop(): Promise<Res<TraderStatus>> };
   /** Additive (lane D3): pending strategy changes (approve with `strategy.approve`). */
-  approvals?: { list(): Promise<Res<PendingChange[]>>; reject(changeId: string): Promise<Res<{ rejected: boolean }>> };
+  approvals?: {
+    list(): Promise<Res<PendingChange[]>>;
+    reject(changeId: string): Promise<Res<{ rejected: boolean }>>;
+    /** Plain confirmation (no Touch ID) for a change that only tightens risk but sells now (go to cash). */
+    confirm(changeId: string): Promise<Res<{ applied: true; decisionId: string }>>;
+  };
   /** Additive (lane D3): the in-app attack suite (testnet only) and the recorded proof. */
   proof?: { get(): Promise<Res<ProofState>>; run(o?: { market?: MarketId; waitPauseSec?: number }): Promise<Res<ProofRun>>; stop(): Promise<Res<{ run: ProofRun | null }>> };
   /** Additive (lane D1): live candidates for Markets (ate_candidates_get) and an out-of-schedule cycle (POST /cycle). */
@@ -294,6 +299,7 @@ export const IPC_METHODS = [
   "trader.stop",
   "approvals.list",
   "approvals.reject",
+  "approvals.confirm",
   "proof.get",
   "proof.run",
   "proof.stop",

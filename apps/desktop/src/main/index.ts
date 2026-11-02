@@ -157,6 +157,8 @@ async function invoke(method: IpcMethod, arg: any, arg2?: any): Promise<unknown>
       for (const p of r.data.pending) rememberPending(p);
       return { ok: true, data: r.data.pending };
     }
+    case "approvals.confirm":
+      return daemon.call("POST", "/strategy/confirm", { changeId: String(arg) });
     case "approvals.reject":
       return daemon.call("POST", "/strategy/reject", { changeId: String(arg) });
     case "proof.get":
