@@ -23,6 +23,7 @@ import {
   type ReservationClaim,
   type Reservations,
   type StrategyGuard,
+  type StrategyPatcher,
   type Suppressed,
 } from "@ate/core";
 import { keccak256, toBytes } from "viem";
@@ -210,6 +211,19 @@ export interface StrategyImpl {
   guard: StrategyGuard;
   reservations: Reservations;
   invalidation: Invalidation;
+  /** Lane C's StrategyPatcher (ate_strategy_set clamping + loosening detection); absent on the stub. */
+  patcher?: StrategyPatcher;
+  /** Lane C's daily-loss breaker state machine (§11.4 rule 6). */
+  stepBreaker?: (s: BreakerStateLike, i: { now: number; utcDay: string; dailyPnlUsd: string; dailyLossLimitUsd: string; flat: boolean; cycle: boolean }) => { state: BreakerStateLike; actions: string[] };
+  /** Lane C's E13 veto outcome scorer. */
+  scoreVeto?: (i: { side: "buy" | "sell"; declinedAmountIn: bigint; quotedPriceE8: bigint; markThenE8: bigint; d: number }) => { savedBps: number; savedUsd: string };
+}
+
+export interface BreakerStateLike {
+  state: "armed" | "flattening" | "tripped";
+  since: number | null;
+  day: string;
+  cycles: number;
 }
 
 /** Prefer Lane C's @ate/strategy (createCandidateEngine/createStrategyGuard/createReservations/createInvalidation). */
@@ -227,6 +241,9 @@ export async function loadStrategy(openProposals: () => OpenProposal[], opts: { 
           guard: (mod.createStrategyGuard as () => StrategyGuard)(),
           reservations,
           invalidation,
+          ...(typeof mod.createStrategyPatcher === "function" ? { patcher: (mod.createStrategyPatcher as () => StrategyPatcher)() } : {}),
+          ...(typeof mod.stepBreaker === "function" ? { stepBreaker: mod.stepBreaker as StrategyImpl["stepBreaker"] } : {}),
+          ...(typeof mod.scoreVeto === "function" ? { scoreVeto: mod.scoreVeto as StrategyImpl["scoreVeto"] } : {}),
         };
       }
     } catch {

@@ -1,15 +1,10 @@
 // /view — daemon-served read-only fallback page (§21.1 item 9). Token comes from the URL fragment
 // (`/view#token=…`, printed by `ate ui`), never from the page itself. Text is rendered via textContent only.
+// CSP: no inline script or style — the page loads /view.js and /view.css from the daemon itself (§17.3).
 export const VIEW_HTML = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>ATE · read-only view</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<style>
-body{font:13px/1.45 ui-monospace,Menlo,monospace;background:#0d0f12;color:#d7dae0;margin:0;padding:16px}
-h1{font-size:16px;margin:0 0 8px} h2{font-size:13px;margin:18px 0 6px;color:#8fb3ff}
-table{border-collapse:collapse;width:100%} td,th{border-bottom:1px solid #222;padding:3px 6px;text-align:left;vertical-align:top}
-.ok{color:#5fd38d}.bad{color:#ff6b6b}.muted{color:#7d8590} #footer{position:sticky;bottom:0;background:#0d0f12;padding:6px 0;border-top:1px solid #222}
-a{color:#8fb3ff}
-</style></head><body>
+<link rel="stylesheet" href="/view.css"></head><body>
 <h1>ATE — bounded autonomy for AI traders <span class="muted">(read-only)</span></h1>
 <div id="err" class="bad"></div>
 <h2>Markets</h2><table id="markets"></table>
@@ -17,8 +12,17 @@ a{color:#8fb3ff}
 <h2>Decisions</h2><table id="journal"></table>
 <h2>Events</h2><table id="events"></table>
 <div id="footer"></div>
-<script>
-(function(){
+<script src="/view.js"></script></body></html>`;
+
+
+export const VIEW_CSS = `body{font:13px/1.45 ui-monospace,Menlo,monospace;background:#0d0f12;color:#d7dae0;margin:0;padding:16px}
+h1{font-size:16px;margin:0 0 8px} h2{font-size:13px;margin:18px 0 6px;color:#8fb3ff}
+table{border-collapse:collapse;width:100%} td,th{border-bottom:1px solid #222;padding:3px 6px;text-align:left;vertical-align:top}
+.ok{color:#5fd38d}.bad{color:#ff6b6b}.muted{color:#7d8590} #footer{position:sticky;bottom:0;background:#0d0f12;padding:6px 0;border-top:1px solid #222}
+a{color:#8fb3ff}
+`;
+
+export const VIEW_JS = `(function(){
 var tok=(new URLSearchParams(location.hash.slice(1))).get('token')||'';
 var X='https://hsk.blockscout.com';
 function el(t,txt,cls){var e=document.createElement(t);if(txt!==undefined)e.textContent=String(txt);if(cls)e.className=cls;return e}
@@ -41,4 +45,4 @@ refresh();setInterval(refresh,15000);
 try{var ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/events?token='+encodeURIComponent(tok));
  ws.onmessage=function(m){var t=document.getElementById('events');var e=JSON.parse(m.data);var tr=el('tr');[new Date(e.at*1000).toISOString().slice(11,19),e.type,JSON.stringify(e.data).slice(0,200)].forEach(function(c){tr.appendChild(el('td',c))});t.insertBefore(tr,t.firstChild);if(e.type.indexOf('trade')===0)refresh()}}catch(e){}
 })();
-</script></body></html>`;
+`;

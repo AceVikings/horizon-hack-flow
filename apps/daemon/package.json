@@ -38,6 +38,8 @@
     "viem": "^2.21.0",
     "ws": "^8.18.0",
     "@ate/approve": "workspace:*",
+    "@ate/chat": "workspace:*",
+    "@ate/trader": "workspace:*",
     "@ate/strategy": "workspace:*"
   },
   "devDependencies": {

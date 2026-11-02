@@ -81,7 +81,7 @@ import { HskDexAdapter, checkReasonToAteError, quoterV2Abi } from "@ate/venues";
 import type { AgentSigner } from "@ate/wallet";
 import type { TransactionReceipt } from "viem";
 import { applyFill, avgEntryE8, emptyBook, fmtE8, seedBook, unrealised, type Book, type FillRow } from "./positions.js";
-import { candidateIdFor, type StrategyImpl } from "./strategy-stub.js";
+import { candidateIdFor, type BreakerStateLike, type StrategyImpl } from "./strategy-stub.js";
 import type { TxQueue, TxPriority } from "./txqueue.js";
 
 export type CallerScope = TokenScope | "internal";
@@ -192,6 +192,14 @@ export class AteService {
   /** Lane E hook: notified with StrategyApprovalPending when ate_strategy_set returns ATE_APPROVAL_REQUIRED. */
   onStrategyPending: ((d: unknown) => void) | null = null;
   counters = { cycles: 0, trades: 0, routedUsdE8: 0n, lastCycleAt: null as number | null };
+  /** Daily P&L (§11.4 rule 6): realised + exit-marked unrealised minus the UTC-day-start snapshot. */
+  private pnlDay: { day: string; startE8: string } | null = null;
+  private dailyPnlE8 = 0n;
+  private breaker: BreakerStateLike = { state: "armed", since: null, day: "", cycles: 0 };
+  /** `ate rogue --stage` hold (§22.3): candidate executes on this market wait until `until`; guard exits never wait. */
+  private rogueHold: { market: MarketId; until: number } | null = null;
+  /** Count of daemon-originated txs per vault (executes, exits, pauses, refreshes) — `--stage` aborts if it moves. */
+  private vaultTxSeq: Partial<Record<MarketId, number>> = {};
   smokeMode = false;
 
   constructor(readonly o: ServiceOptions) {
@@ -552,8 +560,8 @@ export class AteService {
       markets,
       turnover: { budgetUsd: this.strategy.portfolio.maxDailyTurnoverUsd, usedUsd: e8ToUsd(usedAll), reservedUsd: tot.turnoverUsd },
       discretionary: { executedToday: discExec, reservedToday: tot.discretionary },
-      dailyPnlUsd: "0",
-      breaker: { state: "armed", since: null },
+      dailyPnlUsd: e8ToUsdSigned(this.dailyPnlE8),
+      breaker: { state: this.breaker.state, since: this.breaker.since },
       candidates: cands,
       openProposals: this.openProposals(),
       candidateTtlSec: this.strategy.portfolio.candidateTtlSec,
@@ -589,6 +597,16 @@ export class AteService {
     const t = this.now();
     for (const [k, v] of this.candidates) if (v.expiresAt < t - 600) this.candidates.delete(k);
     this.expireProposals();
+    try {
+      this.stepDaily(true);
+    } catch (e) {
+      this.o.log?.(`daily pnl/breaker: ${(e as Error).message}`);
+    }
+    try {
+      this.scoreOutcomes();
+    } catch (e) {
+      this.o.log?.(`veto outcomes: ${(e as Error).message}`);
+    }
     const pf = this.portfolio();
     const snaps = this.snapshots();
     let res: { candidates: Candidate[]; suppressed: Suppressed[] };
@@ -635,6 +653,124 @@ export class AteService {
         if (this.candidates.get(cand.candidateId)?.consumedBy) continue;
         void this.runGuardExit(cand).catch((e) => this.o.log?.(`guard exit ${cand.market}: ${(e as Error).message}`));
       }
+    }
+  }
+
+  private setting<T>(key: string): T | null {
+    const r = this.o.db.prepare("SELECT value FROM settings WHERE key = ?").get(key) as { value: string } | undefined;
+    return r ? (JSON.parse(r.value) as T) : null;
+  }
+  private saveSetting(key: string, v: unknown) {
+    this.o.db.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(key, JSON.stringify(v));
+  }
+
+  /** Σ realised + exit-marked unrealised over both books (8 dp USD). */
+  private pnlTotalE8(): bigint {
+    let tot = 0n;
+    for (const m of this.markets) {
+      const b = this.book(m);
+      tot += b.realisedE8 + unrealised(b, this.exitMarkE8(m), MARKETS[m].baseDecimals).usdE8;
+    }
+    return tot;
+  }
+
+  /**
+   * Daily P&L + Lane C's breaker (§11.4 rule 6). The day-start snapshot and breaker state persist in `settings`
+   * so a restart neither resets the loss count nor re-arms a tripped breaker.
+   */
+  stepDaily(cycle: boolean) {
+    const t = this.now();
+    const day = utcDay(t);
+    if (!this.pnlDay) this.pnlDay = this.setting<{ day: string; startE8: string }>("pnl_day_start");
+    const b0 = this.setting<BreakerStateLike>("breaker");
+    if (b0 && !this.breaker.day) this.breaker = b0;
+    if (!this.cycle) return;
+    const total = this.pnlTotalE8();
+    if (!this.pnlDay || this.pnlDay.day !== day) {
+      this.pnlDay = { day, startE8: total.toString() };
+      this.saveSetting("pnl_day_start", this.pnlDay);
+    }
+    this.dailyPnlE8 = total - BigInt(this.pnlDay.startE8);
+    const step = this.o.strategy.stepBreaker;
+    if (!step) return;
+    const flat = this.markets.every((m) => BigInt(this.cycle?.markets[m]?.vault?.exposureUsdE8 ?? "0") < 50_000_000n);
+    const before = JSON.stringify(this.breaker);
+    const r = step(this.breaker.day ? this.breaker : { state: "armed", since: null, day, cycles: 0 }, {
+      now: t,
+      utcDay: day,
+      dailyPnlUsd: e8ToUsdSigned(this.dailyPnlE8),
+      dailyLossLimitUsd: this.strategy.portfolio.dailyLossLimitUsd,
+      flat,
+      cycle,
+    });
+    this.breaker = r.state;
+    if (JSON.stringify(this.breaker) !== before) this.saveSetting("breaker", this.breaker);
+    for (const a of r.actions) {
+      if (a === "invalidate_buys") for (const id of this.o.strategy.invalidation.onBreaker()) this.setStatus(id, "invalidated");
+      else if (a === "pause_all") void this.pause("internal", `Daily loss breaker tripped: daily P&L ${e8ToUsdSigned(this.dailyPnlE8)} USD ≤ −${this.strategy.portfolio.dailyLossLimitUsd}`).catch((e) => this.o.log?.(`breaker pause: ${(e as Error).message}`));
+      else if (a === "notify") this.o.emit({ type: "breaker", at: t, data: { state: this.breaker.state, dailyPnlUsd: e8ToUsdSigned(this.dailyPnlE8), limitUsd: this.strategy.portfolio.dailyLossLimitUsd } });
+      else if (a === "journal_unflattened")
+        this.journal.append({
+          at: t,
+          kind: "no_trade",
+          engine: "guard",
+          profile: "default",
+          actor: { kind: "guard" },
+          rationale: `Daily loss breaker: flatten window elapsed with exposure left; vaults paused with unflattened exposure (${this.markets.map((m) => `${MARKETS[m].label} $${e8ToUsd(BigInt(this.cycle?.markets[m]?.vault?.exposureUsdE8 ?? "0"))}`).join(", ")})`,
+          context: this.context(undefined),
+          verdict: { ok: true, code: "NO_TRADE", message: "guard" },
+        });
+    }
+  }
+
+  /**
+   * E13 (§11.1): 30 min after an LLM veto (`ate_decide` llm_veto bound to a candidate) or size-down (LLM proposal
+   * below the candidate's maxAmountIn), journal an `outcome` with Lane C's `scoreVeto` counterfactual.
+   */
+  scoreOutcomes() {
+    const score = this.o.strategy.scoreVeto;
+    if (!score || !this.cycle) return;
+    const t = this.now();
+    const H = 1800;
+    const due = this.o.db
+      .prepare(
+        `SELECT d.id, d.at, d.kind, d.record FROM decisions d
+         WHERE d.at <= ? AND d.at >= ? AND (
+           (d.kind = 'no_trade' AND json_extract(d.record,'$.verdict.message') = 'llm_veto' AND json_extract(d.record,'$.candidateId') IS NOT NULL)
+           OR (d.kind = 'proposal' AND json_extract(d.record,'$.engine') = 'llm' AND json_extract(d.record,'$.candidateId') IS NOT NULL))
+         AND NOT EXISTS (SELECT 1 FROM decisions o WHERE o.kind = 'outcome' AND o.ref_id = d.id)
+         ORDER BY d.seq LIMIT 20`,
+      )
+      .all(t - H, t - 86_400) as { id: string; at: number; kind: string; record: string }[];
+    for (const row of due) {
+      const rec = JSON.parse(row.record) as JournalEntry;
+      const cand = this.o.db.prepare("SELECT market, side, max_amount_in FROM candidates WHERE id = ?").get(rec.candidateId) as { market: MarketId; side: Side; max_amount_in: string } | undefined;
+      if (!cand || !isMarketId(cand.market)) continue;
+      const max = BigInt(cand.max_amount_in);
+      const declined = row.kind === "no_trade" ? max : max - BigInt(rec.intent?.amountIn ?? cand.max_amount_in);
+      if (declined <= 0n) continue; // a full-size LLM proposal is an act, not a size-down
+      const m = cand.market;
+      const fee = BigInt(MARKETS[m].fee);
+      const pool = BigInt(rec.context.pool.price || "0");
+      if (pool <= 0n) continue;
+      const quoted = cand.side === "buy" ? (pool * (1_000_000n + fee)) / 1_000_000n : (pool * (1_000_000n - fee)) / 1_000_000n;
+      const poolNow = BigInt(this.cycle.markets[m]?.price.pool.price ?? "0");
+      const markThen = cand.side === "buy" ? (this.exitMarkE8(m) ?? (poolNow * (1_000_000n - fee)) / 1_000_000n) : (poolNow * (1_000_000n + fee)) / 1_000_000n;
+      if (markThen <= 0n) continue;
+      const s = score({ side: cand.side, declinedAmountIn: declined, quotedPriceE8: quoted, markThenE8: markThen, d: MARKETS[m].baseDecimals });
+      this.journal.append({
+        at: t,
+        kind: "outcome",
+        refId: row.id,
+        market: m,
+        engine: rec.engine,
+        profile: rec.profile,
+        actor: { kind: "guard" },
+        rationale: `E13 ${row.kind === "no_trade" ? "veto" : "size-down"} outcome at +30 min: declined ${declined} of ${cand.side}, quoted ${quoted} vs mark ${markThen} → saved ${s.savedBps} bps ($${s.savedUsd})`,
+        context: this.context(m),
+        verdict: { ok: true, code: "OK" },
+        outcome: { horizonSec: 1800, declinedAmountIn: declined.toString(), markThen: markThen.toString(), savedBps: s.savedBps, savedUsd: s.savedUsd },
+      });
     }
   }
 
@@ -767,8 +903,25 @@ export class AteService {
 
   // ------------------------------------------------------------------ tool dispatch
 
-  listTools(scope: "agent" | "chat"): ToolName[] {
+  listTools(scope: "agent" | "chat" | "ui"): ToolName[] {
+    if (scope === "ui") return [...CHAT_TOOL_ALLOWLIST, "ate_propose", "ate_execute"];
     return toolsForScope(scope, { hsp: this.cfg.payments.enabled });
+  }
+
+  /** A proposal waiting for a human (confirm mode, §7.3), for POST /trade/approve. */
+  pendingHuman(id: string): ProposalMeta | null {
+    const p = this.proposals.get(id);
+    return p && p.status === "awaiting_human" && p.expiresAt >= this.now() ? p : null;
+  }
+
+  /** Called by /trade/approve after the ate-approve signature verified: awaiting_human → approved(by=human). */
+  approveHuman(id: string): { proposalId: string; status: ProposalStatus; approvedBy: "human"; approvedAt: number } {
+    const p = this.pendingHuman(id);
+    if (!p) throw new AteError("PolicyError", "ATE_PROPOSAL_UNKNOWN", `proposal ${id} is not awaiting a human approval`);
+    const t = this.now();
+    p.status = "approved";
+    this.o.db.prepare("UPDATE proposals SET status = 'approved', approved_by = 'human', approved_at = ? WHERE id = ?").run(t, id);
+    return { proposalId: id, status: "approved", approvedBy: "human", approvedAt: t };
   }
 
   /**
@@ -781,7 +934,7 @@ export class AteService {
     const tool = name as ToolName;
     if (scope !== "internal") {
       const allowed: readonly string[] =
-        scope === "agent" ? this.listTools("agent") : scope === "chat" || scope === "ui" || scope === "session" ? CHAT_TOOL_ALLOWLIST : scope === "view" ? ["ate_market_get", "ate_candidates_get", "ate_positions", "ate_strategy_get", "ate_journal_read"] : [];
+        scope === "agent" ? this.listTools("agent") : scope === "ui" ? this.listTools("ui") : scope === "chat" || scope === "session" ? CHAT_TOOL_ALLOWLIST : scope === "view" ? ["ate_market_get", "ate_candidates_get", "ate_positions", "ate_strategy_get", "ate_journal_read"] : [];
       if (!allowed.includes(tool)) {
         return fail("ATE_TOOL_NOT_ALLOWED", `${tool} is not available to the ${scope} scope`, scope === "chat" ? `Chat may call only: ${CHAT_TOOL_ALLOWLIST.join(", ")}` : "Use an agent-scope token");
       }
@@ -881,7 +1034,10 @@ export class AteService {
     const t = this.now();
     await this.refresh(5);
     const cand = a.candidateId ? this.candidates.get(a.candidateId) : undefined;
-    const origin: ProposalOrigin = scope === "internal" && cand?.generator === "guard_exit" ? "guard" : a.origin ?? (scope === "ui" || scope === "session" ? "human" : "candidate");
+    // The frozen §7.4 schema defaults origin to "candidate" (Ajv useDefaults fills it), so a human scope's
+    // unbound proposal is recognised by the missing candidateId rather than by a missing origin.
+    const human = (scope === "ui" || scope === "session") && a.origin !== "discretionary" && !a.candidateId;
+    const origin: ProposalOrigin = scope === "internal" && cand?.generator === "guard_exit" ? "guard" : human ? "human" : (a.origin ?? "candidate");
     const engine = this.engineFor(scope, engineHint ?? (cand?.generator === "smoke" || a.rationale.startsWith("[engine=rules]") ? "rules" : undefined));
     const mode = scope === "internal" ? "autonomous" : this.strategy.mode;
     if (mode === "autonomous" && origin === "candidate" && !a.candidateId) {
@@ -1060,6 +1216,10 @@ export class AteService {
     }
     if (p.status === "awaiting_human") return fail("ATE_APPROVAL_REQUIRED", "confirm mode: this proposal awaits a human approval", "Approve it in the UI/CLI");
     if (this.locked) return fail("ATE_DAEMON_LOCKED", "daemon is locked", "Run `ate unlock`");
+    const hold = this.rogueHold;
+    if (hold && hold.market === p.market && hold.until > t && p.origin !== "guard") {
+      return fail("ATE_STRATEGY_BLOCKED", `candidate executes on ${MARKETS[p.market].label} are held for ${hold.until - t} s (ate rogue --stage)`, "Retry after the hold; guard exits are never held", true);
+    }
     if (scope === "agent") {
       this.counters.cycles++;
       this.counters.lastCycleAt = t;
@@ -1132,6 +1292,7 @@ export class AteService {
       return failExec(ae.code ?? "ATE_VENUE_ERROR", ae.message, ae.hint);
     }
     const priority: TxPriority = p.origin === "guard" ? "exit" : "execute";
+    this.bumpVaultTx(p.market);
     const h = this.o.txq.enqueue({
       priority,
       to: tx.to,
@@ -1290,6 +1451,7 @@ export class AteService {
       const pairs = [...new Set(this.markets.map((m) => (this.cfg.supra.pairs?.[m] ?? SUPRA_PAIRS[m]) as number | null).filter((x): x is number => x !== null))];
       const proof = await fetchSupraProof(pull?.proofUrl ?? SUPRA_PROOF_URL, pairs, this.o.fetchImpl);
       const tx = buildSupraPullTx((pull?.contract ?? SUPRA_PULL) as Address, proof);
+      for (const m of this.markets) this.bumpVaultTx(m); // an oracle refresh changes check() for both vaults
       const h = this.o.txq.enqueue({ priority: reason === "pre-trade" ? "execute" : "refresh", to: tx.to, data: tx.data, gas: tx.gas, label: `supra refresh (${reason})` });
       let ok = false;
       let txHash: Hex | null = null;
@@ -1372,7 +1534,7 @@ export class AteService {
     const scoreboard = {
       acts: q("SELECT COUNT(*) c FROM decisions WHERE kind = 'execution' AND json_extract(record,'$.engine') = 'llm' AND json_extract(record,'$.verdict.ok') = 1"),
       vetoes: q("SELECT COUNT(*) c FROM decisions WHERE kind = 'no_trade' AND json_extract(record,'$.verdict.message') = 'llm_veto'"),
-      sizeDowns: 0,
+      sizeDowns: q("SELECT COUNT(*) c FROM decisions o JOIN decisions d ON d.id = o.ref_id WHERE o.kind = 'outcome' AND d.kind = 'proposal'"),
       savedBps: 0,
       savedUsd: "0",
       discretionary: q("SELECT COUNT(*) c FROM proposals WHERE origin = 'discretionary' AND status = 'executed'"),
@@ -1429,6 +1591,21 @@ export class AteService {
 
   private async strategySet(scope: CallerScope, a: StrategySetInput): Promise<ToolResult<ToolOutput<"ate_strategy_set">>> {
     const patch = a.patch;
+    // Lane C's StrategyPatcher (riskProfile expansion, vault/agent clamps, loosening table); the inline clamp
+    // below is the fallback for the lane-b stub only. Loosening → pending change + ATE_APPROVAL_REQUIRED.
+    const patcher = this.o.strategy.patcher;
+    if (patcher) {
+      const pscope = scope === "agent" || scope === "chat" || scope === "ui" || scope === "session" ? scope : "ui";
+      const vaults = {} as Record<MarketId, VaultState>;
+      for (const m of this.markets) {
+        const v = this.cycle?.markets[m]?.vault;
+        if (v && this.vaults[m]) vaults[m] = v as VaultState;
+      }
+      const r = patcher.apply(patch, pscope, this.strategy, this.anchors, vaults);
+      if (r.needsApproval) return this.pendStrategy(patch, scope, a.rationale, r.changes, r.next);
+      const dec = this.applyStrategy(scope, r.next, r.changes, a.rationale);
+      return ok({ status: "applied", decisionId: dec, changes: r.changes, clamped: r.clamped, strategy: this.strategy }, this.meta());
+    }
     const AGENT_FIELDS = new Set<string>(["entrySpreadBps", "minNetEdgeBps", "tradeSizeUsd", "cycleSeconds", "market"]);
     if (scope === "agent") {
       const bad = Object.keys(patch).filter((k) => !AGENT_FIELDS.has(k));
@@ -1487,22 +1664,27 @@ export class AteService {
         changes.push({ scope: s, field: k as keyof StrategyPatch, before, after: v, ...(requested !== undefined ? { requested } : {}), ...(clampedBy ? { clampedBy } : {}), loosening });
       }
     }
-    if (changes.some((c) => c.loosening)) {
-      const changeId = `chg_${rationaleHash(`${this.now()}|${a.rationale}|${Math.random()}`).slice(2, 18)}`;
-      const expiresAt = this.now() + 60;
-      const renderedDiff = changes.map((c) => `${c.scope === "portfolio" ? "portfolio" : MARKETS[c.scope].label} ${c.field}: ${JSON.stringify(c.before)} → ${JSON.stringify(c.after)}`).join("\n");
-      this.pendingChanges.set(changeId, { patch, scope, rationale: a.rationale, changes, next, expiresAt, renderedDiff });
-      const r = fail("ATE_APPROVAL_REQUIRED", "this change loosens risk and needs an ate-approve signature", "Approve the rendered diff with Touch ID within 60 s");
-      if (!r.ok) r.error.details = { changeId, diff: changes, renderedDiff, expiresAt };
-      try {
-        this.onStrategyPending?.(r.ok ? null : r.error.details);
-      } catch {
-        /* hook never breaks the tool */
-      }
-      return r as ToolResult<ToolOutput<"ate_strategy_set">>;
-    }
+    if (changes.some((c) => c.loosening)) return this.pendStrategy(patch, scope, a.rationale, changes, next);
     const dec = this.applyStrategy(scope, next, changes, a.rationale);
     return ok({ status: "applied", decisionId: dec, changes, clamped, strategy: this.strategy }, this.meta());
+  }
+
+  /** Loosening change: held for 60 s until ate-approve (or the armed TTY code) signs it via /strategy/approve. */
+  private pendStrategy(patch: StrategyPatch, scope: CallerScope, rationale: string, changes: StrategyFieldChange[], next: StrategyParams): ToolResult<ToolOutput<"ate_strategy_set">> {
+    const changeId = `chg_${rationaleHash(`${this.now()}|${rationale}|${Math.random()}`).slice(2, 18)}`;
+    const expiresAt = this.now() + 60;
+    const renderedDiff = changes
+      .map((c) => `${c.scope === "portfolio" ? "portfolio" : MARKETS[c.scope].label} ${String(c.field)}: ${JSON.stringify(c.before)} → ${JSON.stringify(c.after)}${c.loosening ? "  [LOOSENING]" : ""}`)
+      .join("\n");
+    this.pendingChanges.set(changeId, { patch, scope, rationale, changes, next, expiresAt, renderedDiff });
+    const r = fail("ATE_APPROVAL_REQUIRED", "this change loosens risk and needs an ate-approve signature", "Approve the rendered diff with Touch ID within 60 s");
+    if (!r.ok) r.error.details = { changeId, diff: changes, renderedDiff, expiresAt };
+    try {
+      this.onStrategyPending?.(r.ok ? null : r.error.details);
+    } catch {
+      /* hook never breaks the tool */
+    }
+    return r as ToolResult<ToolOutput<"ate_strategy_set">>;
   }
 
   private applyStrategy(scope: CallerScope, next: StrategyParams, changes: StrategyFieldChange[], rationale: string): string {
@@ -1559,6 +1741,7 @@ export class AteService {
         continue;
       }
       const tx = this.venue.buildPause(m);
+      this.bumpVaultTx(m);
       const h = this.o.txq.enqueue({ priority: "pause", to: tx.to, data: tx.data, gas: 120_000n, label: `pause ${m}` });
       handles.push(h.mined.catch(() => null));
       res.push({ market: m, vault: v, txHash: await h.submitted, status: "submitted" });
@@ -1602,32 +1785,93 @@ export class AteService {
     };
   }
 
-  /** Rogue raw route (§10.1, §22.3): `to` ∈ vaults, selector ∈ {execute, withdraw, setLimits, pause}; fixed gas; journalled profile=rogue. */
-  async rogueBroadcast(body: { to: string; data: string; gas?: string; rationale?: string }): Promise<{ txHash: Hex; status: string; decisionId: string }> {
+  private bumpVaultTx(m: MarketId) {
+    this.vaultTxSeq[m] = (this.vaultTxSeq[m] ?? 0) + 1;
+  }
+
+  /** `POST /rogue/hold` (rogue scope, §22.3 `--stage`): hold candidate executes on one vault; guard exits are never held. */
+  rogueHoldSet(body: { market?: string; seconds?: number }): { market: MarketId; heldUntil: number; vaultTxSeq: number } {
+    const m = (body?.market === "WHSK" || body?.market === "HSK" ? "hsk-dex:WHSK/USDT:3000" : body?.market === "WBTC" || body?.market === "BTC" ? "hsk-dex:WBTC/USDT:3000" : body?.market) as MarketId;
+    if (!isMarketId(m) || !this.vaults[m]) throw new AteError("ConfigError", "ATE_MARKET_UNKNOWN", `rogue hold: unknown market ${String(body?.market)}`);
+    const secs = Math.max(0, Math.min(300, Math.floor(Number(body?.seconds ?? 90))));
+    const until = this.now() + secs;
+    this.rogueHold = secs > 0 ? { market: m, until } : null;
+    this.o.log?.(`rogue hold: ${MARKETS[m].label} candidate executes held ${secs} s`);
+    return { market: m, heldUntil: until, vaultTxSeq: this.vaultTxSeq[m] ?? 0 };
+  }
+
+  /** Daemon-originated tx count for a vault (the `--stage` abort check). */
+  rogueQueueSeq(m: MarketId): number {
+    return this.vaultTxSeq[m] ?? 0;
+  }
+
+  /**
+   * Rogue raw route (§10.1, §22.3): `to` ∈ vaults, selector ∈ {execute, withdraw, setLimits, pause}; fixed gas
+   * (so a revert lands on-chain); journalled `profile=rogue` as a `proposal` + `execution` pair per attempt with
+   * `verdict.code` = the expected code. `ifVaultTxSeq` (from `/rogue/hold`) aborts with ATE_STRATEGY_BLOCKED if
+   * any daemon tx for that vault entered the queue since — `--stage` then falls back to the recorded E4.
+   */
+  async rogueBroadcast(body: {
+    to: string;
+    data: string;
+    gas?: string;
+    rationale?: string;
+    attack?: string;
+    expected?: string;
+    ifVaultTxSeq?: number;
+    intent?: { side: Side; tokenIn: string; amountIn: string };
+  }): Promise<{ txHash: Hex; status: string; decisionId: string; proposalDecisionId: string; blockNumber: string | null; gasUsed: string | null }> {
     const SELECTORS = new Set(["execute", "withdraw", "setLimits", "pause"].map((fn) => selectorOf(fn)));
     const to = String(body.to).toLowerCase();
     const market = this.markets.find((m) => this.vaults[m]?.toLowerCase() === to);
     if (!market) throw new AteError("AuthError", "ATE_TOOL_NOT_ALLOWED", "rogue route: `to` is not one of the two vaults");
     const data = String(body.data) as Hex;
     if (!/^0x[0-9a-fA-F]{8}/.test(data) || !SELECTORS.has(data.slice(0, 10).toLowerCase())) throw new AteError("AuthError", "ATE_TOOL_NOT_ALLOWED", "rogue route: selector must be execute, withdraw, setLimits or pause");
+    if (body.ifVaultTxSeq !== undefined && (this.vaultTxSeq[market] ?? 0) !== Number(body.ifVaultTxSeq)) {
+      throw new AteError("StrategyError", "ATE_STRATEGY_BLOCKED", `a ${MARKETS[market].label} tx entered the queue after check(); aborting (use the recorded E4)`, { retryable: false });
+    }
     if (this.locked) throw new AteError("WalletError", "ATE_DAEMON_LOCKED", "daemon is locked");
-    const h = this.o.txq.enqueue({ priority: "rogue", to: this.vaults[market]!, data, gas: BigInt(body.gas ?? "800000"), label: "rogue" });
-    const txHash = await h.submitted;
-    const r = await h.mined.catch(() => null);
-    const e = this.journal.append({
+    const gas = BigInt(body.gas ?? "800000");
+    if (gas < 50_000n || gas > 3_000_000n) throw new AteError("ConfigError", "ATE_CONFIG_INVALID", "rogue route: gas must be 50k–3M");
+    const expected = String(body.expected ?? "");
+    const reasonIdx = (ReasonCode as Record<string, number>)[expected];
+    const code = (reasonIdx !== undefined && reasonIdx > 0 ? reasonToError(reasonIdx) : expected === "OWNER_ONLY" ? "ATE_TOOL_NOT_ALLOWED" : "ATE_VENUE_ERROR") ?? "ATE_VENUE_ERROR";
+    const attack = String(body.attack ?? "raw").slice(0, 64);
+    const rationale = `[rogue] ${attack}: ${String(body.rationale ?? "ate rogue raw broadcast").slice(0, 400)}`;
+    const vault = this.vaults[market]!;
+    const prop = this.journal.append({
       at: this.now(),
-      kind: "execution",
+      kind: "proposal",
       market,
       engine: "rules",
       profile: "rogue",
       actor: this.actorFor("rogue"),
-      rationale: body.rationale ?? "ate rogue raw broadcast",
+      ...(body.intent ? { intent: { market, vault, side: body.intent.side, tokenIn: String(body.intent.tokenIn), amountIn: String(body.intent.amountIn) } } : {}),
+      rationale,
       context: this.context(market),
-      verdict: { ok: r?.status === "success", code: r?.status === "success" ? "OK" : "ATE_VENUE_ERROR", message: r ? `tx ${r.status}` : "not mined" },
+      verdict: { ok: false, code: code as never, message: `expected ${expected || "revert"} (rogue key, no pre-flight, fixed gas ${gas})` },
+    });
+    const h = this.o.txq.enqueue({ priority: "rogue", to: vault, data, gas, label: `rogue ${attack}` });
+    const txHash = await h.submitted;
+    const r = await h.mined.catch(() => null);
+    const reverted = r ? r.status !== "success" : undefined;
+    const e = this.journal.append({
+      at: this.now(),
+      kind: "execution",
+      refId: prop.id,
+      market,
+      engine: "rules",
+      profile: "rogue",
+      actor: this.actorFor("rogue"),
+      rationale,
+      context: this.context(market),
+      verdict: reverted
+        ? { ok: false, code: code as never, message: `reverted on-chain as expected (${expected || "revert"}) tx ${txHash}` }
+        : { ok: r?.status === "success", code: r ? ("OK" as const) : ("ATE_VENUE_ERROR" as const), message: r ? `UNEXPECTED: tx succeeded ${txHash}` : "not mined" },
       ...(r ? { execution: { txHash, blockNumber: Number(r.blockNumber), gasUsed: r.gasUsed.toString(), amountOut: "0", exitPath: false, reverted: r.status !== "success" } } : {}),
     });
-    if (r && r.status !== "success") this.o.emit({ type: "policy.violation", at: this.now(), data: { market, reason: 0, code: "ATE_VENUE_ERROR", txHash } });
-    return { txHash, status: r?.status ?? "pending", decisionId: e.id };
+    if (reverted) this.o.emit({ type: "policy.violation", at: this.now(), data: { market, reason: reasonIdx ?? 0, code, txHash, profile: "rogue", attack } });
+    return { txHash, status: r?.status ?? "pending", decisionId: e.id, proposalDecisionId: prop.id, blockNumber: r ? r.blockNumber.toString() : null, gasUsed: r ? r.gasUsed.toString() : null };
   }
 }
 

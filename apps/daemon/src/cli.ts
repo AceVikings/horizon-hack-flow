@@ -106,8 +106,10 @@ export async function daemonStart(ctx: Ctx): Promise<number> {
 export async function mcpServe(ctx: Ctx): Promise<number> {
   const home = ateHome(ctx.env);
   const rt = readRuntime(home);
-  const p = await runStdioProxy({ url: `http://127.0.0.1:${rt.port}/mcp`, token: rt.agentToken, version: rt.version });
-  ctx.stderr.write(`ate MCP stdio proxy → http://127.0.0.1:${rt.port}/mcp (agent scope)\n`);
+  // ATE_MCP_TOKEN (env only, never argv): a chat token from /chat/token makes this a chat-scoped proxy (§11.5).
+  const token = ctx.env.ATE_MCP_TOKEN || rt.agentToken;
+  const p = await runStdioProxy({ url: `http://127.0.0.1:${rt.port}/mcp`, token, version: rt.version });
+  ctx.stderr.write(`ate MCP stdio proxy → http://127.0.0.1:${rt.port}/mcp (${ctx.env.ATE_MCP_TOKEN ? "token from ATE_MCP_TOKEN" : "agent scope"})\n`);
   await new Promise<void>((res) => process.stdin.on("end", () => res()));
   await p.close();
   return 0;

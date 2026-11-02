@@ -11,7 +11,7 @@ import { AteError, type DaemonEvent, type TokenScope } from "@ate/core";
 import { createAteMcpServer } from "@ate/mcp";
 import { WebSocketServer, type WebSocket } from "ws";
 import type { AteService } from "./service.js";
-import { VIEW_HTML } from "./view.js";
+import { VIEW_CSS, VIEW_HTML, VIEW_JS } from "./view.js";
 
 export const BODY_LIMIT = 32 * 1024;
 export const ALLOWED_ORIGIN = "ate://local";
@@ -178,13 +178,23 @@ export class DaemonHttp {
     try {
       const url = new URL(req.url ?? "/", "http://127.0.0.1");
       const method = req.method ?? "GET";
-      if (method === "GET" && (url.pathname === "/view" || url.pathname === "/view/")) {
+      const STATIC: Record<string, [string, string]> = {
+        "/view": ["text/html; charset=utf-8", VIEW_HTML],
+        "/view/": ["text/html; charset=utf-8", VIEW_HTML],
+        "/view.js": ["text/javascript; charset=utf-8", VIEW_JS],
+        "/view.css": ["text/css; charset=utf-8", VIEW_CSS],
+      };
+      const st = method === "GET" ? STATIC[url.pathname] : undefined;
+      if (st) {
+        // No inline script or style (§17.3): the page's code is the separately served /view.js.
         res.writeHead(200, {
-          "content-type": "text/html; charset=utf-8",
-          "content-security-policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws://127.0.0.1:* ws://localhost:*; frame-ancestors 'none'",
+          "content-type": st[0],
+          "content-security-policy": "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' ws://127.0.0.1:* ws://localhost:*; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
           "x-content-type-options": "nosniff",
+          "referrer-policy": "no-referrer",
+          "cache-control": "no-store",
         });
-        res.end(VIEW_HTML);
+        res.end(st[1]);
         return;
       }
       const auth = this.o.tokens.resolve(bearer(req, url));
@@ -206,6 +216,14 @@ export class DaemonHttp {
         const body = method === "GET" ? undefined : await readBody(req);
         return await route.handler({ req, res, body, auth, json });
       }
+      if (method === "GET" && url.pathname.startsWith("/strategy/pending/")) {
+        // The pending loosening change behind an ATE_APPROVAL_REQUIRED (for the ate-approve strategy payload).
+        if (auth.scope !== "ui" && auth.scope !== "session") return json(403, { error: "forbidden" });
+        const changeId = decodeURIComponent(url.pathname.slice("/strategy/pending/".length));
+        const p = this.o.service.pendingChange(changeId);
+        if (!p || p.expiresAt < Math.floor(Date.now() / 1000)) return json(404, { error: { code: "ATE_APPROVAL_REQUIRED", message: "unknown or expired changeId" } });
+        return json(200, { changeId, diff: p.changes, renderedDiff: p.renderedDiff, expiresAt: p.expiresAt });
+      }
       if (method === "GET" && url.pathname.startsWith("/api/view/")) {
         if (!["view", "ui", "agent", "chat", "session"].includes(auth.scope)) return json(403, { error: "forbidden" });
         const tool = url.pathname.slice("/api/view/".length);
@@ -226,7 +244,7 @@ export class DaemonHttp {
   }
 
   private async mcp(req: IncomingMessage, res: ServerResponse, auth: TokenInfo, json: (s: number, v: unknown) => void) {
-    if (auth.scope !== "agent" && auth.scope !== "chat") return json(403, { error: "MCP requires an agent or chat token" });
+    if (auth.scope !== "agent" && auth.scope !== "chat" && auth.scope !== "ui") return json(403, { error: "MCP requires an agent, chat or ui token" });
     if (req.method !== "POST") {
       res.writeHead(405, { allow: "POST" });
       res.end(JSON.stringify({ jsonrpc: "2.0", error: { code: -32000, message: "Method not allowed (stateless server)" }, id: null }));
@@ -238,7 +256,7 @@ export class DaemonHttp {
     const engine = auth.engine;
     const server = createAteMcpServer(
       {
-        listTools: () => svc.listTools(scope),
+        listTools: () => svc.listTools(scope === "ui" ? "ui" : scope),
         callTool: async (name, args) => {
           if (!this.toolLimiter.allow(`${scope}:${name}`)) {
             return { ok: false, error: { code: "ATE_RPC_RATE_LIMITED", message: "60 req/min per tool exceeded", retryable: true } };
@@ -284,9 +302,22 @@ export class DaemonHttp {
       scopes: ["rogue"],
       handler: async ({ body, json }) => {
         try {
-          json(200, await svc.rogueBroadcast(body as { to: string; data: string; gas?: string; rationale?: string }));
+          json(200, await svc.rogueBroadcast(body as Parameters<AteService["rogueBroadcast"]>[0]));
         } catch (e) {
-          json(e instanceof AteError && e.code === "ATE_TOOL_NOT_ALLOWED" ? 403 : 400, { error: e instanceof AteError ? e.toToolError() : (e as Error).message });
+          const code = e instanceof AteError ? e.code : null;
+          json(code === "ATE_TOOL_NOT_ALLOWED" ? 403 : code === "ATE_STRATEGY_BLOCKED" ? 409 : 400, { error: e instanceof AteError ? e.toToolError() : (e as Error).message });
+        }
+      },
+    });
+    r.register({
+      method: "POST",
+      path: "/rogue/hold",
+      scopes: ["rogue"],
+      handler: ({ body, json }) => {
+        try {
+          json(200, svc.rogueHoldSet(body as { market?: string; seconds?: number }));
+        } catch (e) {
+          json(400, { error: e instanceof AteError ? e.toToolError() : (e as Error).message });
         }
       },
     });

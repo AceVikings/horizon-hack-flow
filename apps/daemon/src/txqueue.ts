@@ -161,12 +161,15 @@ export class TxQueue {
     if (this.o.chain.estimateGas) {
       try {
         const g = await this.o.chain.estimateGas({ from: this.o.account().address, to: job.to, data: job.data, value: job.value });
+        // EAS attest: storage-heavy and its estimate is sensitive to state written between estimate and mine
+        // (Lane E's fixed 400k ran out of gas on the fork) → estimate × 1.5 + 60k, never below 500k.
+        if (job.priority === "attest") return maxB((g * 15n) / 10n + 60_000n, 500_000n);
         return (g * 13n) / 10n + 20_000n;
       } catch {
         /* reverting estimate: fall back to a fixed limit; pre-flight already decided to send */
       }
     }
-    return job.priority === "pause" ? 120_000n : 700_000n;
+    return job.priority === "pause" ? 120_000n : job.priority === "attest" ? 900_000n : 700_000n;
   }
 
   private async syncNonce(): Promise<number> {
