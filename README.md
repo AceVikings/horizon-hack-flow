@@ -16,7 +16,7 @@ Built by team Vikings for the HSK Chain Horizon Hackathon (AI Agent Trading). Ap
 
 These links are on the HashKey Chain **testnet** (chain 133), with test tokens. Click in this order.
 
-1. [The vault](https://testnet-explorer.hskchain.net/address/0xF80A74F4D9C17Db8a2a0F32558a9FC3A63e2Bcd2?tab=contract) (Vault-HSK). Source is [verified on Sourcify](https://repo.sourcify.dev/133/0xF80A74F4D9C17Db8a2a0F32558a9FC3A63e2Bcd2).
+1. [The vault](https://testnet-explorer.hskchain.net/address/0xF80A74F4D9C17Db8a2a0F32558a9FC3A63e2Bcd2?tab=contract) (Vault-HSK). Source is verified on Blockscout and [on Sourcify](https://repo.sourcify.dev/133/0xF80A74F4D9C17Db8a2a0F32558a9FC3A63e2Bcd2) (exact match).
 2. [An AI trade](https://testnet-explorer.hskchain.net/tx/0x4ff2ad5176975fed3b45e5242894cce949b68b626051e82ec3d270474fde9c0d) and [its EAS attestation](https://testnet-explorer.hskchain.net/tx/0x1f042937320537b9e3b749d327eb2648613aeb1c6319a476f48341bba0a798f8).
 3. [A rogue agent trade that reverted](https://testnet-explorer.hskchain.net/tx/0x0677fb8896195c736201374805876d0aa0122b0ea57ecdf08b5f78f40b531558) (bad price).
 4. [Pause](https://testnet-explorer.hskchain.net/tx/0xaba62b83fd096241a703c4f4ced8b7a7eb4a3e9101a127c71c60e1c11c4a221a), then [unpause](https://testnet-explorer.hskchain.net/tx/0x530bafc2456b50dd35ee58359f02b1c4b8e44c9719f154caff7e599680f9e949).
@@ -41,7 +41,7 @@ What each link shows: [`docs/JUDGE.md`](docs/JUDGE.md).
 
 These links are on the HashKey Chain **testnet** (chain 133), with test tokens.
 
-- Vaults: Vault-HSK ([Blockscout](https://testnet-explorer.hskchain.net/address/0xF80A74F4D9C17Db8a2a0F32558a9FC3A63e2Bcd2?tab=contract), [Sourcify](https://repo.sourcify.dev/133/0xF80A74F4D9C17Db8a2a0F32558a9FC3A63e2Bcd2)) and Vault-BTC ([Blockscout](https://testnet-explorer.hskchain.net/address/0x6Da0c6EF7328d3aD6b0b8781770D941D065a6693?tab=contract), [Sourcify](https://repo.sourcify.dev/133/0x6Da0c6EF7328d3aD6b0b8781770D941D065a6693)). Both are verified on Sourcify (exact match). Blockscout shows the vault bytecode as unverified, because the source upload hit a size limit there.
+- Vaults: Vault-HSK ([Blockscout](https://testnet-explorer.hskchain.net/address/0xF80A74F4D9C17Db8a2a0F32558a9FC3A63e2Bcd2?tab=contract), [Sourcify](https://repo.sourcify.dev/133/0xF80A74F4D9C17Db8a2a0F32558a9FC3A63e2Bcd2)) and Vault-BTC ([Blockscout](https://testnet-explorer.hskchain.net/address/0x6Da0c6EF7328d3aD6b0b8781770D941D065a6693?tab=contract), [Sourcify](https://repo.sourcify.dev/133/0x6Da0c6EF7328d3aD6b0b8781770D941D065a6693)). Both are verified on Sourcify (exact match) and on Blockscout (partial match: the upload had comments stripped to fit the explorer's 100 KB request limit, so only the metadata hash differs). Blockscout decodes every vault revert.
 - A trade that Claude decided: [WBTC buy](https://testnet-explorer.hskchain.net/tx/0x4ff2ad5176975fed3b45e5242894cce949b68b626051e82ec3d270474fde9c0d). The pool price gap was staged by us, because nobody else trades on the test pools.
 - The EAS attestation for that trade: [attest tx](https://testnet-explorer.hskchain.net/tx/0x1f042937320537b9e3b749d327eb2648613aeb1c6319a476f48341bba0a798f8).
 - Skipped trades and the veto: in the [journal export](docs/testnet-133-journal.json) (`no_trade` records, head hash `0x5e72…ad85`).
@@ -441,7 +441,7 @@ flowchart LR
     ATE --> SU["Supra on HSK Chain<br/>enforced price"]
     ATE --> AP["APRO<br/>cross-check"]
     ATE --> EA["EAS predeploy<br/>attestations"]
-    ATE --> BS["Blockscout<br/>decoded reverts · source verification at deploy"]
+    ATE --> BS["Blockscout<br/>verified source · decoded reverts"]
     ATE --> HG["hashkey-public-market<br/>exchange data"]
     ATE -. "optional" .-> HSP["HSP + OKX Agentic Wallet<br/>agent-to-agent payments"]
 ```

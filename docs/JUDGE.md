@@ -23,7 +23,7 @@ pools were put back to the Supra price afterwards:
 - Supra adapters: https://testnet-explorer.hskchain.net/address/0xeCC8Fe21c7C0D39988856b6B67860bAe55A8c9A2?tab=contract (pair 517) and
   https://testnet-explorer.hskchain.net/address/0x9bbb840B9e1086177507D958E40668f3cEF99372?tab=contract (pair 0)
 
-Same `PolicyVault` source as mainnet (Sourcify exact match). `limits()` on the Read tab: $100 per trade,
+Same `PolicyVault` source as mainnet (Sourcify exact match; Blockscout verified, partial match). `limits()` on the Read tab: $100 per trade,
 $250 per epoch, $150 exposure, 250 bps slippage and deviation, 60 s cooldown. `agent()` is
 `0xC11C…4f8a`, `guardian()` is `0x8aAc…db66B`, `owner()` is the deployer `0xFF7D…569e`.
 

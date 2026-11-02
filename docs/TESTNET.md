@@ -31,7 +31,10 @@ Every address is in [`deployments/133.json`](../deployments/133.json), which the
 The limits are the §19 defaults: $100 per trade, $250 per epoch, $150 exposure, 250 bps slippage and deviation,
 500 bps exit discount, `maxOracleAge` 90000 s, 60 s cooldown. Each vault was seeded with ~$150 tUSDT and ~$50 of
 its price token. The tokens and adapters are verified on Blockscout. The vaults are verified on Sourcify (exact
-match), because their standard-JSON payload hits a 413 on the explorer gateway.
+match) and on Blockscout. The full standard JSON (134 KB) hits a 413 on the explorer gateway (~100 KB limit), so the
+Blockscout upload uses `python3 scripts/min-std-json.py` (comments stripped, 68 KB) with the v2
+`verification/via/standard-input` endpoint. Blockscout reports a partial match (same bytecode, different metadata
+hash), which is enough for it to show the source and decode every custom error.
 
 ## Test tokens
 
