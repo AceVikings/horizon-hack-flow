@@ -23,7 +23,7 @@ export interface Deployment {
 }
 
 export const MARKET_OF = { hsk: "hsk-dex:WHSK/USDT:3000", btc: "hsk-dex:WBTC/USDT:3000" } as const;
-const erc20 = parseAbi(["function mint(address to, uint256 amount)", "function owner() view returns (address)", "function decimals() view returns (uint8)", "function balanceOf(address) view returns (uint256)"]);
+const erc20 = parseAbi(["function mint(address to, uint256 amount)", "function faucet()", "function transfer(address to, uint256 amount) returns (bool)", "function owner() view returns (address)", "function decimals() view returns (uint8)", "function balanceOf(address) view returns (uint256)"]);
 const adapterAbi = parseAbi(["function latestRoundData() view returns (uint80, int256, uint256, uint256, uint80)"]);
 
 /** Foundry artifact (contracts/out, $ATE_CONTRACTS_OUT, or the slim contracts/artifacts copy the cloud image ships). */
@@ -184,23 +184,32 @@ export class OwnerChain {
     return { vaults: out, txs };
   }
 
-  /** Testnet only: mint ~$150 of tUSDT and ~$50 of the price token (at the adapter price) into each vault. */
+  /**
+   * Testnet only: put ~$150 of tUSDT and ~$50 of the price token (at the adapter price) into each vault. The token
+   * deployer mints directly; any other owner key uses the public faucet() (once per hour per address) and transfers.
+   */
   async seed(vaults: { market: string; vault: Address }[]): Promise<{ label: string; hash: Hex }[]> {
     if (this.dep.chainId !== 133) throw new OwnerError(403, "seeding with test tokens is testnet only");
     const txs: { label: string; hash: Hex }[] = [];
+    const give = async (token: Address, to: Address, amount: bigint, label: string) => {
+      const tokOwner = (await this.pub.readContract({ address: token, abi: erc20, functionName: "owner" })) as Address;
+      if (tokOwner.toLowerCase() === this.address.toLowerCase()) {
+        txs.push(await this.send(label, token, encodeFunctionData({ abi: erc20, functionName: "mint", args: [to, amount] })));
+        return;
+      }
+      const bal = (await this.pub.readContract({ address: token, abi: erc20, functionName: "balanceOf", args: [this.address] })) as bigint;
+      if (bal < amount) txs.push(await this.send(`faucet for ${label}`, token, encodeFunctionData({ abi: erc20, functionName: "faucet" })));
+      txs.push(await this.send(label, token, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [to, amount] })));
+    };
     for (const v of vaults) {
       const m = this.dep.markets[v.market];
       if (!m) continue;
-      const tokOwner = (await this.pub.readContract({ address: m.quoteToken as Address, abi: erc20, functionName: "owner" })) as Address;
-      if (tokOwner.toLowerCase() !== this.address.toLowerCase()) throw new OwnerError(409, "the owner key does not own the test tokens; use the token faucet instead");
-      txs.push(await this.send(`tUSDT into ${v.market.includes("WBTC") ? "BTC" : "HSK"} vault`, m.quoteToken as Address, encodeFunctionData({ abi: erc20, functionName: "mint", args: [v.vault, 150n * 10n ** 6n] })));
-      const vs = (await this.pub.readContract({ address: v.vault, abi: policyVaultAbi, functionName: "oracle" as never })) as Address;
-      const [, answer] = (await this.pub.readContract({ address: vs, abi: adapterAbi, functionName: "latestRoundData" })) as readonly [bigint, bigint, bigint, bigint, bigint];
+      const name = v.market.includes("WBTC") ? "BTC" : "HSK";
+      await give(m.quoteToken as Address, v.vault, 150n * 10n ** 6n, `tUSDT into ${name} vault`);
+      const oracle = (await this.pub.readContract({ address: v.vault, abi: policyVaultAbi, functionName: "oracle" as never })) as Address;
+      const [, answer] = (await this.pub.readContract({ address: oracle, abi: adapterAbi, functionName: "latestRoundData" })) as readonly [bigint, bigint, bigint, bigint, bigint];
       const dec = Number(await this.pub.readContract({ address: m.priceToken as Address, abi: erc20, functionName: "decimals" }));
-      if (answer > 0n) {
-        const amt = (50n * 10n ** 8n * 10n ** BigInt(dec)) / answer;
-        txs.push(await this.send(`price token into ${v.market.includes("WBTC") ? "BTC" : "HSK"} vault`, m.priceToken as Address, encodeFunctionData({ abi: erc20, functionName: "mint", args: [v.vault, amt] })));
-      }
+      if (answer > 0n) await give(m.priceToken as Address, v.vault, (50n * 10n ** 8n * 10n ** BigInt(dec)) / answer, `price token into ${name} vault`);
     }
     return txs;
   }

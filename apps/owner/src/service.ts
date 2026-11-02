@@ -34,7 +34,6 @@ const addr = (x: unknown, what: string): Address => {
 
 export class OwnerService {
   private pending = new Map<string, { payload: ConfigApproval; run: (by: "touch-id" | "passkey") => Promise<OpResult> }>();
-  private busy = false;
   constructor(
     private readonly o: { chain: ChainLike; approver: Approver; home: string; env?: NodeJS.ProcessEnv; log?: (m: string) => void; now?: () => number },
   ) {}
@@ -228,9 +227,15 @@ export class OwnerService {
     return p.run(by);
   }
 
-  private async execute(plan: Plan, approvedBy: "touch-id" | "passkey" | null): Promise<OpResult> {
-    if (this.busy) throw new OwnerError(409, "another owner action is in progress");
-    this.busy = true;
+  /** Owner txs run one op at a time, in order (with the chain-side nonce manager in OwnerChain.submit). */
+  private queue: Promise<unknown> = Promise.resolve();
+  private execute(plan: Plan, approvedBy: "touch-id" | "passkey" | null): Promise<OpResult> {
+    const p = this.queue.then(() => this.executeNow(plan, approvedBy));
+    this.queue = p.catch(() => undefined);
+    return p;
+  }
+
+  private async executeNow(plan: Plan, approvedBy: "touch-id" | "passkey" | null): Promise<OpResult> {
     const c = this.o.chain;
     const op = plan.op;
     this.o.log?.(`owner: ${op.op}${approvedBy ? ` (approved by ${approvedBy})` : ""}`);
@@ -290,7 +295,7 @@ export class OwnerService {
       }
       return { done: true, op: op.op, approvedBy, txs, ...(result !== undefined ? { result } : {}) };
     } finally {
-      this.busy = false;
+      /* queue continues */
     }
   }
 }

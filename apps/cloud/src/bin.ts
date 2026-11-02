@@ -3,7 +3,7 @@
 // Env: PORT, FLOW_ORIGIN (https://<host>), FLOW_RP_ID (default: the origin's hostname), FLOW_PASSWORD (≥ 12 chars,
 // password fallback), ATE_HOME (persistent dir), ATE_AGENT_* (agent signer, e.g. secret), ATE_OWNER_* (owner signer;
 // only the owner child receives them), FLOW_DAEMON_ARGS (default "--approval-fallback=armed --profile WHSK=demo"),
-// FLOW_CHAIN_ID (133), FLOW_TRUST_PROXY=1 behind the host's TLS proxy, FLOW_WEB_DIR.
+// FLOW_CHAIN_ID (133), FLOW_GUARDIAN (guardian for vaults Flow creates), FLOW_TRUST_PROXY=1 behind the host's TLS proxy, FLOW_WEB_DIR.
 import { mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -65,7 +65,7 @@ async function main() {
 
   const auth = new Auth({ passkeysPath: join(home, "gateway", "passkeys.json"), password, origin, rpId });
   const runs = new Runs();
-  bridge = new CloudBridge({ daemon, proc, owner, auth, approvalKey, restartDaemon, chainId: () => chainId });
+  bridge = new CloudBridge({ daemon, proc, owner, auth, approvalKey, restartDaemon, chainId: () => chainId, guardian: () => env.FLOW_GUARDIAN });
   gw = createGateway({
     auth,
     runs,

@@ -44,7 +44,7 @@ export class CloudBridge {
   status: { key?: { exists: boolean; unlocked: boolean; address: string | null }; state?: { step: number; completedAt: number | null } } | null = null;
 
   constructor(
-    private readonly d: { daemon: DaemonClient; proc: DaemonProcess; owner: OwnerProcess; auth: Auth; approvalKey: GatewayApprovalKey; restartDaemon: () => Promise<void>; chainId: () => number },
+    private readonly d: { daemon: DaemonClient; proc: DaemonProcess; owner: OwnerProcess; auth: Auth; approvalKey: GatewayApprovalKey; restartDaemon: () => Promise<void>; chainId: () => number; guardian?: () => string | undefined },
   ) {}
 
   // ---------------------------------------------------------------- events (same chat bookkeeping as main)
@@ -108,7 +108,8 @@ export class CloudBridge {
       const ag = await this.d.daemon.call<{ address: string | null }>("GET", "/setup/agent");
       if (!ag.ok || !ag.data.address) return bad("the agent key is not ready yet");
       const markets = (o?.markets ?? ["hsk", "btc"]).map((m) => (/btc/i.test(m) ? "btc" : "hsk"));
-      const r = await this.ownerOp(ctx, { op: "deploy", markets: [...new Set(markets)], agent: ag.data.address, seed: this.d.chainId() === 133 });
+      const guardian = this.d.guardian?.();
+      const r = await this.ownerOp(ctx, { op: "deploy", markets: [...new Set(markets)], agent: ag.data.address, ...(guardian ? { guardian } : {}), seed: this.d.chainId() === 133 });
       if (!r.ok) return r;
       const vaults = r.data.result?.vaults ?? [];
       const sv = await this.d.daemon.call<{ restart?: boolean }>("POST", "/setup/vaults", { source: "deploy", vaults: vaults.map((v) => ({ market: v.market, address: v.address })) });
