@@ -7,7 +7,7 @@ const GLYPH: Record<Tone, string> = { ok: "✓", warn: "!", bad: "✕", info: "i
 
 export function Badge({ tone = "mute", children, title }: { tone?: Tone; children: ReactNode; title?: string }) {
   return (
-    <span className={`badge ${tone}`} title={title}>
+    <span className={`badge ate-badge ate-badge--${tone} ${tone}`} title={title}>
       <span aria-hidden="true" className="glyph">{GLYPH[tone]}</span>
       {children}
     </span>
@@ -78,7 +78,7 @@ export function PnL({ usd, bps }: { usd: string; bps?: number }) {
 
 export function Card({ title, right, children, className }: { title?: string; right?: ReactNode; children: ReactNode; className?: string }) {
   return (
-    <section className={`card ${className ?? ""}`}>
+    <section className={`card ate-card ${className ?? ""}`}>
       {(title || right) && (
         <header className="cardhead">
           <h3>{title}</h3>

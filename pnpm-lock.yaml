@@ -144,6 +144,9 @@ importers:
       '@ate/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@ate/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       ws:
         specifier: ^8.18.0
         version: 8.21.0

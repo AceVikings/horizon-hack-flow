@@ -34,8 +34,8 @@ export function Shell({ view, setView, children }: { view: ViewId; setView(v: Vi
   return (
     <Slots.Provider value={{ ctx, insp }}>
       <div className={`app ${inspOpen ? "" : "noinsp"}`}>
-        <nav className="rail" aria-label="Views">
-          <div className="logo" aria-hidden="true">ATE</div>
+        <nav className="rail ate-dark" aria-label="Views">
+          <div className="logo" aria-hidden="true">ATE<span className="dot">.</span></div>
           {VIEWS.map((v, i) => (
             <button key={v.id} className={`railbtn ${view === v.id ? "on" : ""}`} onClick={() => setView(v.id)} aria-label={v.name} aria-current={view === v.id ? "page" : undefined} title={`${v.name} (⌘${i + 1})`}>
               <span aria-hidden="true" className="ric">{v.icon}</span>
@@ -51,12 +51,12 @@ export function Shell({ view, setView, children }: { view: ViewId; setView(v: Vi
         <aside className="ctxpanel" ref={setCtx} aria-label="Context" />
         <main className="main">
           <div className="topbar">
-            <h1>{VIEWS.find((v) => v.id === view)!.name}</h1>
+            <h1><span className="ate-hl">{VIEWS.find((v) => v.id === view)!.name}</span></h1>
             <ConnBadge />
           </div>
           <div className="content">{children}</div>
         </main>
-        <aside className="inspector" ref={setInsp} aria-label="Inspector" hidden={!inspOpen} />
+        <aside className="inspector ate-dark" ref={setInsp} aria-label="Inspector" hidden={!inspOpen} />
         <Footer />
         <div className="toasts" aria-live="polite">
           {toasts.map((t) => (
@@ -87,12 +87,12 @@ function Footer() {
   const [lastTx, setLastTx] = useState<string | null>(null);
   const { tick } = useApp();
   useHeadEffect(ate, tick, setHead, setLastTx);
-  if (!vs) return <footer className="footer"><span className="muted">Loading evidence…</span></footer>;
-  if (!vs.ok) return <footer className="footer"><Badge tone="bad">{vs.error.code}</Badge> <span className="muted">{vs.error.message}</span></footer>;
+  if (!vs) return <footer className="footer ate-dark"><span className="muted">Loading evidence…</span></footer>;
+  if (!vs.ok) return <footer className="footer ate-dark"><Badge tone="bad">{vs.error.code}</Badge> <span className="muted">{vs.error.message}</span></footer>;
   const { status } = vs.data;
   const up = status.uptimeSec + Math.max(0, now - fetchedAt);
   return (
-    <footer className="footer" aria-label="Evidence">
+    <footer className="footer ate-dark" aria-label="Evidence">
       <div className="frow">
         {status.vaults.map((v) => (
           <span key={v.market} className="fitem">
