@@ -61,6 +61,12 @@ export function Hero() {
         <p className="mt-[18px] text-[14px] text-fg-mute">
           {downloads.win ? "macOS (Apple silicon) and Windows." : "macOS (Apple silicon) now, Windows soon."} Testnet today, mainnet next.
         </p>
+        {downloads.mac && (
+          <p className="mt-1.5 max-w-xl text-[13px] text-fg-mute">
+            First launch on macOS: if it says it can't check the app, open System Settings → Privacy &amp; Security and click
+            Open Anyway.
+          </p>
+        )}
 
         <dl className="mt-16 grid w-full max-w-[980px] grid-cols-[repeat(4,1fr)] overflow-hidden rounded-2xl border border-line-2 bg-white max-sm:mt-12 max-sm:grid-cols-[repeat(2,1fr)]">
           {stats.map((s, i) => (
