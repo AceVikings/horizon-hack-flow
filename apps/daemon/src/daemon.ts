@@ -196,6 +196,9 @@ export async function startDaemon(o: StartOptions = {}): Promise<RunningDaemon> 
   let approvalHandle: { tty: SetupTty; verifier: import("@ate/approve").ApprovalVerifier | null; hasPinnedKey: boolean } | null = null;
   const codeFd = env.ATE_APPROVAL_CODE_FD ? Number(env.ATE_APPROVAL_CODE_FD) : null;
   const codeSink = codeFd !== null && Number.isInteger(codeFd) && codeFd > 2 ? createWriteStream("", { fd: codeFd }) : null;
+  // App-owned daemon (desktop): hand the parent its ui token over the private pipe, so opening the app needs no
+  // Touch ID or code (v1 policy). Never logged; only an inherited fd the parent created can read it.
+  if (codeSink) codeSink.write(`${JSON.stringify({ type: "ui.token", token: tokens.mint({ scope: "ui" }) })}\n`);
   try {
     const mod = (await import("./approval/index.js" as string)) as {
       createDaemonApproval?: (o: Record<string, unknown>) => {

@@ -161,7 +161,7 @@ describe("/setup/* routes", () => {
     expect((await req("POST", "/setup/handoff", T.ui, { kind: "setLimits", limits: { ...DEF, maxSlippageBps: 5000 } })).status).toBe(400);
   });
   it("settings save is two-step: nonce + one-time code, then config.json is rewritten", async () => {
-    const s1 = await req("POST", "/setup/config", T.ui, { changes: [{ key: "daemon.autoLockMinutes", after: 8 * 60 }] });
+    const s1 = await req("POST", "/setup/config", T.ui, { changes: [{ key: "daemon.autoLockMinutes", after: 8 * 60 }], confirm: true });
     expect(s1.status).toBe(200);
     const { data } = (await s1.json()) as { data: { nonce: string; codeIssued: boolean; payload: { kind: string; body: { changes: { before: number; after: number }[] } } } };
     expect(data.codeIssued).toBe(true);
@@ -170,12 +170,18 @@ describe("/setup/* routes", () => {
     expect((await req("POST", "/setup/config", T.ui, { nonce: data.nonce, approval: "00000000" })).status).toBe(401);
   });
   it("a valid code applies the change", async () => {
-    const s1 = await req("POST", "/setup/config", T.ui, { changes: [{ key: "daemon.autoLockMinutes", after: 480 }] });
+    const s1 = await req("POST", "/setup/config", T.ui, { changes: [{ key: "daemon.autoLockMinutes", after: 480 }], confirm: true });
     const { data } = (await s1.json()) as { data: { nonce: string } };
     const s2 = await req("POST", "/setup/config", T.ui, { nonce: data.nonce, approval: "12345678" });
     expect(s2.status).toBe(200);
     expect(JSON.parse(readFileSync(join(home, "config.json"), "utf8")).daemon.autoLockMinutes).toBe(480);
     expect((await req("POST", "/setup/config", T.ui, { changes: [{ key: "chain.id", after: 177 }] })).status).toBe(400);
+  });
+  it("plain settings save at once without Touch ID (v1 policy)", async () => {
+    const r = await req("POST", "/setup/config", T.ui, { changes: [{ key: "daemon.autoLockMinutes", after: 240 }] });
+    expect(r.status).toBe(200);
+    expect(((await r.json()) as { data: { saved: boolean } }).data.saved).toBe(true);
+    expect(JSON.parse(readFileSync(join(home, "config.json"), "utf8")).daemon.autoLockMinutes).toBe(240);
   });
 });
 

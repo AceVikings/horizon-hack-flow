@@ -619,7 +619,7 @@ export function registerSetupRoutes(d: SetupRouteDeps): void {
 
   const CONFIG_KEYS = ["chain.rpcUrls", "supra.pull.refreshAgeSec", "daemon.autoLockMinutes"] as const;
   reg("POST", "/setup/config", (b) => {
-    const o = (b ?? {}) as { changes?: { key: string; after: unknown }[]; nonce?: string; approval?: string };
+    const o = (b ?? {}) as { changes?: { key: string; after: unknown }[]; nonce?: string; approval?: string; confirm?: boolean };
     if (o.nonce) {
       const p = pendingConfig.get(o.nonce);
       if (!p || p.expiresAt < now()) throw new HttpErr(401, "unknown or expired nonce");
@@ -663,6 +663,13 @@ export function registerSetupRoutes(d: SetupRouteDeps): void {
       }
     }
     parseConfig(next);
+    // Touch ID policy (v1): plain settings (RPCs, price refresh, auto-lock) save at once with the ui token; Touch ID is
+    // kept for risk-raising strategy/limit changes, payments and replacing/removing stored credentials.
+    if (o.confirm !== true) {
+      writeConfigFile(d.configPath, next);
+      d.log?.(`setup: config saved: ${changes.map((c) => c.key).join(", ")}`);
+      return { saved: true, restart: true, method: "ui", changes };
+    }
     const nonce = randomBytes(16).toString("hex");
     const expiresAt = now() + 60;
     const payload = configPayload({ nonce, expiresAt, changes });
