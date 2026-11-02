@@ -398,9 +398,17 @@ function Record({ id }: { id: string }) {
             {why.bullets.map((t, i) => <li key={i} style={{ marginBottom: 4 }}>{t}</li>)}
           </ul>
         )}
+        {/* The fingerprint is the rationale hash (sent with the trade and in the EAS attestation), not the trade tx. */}
         <p className="xs fg2" style={{ marginTop: 10 }}>
-          {exec?.execution ? <>A fingerprint of this text is stored on-chain with the trade · <Link href={explorer.tx(exec.execution.txHash)} mono>{short(exec.execution.txHash, 6, 4)}</Link></> : "A fingerprint of this text is kept in the tamper-evident journal."}
+          {exec?.execution || att?.attestation ? "A fingerprint of this text is stored on-chain" : "A fingerprint of this text is kept in the tamper-evident journal"}
+          : <span className="mono" title={(prop ?? e).rationaleHash}>{short((prop ?? e).rationaleHash, 6, 4)}</span>
+          {att?.attestation && <> · <Link href={explorer.tx(att.attestation.txHash)} mono>EAS attestation {short(att.attestation.txHash, 6, 4)}</Link></>}
         </p>
+        {exec?.execution && (
+          <p className="xs fg2" style={{ marginTop: 4 }}>
+            Trade: <Link href={explorer.tx(exec.execution.txHash)} mono>{short(exec.execution.txHash, 6, 4)}</Link>
+          </p>
+        )}
       </section>
       {mode === "pro" && <div style={{ marginTop: 16 }}>
       <section className="card dk" style={{ padding: "18px 24px" }} aria-label="Prices at the decision">
