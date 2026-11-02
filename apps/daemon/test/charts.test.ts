@@ -197,3 +197,66 @@ describe("price chart fallback", () => {
     expect(s.notes[0]).toMatch(/could not be read/);
   });
 });
+
+describe("analysis", () => {
+  // a range market: three dips to ~100 and three tops at ~110 over 60 bars
+  const wave = Array.from({ length: 60 }, (_, i) => {
+    const mid = 105 + 5 * Math.sin((i / 60) * Math.PI * 6 - Math.PI / 2);
+    return { t: 1_793_000_000 + i * 3600, o: mid - 0.2, h: mid + 0.3, l: mid - 0.3, c: mid + 0.1, v: 1, q: 100 };
+  });
+  it("finds support and resistance with touch counts, tied to drawings", async () => {
+    const { analyse } = await import("../src/charts/analysis.js");
+    const { analysis, drawings } = analyse(wave, { label: "BTC", interval: "1h", gapBps: -42 });
+    const sup = drawings.find((d) => d.id === "support")!;
+    const res = drawings.find((d) => d.id === "resistance")!;
+    expect(sup.a.v).toBeGreaterThan(99.4);
+    expect(sup.a.v).toBeLessThan(100.6);
+    expect(res.a.v).toBeGreaterThan(109.4);
+    expect(res.a.v).toBeLessThan(110.6);
+    const f = analysis.findings.find((x) => x.drawingId === "support")!;
+    expect(f.text).toMatch(/Support near \$(99|100)[.0-9]* — tested [3-9] times/);
+    expect(analysis.findings.some((x) => x.drawingId === "resistance" && /tested [3-9] times/.test(x.text))).toBe(true);
+    expect(analysis.findings.some((x) => /0\.42% below HashKey Global/.test(x.text))).toBe(true);
+    expect(analysis.summary).toMatch(/^BTC .* over the last 2 days/);
+    expect(analysis.disclaimer).toMatch(/not advice/);
+    for (const x of analysis.findings) if (x.drawingId) expect(drawings.some((d) => d.id === x.drawingId)).toBe(true);
+  });
+  it("says so when there is too little history", async () => {
+    const { analyse } = await import("../src/charts/analysis.js");
+    const r = analyse(wave.slice(0, 3), { label: "HSK", interval: "1h" });
+    expect(r.analysis.summary).toMatch(/Not enough HSK price history/);
+    expect(r.drawings).toEqual([]);
+  });
+  it("ignores flat no-trade stretches as swings", async () => {
+    const { swings } = await import("../src/charts/analysis.js");
+    const flat = Array.from({ length: 20 }, (_, i) => ({ t: i, o: 5, h: 5, l: 5, c: 5 }));
+    expect(swings(flat)).toEqual({ highs: [], lows: [] });
+  });
+});
+
+describe("validateDrawings", () => {
+  it("keeps valid drawings, reports and drops bad ones", async () => {
+    const { validateDrawings } = await import("@ate/core");
+    const r = validateDrawings([
+      { kind: "hline", a: { v: 77000 }, label: "  Support  " },
+      { kind: "trend", a: { t: 1793500000, v: 1 } },
+      { kind: "arrow", a: { v: 1 } },
+      { kind: "text", a: { t: 1793500000, v: 2 }, label: "note", role: "bogus" },
+      { kind: "hline", a: { v: "NaN" } },
+    ]);
+    expect(r.drawings.map((d) => d.kind)).toEqual(["hline", "text"]);
+    expect(r.drawings[0]!.label).toBe("Support");
+    expect(r.drawings[1]!.role).toBeUndefined();
+    expect(r.errors).toHaveLength(3);
+  });
+});
+
+describe("analysis on a thin pool", () => {
+  it("skips momentum when most bars have no trades", async () => {
+    const { analyse } = await import("../src/charts/analysis.js");
+    const c = Array.from({ length: 24 }, (_, i) => ({ t: i * 3600 + 1_793_000_000, o: 100 + (i % 6 === 0 ? 1 : 0), h: 101, l: 99.5, c: 100 + (i % 6 === 0 ? 1 : 0), v: i % 6 === 0 ? 2 : 0 }));
+    const { analysis } = analyse(c, { label: "BTC", interval: "1h" });
+    expect(analysis.findings.some((f) => /trades rarely/.test(f.text))).toBe(true);
+    expect(analysis.findings.some((f) => /Momentum/.test(f.text))).toBe(false);
+  });
+});

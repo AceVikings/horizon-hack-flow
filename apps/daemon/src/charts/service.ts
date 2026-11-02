@@ -24,11 +24,13 @@ import {
   type JournalEntry,
   type MarketId,
   type StrategyParams,
+  validateDrawings,
 } from "@ate/core";
 import { aggregatorAbi, type CexReader, type CycleRead } from "@ate/oracle";
 import { quoterV2Abi } from "@ate/venues";
 import type { PublicClient } from "viem";
 import { indicatorSeries } from "./indicators.js";
+import { analyse } from "./analysis.js";
 import { bucketCandles, SwapIndex, type PoolRef, type Rpc, type SwapRow } from "./swaps.js";
 
 /** HashKey Chain mainnet (177) market constants, fixed here because a testnet daemon rewrites MARKETS in place. */
@@ -139,6 +141,16 @@ export class ChartService {
       const ind = indicatorSeries(candles, input.indicators);
       spec.series.push(...ind);
       spec.overlays.push(...ind.map((s) => s.id));
+    }
+    if (candles && input.compare?.length && (input.kind === "price" || input.kind === "cex")) await this.addCompare(spec, market, interval, bars, input);
+    const v = validateDrawings(input.drawings);
+    if (v.drawings.length) spec.drawings = v.drawings.map((d) => ({ ...d, by: "agent" as const }));
+    if (v.errors.length) spec.notes.push(`Some drawings were skipped: ${v.errors.slice(0, 2).join("; ")}.`);
+    if (input.analyse && candles) {
+      const gap = await this.gapBps(spec, market, interval, bars).catch(() => null);
+      const a = analyse(candles, { label: LABEL[market], interval, gapBps: gap });
+      spec.analysis = a.analysis;
+      spec.drawings = [...(spec.drawings ?? []), ...a.drawings];
     }
     const wantMarkers = input.markers ?? (input.kind === "price" || input.kind === "pnl");
     if (wantMarkers && spec.x.type === "time") spec.markers = this.markers(market, spec);
@@ -271,6 +283,47 @@ export class ChartService {
         };
       }
     }
+  }
+
+  /** Comparison lines on a price/cex chart: pool, HashKey Global and oracle (Supra at decisions + live, APRO rounds). */
+  private async addCompare(spec: ChartSpec, m: MarketId, iv: ChartInterval, bars: number, input: ChartInput): Promise<void> {
+    const base = spec.series[0]?.id;
+    const want = new Set(input.compare);
+    if (want.has("cex") && base !== "cex") {
+      const k = await this.cexCandles(m, iv, bars).catch(() => null);
+      if (k) {
+        spec.series.push({ id: "cmp_cex", label: "HashKey Global", type: "line", unit: "usd", pane: 0, role: "accent", points: k.candles.map((x) => ({ t: x.t, v: x.c })) });
+        spec.sources.push(k.source);
+      }
+    }
+    if (want.has("pool") && base !== "pool") {
+      const p = await this.poolCandles(m, iv, bars, input.network).catch(() => null);
+      if (p?.candles.length) {
+        spec.series.push({ id: "cmp_pool", label: "HSKSwap pool", type: "line", unit: "usd", pane: 0, role: "secondary", points: p.candles.map((x) => ({ t: x.t, v: x.c })) });
+        spec.sources.push(p.source);
+      }
+    }
+    if (want.has("oracle")) {
+      const fromT = this.now() - bars * INTERVAL_SEC[iv];
+      const supra = this.d.journal
+        .list({ market: m, since: fromT, limit: 2000 })
+        .filter((e) => e.context?.oracle?.price && e.context.oracle.price !== "0")
+        .map((e) => ({ t: e.context.oracle.updatedAt || e.at, v: e8(e.context.oracle.price) }));
+      const live = (await this.d.snapshot())?.markets[m]?.price;
+      if (live && live.oracle.price !== "0") supra.push({ t: live.oracle.updatedAt, v: e8(live.oracle.price) });
+      const apro = await this.aproHistory(m, fromT).catch(() => null);
+      const pts = dedupe([...supra, ...(apro ?? [])]).filter((x) => x.t >= fromT - INTERVAL_SEC[iv]);
+      if (pts.length) spec.series.push({ id: "cmp_oracle", label: "Oracle", type: "line", unit: "usd", pane: 0, role: "muted", points: pts });
+      else spec.notes.push("No oracle prices in this window yet.");
+    }
+  }
+
+  /** Last pool-vs-exchange gap in bps for the analysis (null when either side is missing). */
+  private async gapBps(spec: ChartSpec, m: MarketId, iv: ChartInterval, bars: number): Promise<number | null> {
+    const pool = spec.series.find((s) => s.id === "pool")?.candles?.at(-1)?.c;
+    if (!pool) return null;
+    const cex = spec.series.find((s) => s.id === "cmp_cex")?.points?.at(-1)?.v ?? (await this.cexCandles(m, iv, Math.min(bars, 5))).candles.at(-1)?.c;
+    return cex ? Math.round(((pool - cex) / cex) * 10_000) : null;
   }
 
   // ------------------------------------------------------------------ series builders

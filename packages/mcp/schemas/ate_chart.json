@@ -1,6 +1,6 @@
 {
   "name": "ate_chart",
-  "description": "Build a chart for the user (read-only; the app draws it inline). kind: price = HSKSwap pool candles from on-chain Swap logs; cex = HashKey Global klines; oracle = Supra (vault oracle) vs APRO vs pool; spread = pool vs CEX gap in bps with the round-trip cost line; depth = price impact in bps for a ladder of trade sizes (live QuoterV2, both sides); volume = pool USD volume; pnl = the vault's realised + marked P&L curve; exposure = vault exposure vs its cap; budget = epoch budget spent vs cap. Indicators (EMA, SMA, VWAP, Bollinger, RSI, MACD, ATR) are computed server-side; add them only when the user asks. markers adds journal decisions (buys, sells, no-trades). network=mainnet reads HashKey Chain mainnet market data even when the vaults run on testnet. Call when the user asks to see, chart, graph or plot something.",
+  "description": "Build a chart for the user (read-only; the app draws it inline). kind: price = HSKSwap pool candles from on-chain Swap logs; cex = HashKey Global klines; oracle = Supra (vault oracle) vs APRO vs pool; spread = pool vs CEX gap in bps with the round-trip cost line; depth = price impact in bps for a ladder of trade sizes (live QuoterV2, both sides); volume = pool USD volume; pnl = the vault's realised + marked P&L curve; exposure = vault exposure vs its cap; budget = epoch budget spent vs cap. Indicators (EMA, SMA, VWAP, Bollinger, RSI, MACD, ATR, volume) are computed server-side; add them only when the user asks. compare adds the exchange and oracle prices on the same chart; drawings put levels, trendlines, zones, Fibonacci and notes on it; analyse returns plain findings (e.g. support tested 3 times) tied to drawings. markers adds journal decisions (buys, sells, no-trades). network=mainnet reads HashKey Chain mainnet market data even when the vaults run on testnet. Call when the user asks to see, chart, graph or plot something.",
   "inputSchema": {
     "type": "object",
     "required": [
@@ -57,7 +57,8 @@
             "bb20",
             "rsi14",
             "macd",
-            "atr14"
+            "atr14",
+            "volume"
           ]
         },
         "uniqueItems": true,
@@ -74,6 +75,90 @@
           "mainnet"
         ],
         "description": "vault = the daemon's chain (default); mainnet = HashKey Chain 177 market data"
+      },
+      "compare": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "pool",
+            "cex",
+            "oracle"
+          ]
+        },
+        "uniqueItems": true,
+        "description": "ADDITIVE. Extra price lines on a price/cex chart: pool, cex (HashKey Global), oracle (Supra + APRO)"
+      },
+      "drawings": {
+        "type": "array",
+        "maxItems": 20,
+        "description": "ADDITIVE. Drawings to show: hline (level at a.v), trend (a→b), zone (band a.v–b.v, optional times), fib (retracement a→b), text (note at a). Prices in USD, times in unix seconds. E.g. a 1% gap line = hline at exchange price × 0.99",
+        "items": {
+          "type": "object",
+          "required": [
+            "kind",
+            "a"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "hline",
+                "trend",
+                "zone",
+                "fib",
+                "text"
+              ]
+            },
+            "a": {
+              "type": "object",
+              "required": [
+                "v"
+              ],
+              "properties": {
+                "t": {
+                  "type": "integer"
+                },
+                "v": {
+                  "type": "number"
+                }
+              },
+              "additionalProperties": false
+            },
+            "b": {
+              "type": "object",
+              "required": [
+                "v"
+              ],
+              "properties": {
+                "t": {
+                  "type": "integer"
+                },
+                "v": {
+                  "type": "number"
+                }
+              },
+              "additionalProperties": false
+            },
+            "label": {
+              "type": "string",
+              "maxLength": 80
+            },
+            "role": {
+              "type": "string",
+              "enum": [
+                "support",
+                "resistance",
+                "neutral"
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "analyse": {
+        "type": "boolean",
+        "description": "ADDITIVE. Add a plain-language analysis (trend, range, support and resistance with touch counts, momentum, gap) tied to drawings. Information, not advice"
       }
     },
     "additionalProperties": false

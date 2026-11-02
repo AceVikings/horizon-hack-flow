@@ -181,6 +181,9 @@ export function indicatorSeries(c: Candle[], wanted: readonly ChartIndicator[]):
       case "atr14":
         out.push(line("atr14", "ATR 14", w, atr(c, 14), 1, "accent"));
         break;
+      case "volume":
+        out.push({ id: "volume", label: "Volume (USD)", type: "histogram", unit: "usd", pane: 1, indicator: w, points: c.map((x) => ({ t: x.t, v: Math.round((x.q ?? (x.v ?? 0) * x.c) * 100) / 100, tone: x.c >= x.o ? "up" : "down" })) });
+        break;
     }
   }
   return out;

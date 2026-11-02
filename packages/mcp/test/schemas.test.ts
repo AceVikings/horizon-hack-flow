@@ -56,3 +56,30 @@ describe("input validation", () => {
     expect(validateToolInput("ate_decide", { decision: "no_trade", market: "hsk-dex:WHSK/USDT:3000", rationale: "x".repeat(20) }).ok).toBe(false);
   });
 });
+
+describe("ate_chart (lane D4, additive): agent-built charts", () => {
+  it("accepts compare, drawings and analyse", () => {
+    const args = {
+      kind: "price",
+      market: "hsk-dex:WBTC/USDT:3000",
+      interval: "1h",
+      indicators: ["rsi14", "volume"],
+      compare: ["cex", "oracle"],
+      drawings: [
+        { kind: "hline", a: { v: 77300 }, label: "1% under the exchange", role: "support" },
+        { kind: "trend", a: { t: 1793500000, v: 76900 }, b: { t: 1793600000, v: 78100 } },
+        { kind: "zone", a: { v: 76800 }, b: { v: 77000 }, label: "Support zone" },
+        { kind: "fib", a: { t: 1793500000, v: 76500 }, b: { t: 1793600000, v: 78500 } },
+        { kind: "text", a: { t: 1793550000, v: 77800 }, label: "Breakout" },
+      ],
+      analyse: true,
+    };
+    expect(validateToolInput("ate_chart", args).ok).toBe(true);
+  });
+  it("rejects unknown drawing kinds, extra keys and more than 20 drawings", () => {
+    expect(validateToolInput("ate_chart", { kind: "price", drawings: [{ kind: "arrow", a: { v: 1 } }] }).ok).toBe(false);
+    expect(validateToolInput("ate_chart", { kind: "price", drawings: [{ kind: "hline", a: { v: 1, x: 2 } }] }).ok).toBe(false);
+    expect(validateToolInput("ate_chart", { kind: "price", drawings: Array.from({ length: 21 }, () => ({ kind: "hline", a: { v: 1 } })) }).ok).toBe(false);
+    expect(validateToolInput("ate_chart", { kind: "price", compare: ["binance"] }).ok).toBe(false);
+  });
+});

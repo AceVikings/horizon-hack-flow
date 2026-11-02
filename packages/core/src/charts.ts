@@ -12,7 +12,7 @@ export type ChartInterval = (typeof CHART_INTERVALS)[number];
 export const INTERVAL_SEC: Record<ChartInterval, number> = { "1m": 60, "5m": 300, "1h": 3600, "1d": 86_400 };
 
 /** Server-side indicators. Overlays (main pane): ema*, sma*, vwap, bb20. Lower pane: rsi14, macd, atr14. */
-export const CHART_INDICATORS = ["ema20", "ema50", "sma20", "sma50", "vwap", "bb20", "rsi14", "macd", "atr14"] as const;
+export const CHART_INDICATORS = ["ema20", "ema50", "sma20", "sma50", "vwap", "bb20", "rsi14", "macd", "atr14", "volume"] as const;
 export type ChartIndicator = (typeof CHART_INDICATORS)[number];
 
 /** Market-data network: the daemon's own chain (where the vaults are) or HashKey Chain mainnet (177). */
@@ -29,6 +29,96 @@ export interface ChartInput {
   /** Decision markers from the journal (default true for price/pnl). */
   markers?: boolean;
   network?: ChartNetwork;
+  /** ADDITIVE: extra price lines on the same chart (price/cex kinds): the pool, HashKey Global, the oracle. */
+  compare?: ChartCompare[];
+  /** ADDITIVE: drawings to put on the chart (agent-built charts): levels, trendlines, zones, Fibonacci, notes. */
+  drawings?: ChartDrawing[];
+  /** ADDITIVE: add a plain-language analysis (trend, range, support/resistance, momentum) tied to drawings. */
+  analyse?: boolean;
+}
+
+export const CHART_COMPARE = ["pool", "cex", "oracle"] as const;
+export type ChartCompare = (typeof CHART_COMPARE)[number];
+
+export const DRAWING_KINDS = ["hline", "trend", "zone", "fib", "text"] as const;
+export type DrawingKind = (typeof DRAWING_KINDS)[number];
+export interface DrawPoint {
+  /** Unix seconds; omitted for horizontal levels. */
+  t?: number;
+  /** Price (USD) — or the series value on non-price charts. */
+  v: number;
+}
+/**
+ * hline: a level at `a.v` · trend: a line from `a` to `b` · zone: a band between `a.v` and `b.v` (from `a.t` to `b.t`
+ * when given) · fib: retracement levels between `a` and `b` · text: a note at `a`.
+ */
+export interface ChartDrawing {
+  id?: string;
+  kind: DrawingKind;
+  a: DrawPoint;
+  b?: DrawPoint;
+  label?: string;
+  role?: "support" | "resistance" | "neutral";
+  /** Who made it: the user (saved per market) or the agent (until kept). */
+  by?: "user" | "agent";
+}
+
+export interface ChartFinding {
+  text: string;
+  /** The drawing this finding refers to. */
+  drawingId?: string;
+  tone?: "up" | "down" | "neutral";
+}
+export interface ChartAnalysis {
+  /** One sentence. */
+  summary: string;
+  findings: ChartFinding[];
+  /** Always present: information, not advice; Flow does not trade from it. */
+  disclaimer: string;
+  from: number;
+  to: number;
+}
+
+export const ANALYSIS_DISCLAIMER = "This is information, not advice. Flow does not trade from it — you decide.";
+export const MAX_DRAWINGS = 20;
+
+/** Validates drawings (agent or user input): known kind, finite positive prices, needed points; clamps labels. */
+export function validateDrawings(input: unknown): { drawings: ChartDrawing[]; errors: string[] } {
+  const errors: string[] = [];
+  const out: ChartDrawing[] = [];
+  if (!Array.isArray(input)) return { drawings: [], errors: input === undefined ? [] : ["drawings must be an array"] };
+  const pt = (p: unknown): DrawPoint | null => {
+    if (!p || typeof p !== "object") return null;
+    const o = p as Record<string, unknown>;
+    const v = Number(o.v);
+    if (!Number.isFinite(v)) return null;
+    const t = o.t === undefined || o.t === null ? undefined : Number(o.t);
+    if (t !== undefined && (!Number.isFinite(t) || t < 1_000_000_000 || t > 4_000_000_000)) return null;
+    return t === undefined ? { v } : { t: Math.floor(t), v };
+  };
+  input.slice(0, MAX_DRAWINGS).forEach((d, i) => {
+    const o = (d ?? {}) as Record<string, unknown>;
+    const kind = o.kind as DrawingKind;
+    if (!(DRAWING_KINDS as readonly string[]).includes(String(kind))) return void errors.push(`drawing ${i}: unknown kind ${String(o.kind)}`);
+    const a = pt(o.a);
+    const b = o.b === undefined ? undefined : pt(o.b);
+    if (!a) return void errors.push(`drawing ${i}: needs a point a { v, t? }`);
+    if ((kind === "trend" || kind === "fib") && (!b || a.t === undefined || b.t === undefined)) return void errors.push(`drawing ${i}: ${kind} needs points a and b with times`);
+    if (kind === "zone" && !b) return void errors.push(`drawing ${i}: zone needs a and b`);
+    if (kind === "text" && (a.t === undefined || !o.label)) return void errors.push(`drawing ${i}: text needs a time and a label`);
+    const role = o.role === "support" || o.role === "resistance" || o.role === "neutral" ? o.role : undefined;
+    out.push({
+      id: typeof o.id === "string" && o.id.length <= 40 ? o.id : `d${i}`,
+      kind,
+      a,
+      ...(b ? { b } : {}),
+      ...(typeof o.label === "string" && o.label.trim() ? { label: o.label.trim().slice(0, 80) } : {}),
+      ...(role ? { role } : {}),
+      ...(o.by === "user" || o.by === "agent" ? { by: o.by } : {}),
+    });
+  });
+  if (input.length > MAX_DRAWINGS) errors.push(`only the first ${MAX_DRAWINGS} drawings are kept`);
+  return { drawings: out, errors };
 }
 
 export interface Candle {
@@ -123,6 +213,10 @@ export interface ChartSpec {
   input: ChartInput;
   /** Depth charts: the x labels (trade sizes in USD). */
   categories?: string[];
+  /** ADDITIVE: drawings on the chart (from the input and from the analysis). */
+  drawings?: ChartDrawing[];
+  /** ADDITIVE: present when the input asked for `analyse`. */
+  analysis?: ChartAnalysis;
 }
 
 // ------------------------------------------------------------------ ate_data

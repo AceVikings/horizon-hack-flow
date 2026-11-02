@@ -2,7 +2,7 @@
 // Source of truth for packages/mcp/schemas/*.json (run `pnpm --filter @ate/mcp schemas:emit`; a test
 // asserts the JSON files equal these objects). Verbatim from §7.4 where the spec gives a schema.
 
-import { CHART_INDICATORS, CHART_INTERVALS, CHART_KINDS, CHART_NETWORKS, DATA_TABLES, MARKET_IDS, TOOL_NAMES, type ToolName } from "@ate/core";
+import { CHART_COMPARE, CHART_INDICATORS, CHART_INTERVALS, CHART_KINDS, CHART_NETWORKS, DATA_TABLES, DRAWING_KINDS, MARKET_IDS, TOOL_NAMES, type ToolName } from "@ate/core";
 
 const market = { type: "string", enum: [...MARKET_IDS] } as const;
 const rationale = { type: "string", minLength: 16, maxLength: 1000 } as const;
@@ -273,7 +273,7 @@ export const TOOL_DEFINITIONS: Record<ToolName, ToolDefinition> = {
   ate_chart: {
     name: "ate_chart",
     description:
-      "Build a chart for the user (read-only; the app draws it inline). kind: price = HSKSwap pool candles from on-chain Swap logs; cex = HashKey Global klines; oracle = Supra (vault oracle) vs APRO vs pool; spread = pool vs CEX gap in bps with the round-trip cost line; depth = price impact in bps for a ladder of trade sizes (live QuoterV2, both sides); volume = pool USD volume; pnl = the vault's realised + marked P&L curve; exposure = vault exposure vs its cap; budget = epoch budget spent vs cap. Indicators (EMA, SMA, VWAP, Bollinger, RSI, MACD, ATR) are computed server-side; add them only when the user asks. markers adds journal decisions (buys, sells, no-trades). network=mainnet reads HashKey Chain mainnet market data even when the vaults run on testnet. Call when the user asks to see, chart, graph or plot something.",
+      "Build a chart for the user (read-only; the app draws it inline). kind: price = HSKSwap pool candles from on-chain Swap logs; cex = HashKey Global klines; oracle = Supra (vault oracle) vs APRO vs pool; spread = pool vs CEX gap in bps with the round-trip cost line; depth = price impact in bps for a ladder of trade sizes (live QuoterV2, both sides); volume = pool USD volume; pnl = the vault's realised + marked P&L curve; exposure = vault exposure vs its cap; budget = epoch budget spent vs cap. Indicators (EMA, SMA, VWAP, Bollinger, RSI, MACD, ATR, volume) are computed server-side; add them only when the user asks. compare adds the exchange and oracle prices on the same chart; drawings put levels, trendlines, zones, Fibonacci and notes on it; analyse returns plain findings (e.g. support tested 3 times) tied to drawings. markers adds journal decisions (buys, sells, no-trades). network=mainnet reads HashKey Chain mainnet market data even when the vaults run on testnet. Call when the user asks to see, chart, graph or plot something.",
     inputSchema: {
       type: "object",
       required: ["kind"],
@@ -285,6 +285,34 @@ export const TOOL_DEFINITIONS: Record<ToolName, ToolDefinition> = {
         indicators: { type: "array", items: { type: "string", enum: [...CHART_INDICATORS] }, uniqueItems: true, maxItems: 4 },
         markers: { type: "boolean", description: "Show journal decisions on the chart (default true for price and pnl)" },
         network: { type: "string", enum: [...CHART_NETWORKS], description: "vault = the daemon's chain (default); mainnet = HashKey Chain 177 market data" },
+        compare: {
+          type: "array",
+          items: { type: "string", enum: [...CHART_COMPARE] },
+          uniqueItems: true,
+          description: "ADDITIVE. Extra price lines on a price/cex chart: pool, cex (HashKey Global), oracle (Supra + APRO)",
+        },
+        drawings: {
+          type: "array",
+          maxItems: 20,
+          description:
+            "ADDITIVE. Drawings to show: hline (level at a.v), trend (a→b), zone (band a.v–b.v, optional times), fib (retracement a→b), text (note at a). Prices in USD, times in unix seconds. E.g. a 1% gap line = hline at exchange price × 0.99",
+          items: {
+            type: "object",
+            required: ["kind", "a"],
+            properties: {
+              kind: { type: "string", enum: [...DRAWING_KINDS] },
+              a: { type: "object", required: ["v"], properties: { t: { type: "integer" }, v: { type: "number" } }, additionalProperties: false },
+              b: { type: "object", required: ["v"], properties: { t: { type: "integer" }, v: { type: "number" } }, additionalProperties: false },
+              label: { type: "string", maxLength: 80 },
+              role: { type: "string", enum: ["support", "resistance", "neutral"] },
+            },
+            additionalProperties: false,
+          },
+        },
+        analyse: {
+          type: "boolean",
+          description: "ADDITIVE. Add a plain-language analysis (trend, range, support and resistance with touch counts, momentum, gap) tied to drawings. Information, not advice",
+        },
       },
       additionalProperties: false,
     },
