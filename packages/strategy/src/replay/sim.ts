@@ -238,8 +238,9 @@ export function simulate(market: MarketId, swaps: SwapPoint[], klines: Kline[], 
   let verdict: string;
   if (rows.length === 0) verdict = "no data";
   else if (episodes.length === 0) verdict = "transient (gap never exceeded cost)";
-  else if (shareAboveCost >= 0.5 || longestSec >= span * 0.5) verdict = `persistent (> ${Math.max(1, Math.floor(longestSec / 86_400))} days)`.replace("(> 0 days)", "(< 1 day)");
-  else verdict = `transient (median time-to-close ${medianTtc === null ? "n/a" : fmtDur(medianTtc)})`;
+  // Persistent = some gap > cost stayed open for ≥ 1 day (or more than half the window); otherwise transient.
+  else if (longestSec >= Math.min(86_400, span * 0.5)) verdict = `persistent (> ${Math.max(1, Math.floor(longestSec / 86_400))} day${longestSec >= 2 * 86_400 ? "s" : ""}; longest episode ${fmtDur(longestSec)})`;
+  else verdict = `transient (median time-to-close ${medianTtc === null ? "n/a" : fmtDur(medianTtc)}; longest ${fmtDur(longestSec)})`;
 
   const fired = rows.filter((r) => r.fired);
   const nets = rows.map((r) => r.netBps);
