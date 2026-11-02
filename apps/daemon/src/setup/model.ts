@@ -13,7 +13,7 @@ import { join } from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
 
 export const DEFAULT_MODEL = "claude-opus-5-5";
-const KEYCHAIN_SERVICE = "flow/anthropic-api-key";
+const KEYCHAIN_SERVICE = "ate-anthropic-api-key"; // shared with the engine (FREEZE-NOTES D3.2)
 export const API_KEY_RE = /^sk-ant-[A-Za-z0-9_-]{20,200}$/;
 
 export type CredentialSource = "env" | "keychain" | "profile" | null;
