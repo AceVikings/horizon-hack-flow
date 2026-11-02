@@ -351,3 +351,21 @@ Lanes may **add** to frozen artifacts; changing anything here needs a lead-appro
 5. **OpenCode (`95be9fa`, `1b8dacf`):** `setup-bridge.ts` `PROV` includes `opencode|subscription`. `effectiveModel()` for opencode
    ignores a model id without `/`. `SubscriptionSignIn` calls `onConnected` only when `connected` changes (it holds the callback
    in a ref). Pass inline callbacks freely, but never put a callback that reloads data in an effect's dependency list.
+10. **Per-agent models + Tools (MCP).**
+   - Ask has its own model: `POST /engine/select { agent: "chat", provider, model }` (provider `null` = follow the
+     trader); `GET /engine/providers` adds `chat: { provider, model, own }`. Persisted in ai.json (`chat`). The Agent
+     screen's choice stays the trader's.
+   - MCP servers (`apps/daemon/src/mcp-servers.ts`, `<home>/mcp.json`, secrets in the keychain as `mcp:<id>:env|hdr:<k>`):
+     Flow's own server (always on, both agents), the servers in the user's opencode config (read-only definitions,
+     off by default), and servers added in Flow (stdio command or Streamable HTTP URL; http only https or loopback).
+     Enabled per agent: chat toggles apply at once; turning a non-Flow server on for the **trader** returns
+     `{ nonce, payload (config), codeIssued }` → Touch ID signature or the daemon's one-time code →
+     `{ nonce, approval }` (same two-step as credentials). User servers start `{ chat: true, trader: false }`.
+   - Routes (ui; GET also view): `GET /engine/mcp` → `{ servers: [{ id, name, source: flow|opencode|user, type:
+     builtin|stdio|http, command?, args?, url?, envKeys?, headerKeys?, enabled: { chat, trader }, state:
+     connected|available|error, error, tools: [{ name, description }], checkedAt }] }`; `POST /engine/mcp/add { name,
+     type: stdio|http, command?, args?, url?, env?, headers? }`; `POST /engine/mcp/remove { id }`; `POST
+     /engine/mcp/test { id }`; `POST /engine/mcp/enable { id, agent: chat|trader, on }`.
+   - Engines: SDK loops offer enabled servers' tools as `mcp__<server>__<tool>` and send those calls to the server; the
+     private opencode server registers Flow-enabled servers, keeps the user's other opencode servers off, and enables
+     their tool ids per scope only when enabled for that agent.

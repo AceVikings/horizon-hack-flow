@@ -6,6 +6,7 @@ import { AiEngine } from "./engine.js";
 import { ProviderKeys } from "./providers.js";
 import { ProxySidecar } from "./sidecar.js";
 import { OpencodeEngine } from "./opencode.js";
+import { McpServers } from "./mcp-servers.js";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -272,8 +273,11 @@ export async function startDaemon(o: StartOptions = {}): Promise<RunningDaemon> 
   // The default engine runs on the user's subscriptions through the CLIProxyAPI sidecar the daemon manages.
   const sidecar = new ProxySidecar(home, new ProviderKeys(home, env), env);
   // OpenCode: the user's opencode login, driven through a private `opencode serve` that calls Flow's MCP.
-  const opencode = new OpencodeEngine({ home, daemonPort: port, tokens, env, log });
-  const ai = new AiEngine(home, env, {}, sidecar, opencode);
+  // Extra MCP servers per agent (Tools (MCP)); a change restarts the private opencode server on its next prompt.
+  const mcpServers = new McpServers(home, new ProviderKeys(home, env), env);
+  const opencode = new OpencodeEngine({ home, daemonPort: port, tokens, env, log, mcp: mcpServers });
+  mcpServers.onChange = () => opencode.stop();
+  const ai = new AiEngine(home, env, {}, sidecar, opencode, mcpServers);
   registerChatRoutes({ routes, tokens, service, home, emit, log, ai });
   // /setup/* (desktop onboarding + Settings), ui scope only.
   registerSetupRoutes({ routes, home, env, cfg, configPath, service, unlock, broadcast: (e) => http.broadcast(e), approval: approvalHandle, log });
@@ -309,6 +313,7 @@ export async function startDaemon(o: StartOptions = {}): Promise<RunningDaemon> 
       await app.trader.stop(false);
       await sidecar.stop();
       opencode.stop();
+      await mcpServers.closeAll();
       service.stopScan();
       txq.stop();
       await http.close();

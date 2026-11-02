@@ -27,7 +27,7 @@ import { anthropicClient, loadStoredApiKey, modelCredentials, removeApiKey, stor
 
 export type ProviderId = "subscription" | "opencode" | "anthropic" | "openai" | "gemini" | "openrouter" | "ollama" | "proxy";
 /** Keychain slots that are not a provider's own key (the managed proxy's management key). */
-export type SecretSlot = ProviderId | "subscription-mgmt";
+export type SecretSlot = ProviderId | "subscription-mgmt" | `mcp:${string}`;
 export type Protocol = "anthropic" | "openai" | "gemini";
 
 export interface ProviderDef {
@@ -228,7 +228,14 @@ export interface LoopResult {
   usage: LoopUsage;
   servedBy: string;
 }
+/** A tool from an extra MCP server (name as the model sees it; schema passed through, the server validates). */
+export interface ExtraToolDef {
+  name: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+}
 export interface GenericLoopOptions {
+  extraTools?: ExtraToolDef[];
   model: string;
   system: string;
   toolNames: readonly string[];
@@ -279,7 +286,7 @@ export async function runOpenAILoop(client: OpenAILike, history: ChatCompletionM
   let turns = 0;
   let toolCalls = 0;
   let servedBy = o.model;
-  const tools = openaiTools(o.toolNames, o.strict);
+  const tools = [...openaiTools(o.toolNames, o.strict), ...(o.extraTools ?? []).map((t) => ({ type: "function" as const, function: { name: t.name, description: t.description, parameters: t.inputSchema } }))];
   for (;;) {
     if (o.signal?.aborted) return { text, stop: "aborted", turns, toolCalls, usage, servedBy };
     const body: Record<string, unknown> = {
@@ -373,7 +380,7 @@ export async function runGeminiLoop(client: GeminiLike, history: Content[], o: G
   let turns = 0;
   let toolCalls = 0;
   let servedBy = o.model;
-  const decls = geminiTools(o.toolNames);
+  const decls = [...geminiTools(o.toolNames), ...(o.extraTools ?? []).map((t) => ({ name: t.name, description: t.description, parametersJsonSchema: t.inputSchema }))];
   for (;;) {
     if (o.signal?.aborted) return { text, stop: "aborted", turns, toolCalls, usage, servedBy };
     const r = await abortable(client.models.generateContent({

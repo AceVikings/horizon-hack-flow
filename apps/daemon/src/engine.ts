@@ -25,6 +25,7 @@ import type { ToolName } from "@ate/core";
 import { TOOL_DEFINITIONS } from "@ate/mcp";
 import { bestModel, type ProxySidecar } from "./sidecar.js";
 import { OPENCODE_PREFERRED, type OpencodeEngine } from "./opencode.js";
+import type { McpServers } from "./mcp-servers.js";
 import {
   PROVIDERS,
   PROVIDER_IDS,
@@ -302,6 +303,8 @@ export class AiEngine {
     readonly sidecar?: ProxySidecar,
     /** The private opencode server behind the "opencode" provider (the user's opencode login). */
     readonly opencode?: OpencodeEngine,
+    /** Extra MCP servers the user enabled per agent (Tools (MCP)). */
+    readonly mcp?: McpServers,
   ) {
     this.keys = new ProviderKeys(home, env);
     // default: the user's own subscriptions through the sidecar; "" = pick the best model the subscription offers
@@ -617,12 +620,17 @@ export class AiEngine {
     if (info && info.tools === false) throw new ToolsUnsupportedError(c.provider, c.model);
     const start = c.items.length;
     const strict = this.strictOk[c.provider] !== false;
+    // extra MCP servers enabled for this agent: their tools join Flow's; calls go to the server, not the daemon
+    const agent = kind === "trader" ? "trader" : "chat";
+    const extra = this.mcp?.extraTools(agent) ?? [];
+    const flowCall = o.call;
+    o = { ...o, call: (name, input, id) => (name.startsWith("mcp__") && this.mcp ? this.mcp.call(agent, name, input) : flowCall(name, input, id)) };
     const once = async (useStrict: boolean): Promise<LoopResult> => {
       if (c.protocol === "anthropic")
-        return runToolLoop(this.anthropicClient(c.provider), { model: c.model, effort: o.effort, system: o.system, tools: toolsFor(o.toolNames, useStrict), messages: c.items as BetaMessageParam[], call: o.call, fallbacks: c.provider === "anthropic", ...(o.signal ? { signal: o.signal } : {}), ...(o.onText ? { onText: o.onText } : {}), ...(o.maxTurns ? { maxTurns: o.maxTurns } : {}), ...(o.maxTokens ? { maxTokens: o.maxTokens } : {}) });
-      if (c.protocol === "gemini") return runGeminiLoop(this.geminiClient(), c.items as Content[], { model: c.model, system: o.system, toolNames: o.toolNames, call: o.call, ...(o.signal ? { signal: o.signal } : {}), ...(o.onText ? { onText: o.onText } : {}), ...(o.maxTurns ? { maxTurns: o.maxTurns } : {}), ...(o.maxTokens ? { maxTokens: o.maxTokens } : {}) });
+        return runToolLoop(this.anthropicClient(c.provider), { model: c.model, effort: o.effort, system: o.system, tools: [...toolsFor(o.toolNames, useStrict), ...extra.map((t) => ({ name: t.name, description: t.description, input_schema: t.inputSchema as BetaTool["input_schema"] }))], messages: c.items as BetaMessageParam[], call: o.call, fallbacks: c.provider === "anthropic", ...(o.signal ? { signal: o.signal } : {}), ...(o.onText ? { onText: o.onText } : {}), ...(o.maxTurns ? { maxTurns: o.maxTurns } : {}), ...(o.maxTokens ? { maxTokens: o.maxTokens } : {}) });
+      if (c.protocol === "gemini") return runGeminiLoop(this.geminiClient(), c.items as Content[], { model: c.model, system: o.system, toolNames: o.toolNames, extraTools: extra, call: o.call, ...(o.signal ? { signal: o.signal } : {}), ...(o.onText ? { onText: o.onText } : {}), ...(o.maxTurns ? { maxTurns: o.maxTurns } : {}), ...(o.maxTokens ? { maxTokens: o.maxTokens } : {}) });
       // strict function schemas only on OpenAI itself; OpenRouter / Ollama / proxies get plain schemas
-      return runOpenAILoop(this.openaiClient(c.provider), c.items as ChatCompletionMessageParam[], { model: c.model, system: o.system, toolNames: o.toolNames, call: o.call, strict: useStrict && c.provider === "openai", stream: PROVIDERS[c.provider].caps.streaming, ...(o.signal ? { signal: o.signal } : {}), ...(o.onText ? { onText: o.onText } : {}), ...(o.maxTurns ? { maxTurns: o.maxTurns } : {}), ...(o.maxTokens ? { maxTokens: o.maxTokens } : {}) });
+      return runOpenAILoop(this.openaiClient(c.provider), c.items as ChatCompletionMessageParam[], { model: c.model, system: o.system, toolNames: o.toolNames, extraTools: extra, call: o.call, strict: useStrict && c.provider === "openai", stream: PROVIDERS[c.provider].caps.streaming, ...(o.signal ? { signal: o.signal } : {}), ...(o.onText ? { onText: o.onText } : {}), ...(o.maxTurns ? { maxTurns: o.maxTurns } : {}), ...(o.maxTokens ? { maxTokens: o.maxTokens } : {}) });
     };
     let r: LoopResult;
     try {

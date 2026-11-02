@@ -12,6 +12,7 @@ import { dirname, join } from "node:path";
 import { createServer } from "node:net";
 import type { TokenInfo, TokenRegistry } from "./http.js";
 import { abortable, type LoopResult, type ModelInfo } from "./providers.js";
+import type { McpServers } from "./mcp-servers.js";
 
 /** Built-in opencode tools Flow never allows (belt and braces with `permission` and per-prompt `tools`). */
 const BUILTINS = ["bash", "edit", "write", "read", "grep", "glob", "list", "patch", "multiedit", "webfetch", "websearch", "codesearch", "task", "todowrite", "todoread", "skill", "lsp", "batch"];
@@ -44,6 +45,8 @@ export interface OpencodeOptions {
   log?: (m: string) => void;
   /** Tests: use an already running (mock) server instead of spawning `opencode serve`. */
   baseUrl?: string;
+  /** Extra MCP servers (Tools (MCP)): enabled ones are registered, the user's own opencode servers stay off otherwise. */
+  mcp?: McpServers;
 }
 
 type Prompt = { scope: "agent" | "chat"; model: string; system: string; text: string; toolNames: readonly string[]; sessionId?: string; signal?: AbortSignal; agentId: string };
@@ -111,7 +114,7 @@ export class OpencodeEngine {
             share: "disabled",
             permission: { edit: "deny", bash: "deny", webfetch: "deny", external_directory: "deny" },
             tools: Object.fromEntries(BUILTINS.map((t) => [t, false])),
-            mcp: { [SERVERS.agent]: mcp(at), [SERVERS.chat]: mcp(ct) },
+            mcp: { ...this.extraMcp(), [SERVERS.agent]: mcp(at), [SERVERS.chat]: mcp(ct) },
           },
         });
         url = this.server.url;
@@ -125,6 +128,26 @@ export class OpencodeEngine {
       throw e;
     });
     return this.starting;
+  }
+
+  /** opencode MCP entries for extra servers: Flow-enabled ones on, the user's other opencode servers off. */
+  private extraMcp(): Record<string, unknown> {
+    const reg = this.o.mcp;
+    if (!reg) return {};
+    const out: Record<string, unknown> = {};
+    for (const d of reg.list()) {
+      if (d.type === "builtin") continue;
+      const on = d.enabled.chat || d.enabled.trader;
+      const key = d.source === "opencode" ? d.name : `flowx-${d.id}`;
+      out[key] = { ...reg.opencodeConfigFor(d), enabled: on };
+    }
+    return out;
+  }
+  /** Tool-id prefixes (as opencode names MCP tools) of the extra servers enabled for a scope. */
+  private extraPrefixes(scope: "agent" | "chat"): string[] {
+    const reg = this.o.mcp;
+    if (!reg) return [];
+    return reg.enabledFor(scope === "agent" ? "trader" : "chat").map((d) => `${(d.source === "opencode" ? d.name : `flowx-${d.id}`).replace(/[^A-Za-z0-9_-]/g, "_")}_`);
   }
 
   stop(): void {
@@ -167,6 +190,9 @@ export class OpencodeEngine {
     // everything off except this scope's allowlisted Flow tools (the other scope's server stays off too)
     const tools: Record<string, boolean> = Object.fromEntries([...ids, ...BUILTINS].map((t) => [t, false]));
     for (const t of allowed) tools[t] = true;
+    // extra MCP servers the user enabled for this agent (Tools (MCP))
+    const prefixes = this.extraPrefixes(p.scope);
+    for (const id of ids) if (prefixes.some((x) => id.startsWith(x))) tools[id] = true;
     let sessionId = p.sessionId;
     if (!sessionId) {
       const s = await abortable(c.session.create({ body: { title: p.scope === "agent" ? "Flow trader cycle" : "Flow chat" }, query: { directory: this.work } }), p.signal);

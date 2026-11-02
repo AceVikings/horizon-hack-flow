@@ -625,6 +625,76 @@ export function registerAppRoutes(o: AppRoutesOptions): { trader: TraderSupervis
   });
   r.register({ method: "POST", path: "/engine/opencode/test", scopes: ["ui"], handler: ({ json }) => guard(json, () => ai.test("opencode")) });
 
+  // ---- Tools (MCP): Flow's server + opencode's + user-added servers, enable per agent (trader extra = Touch ID)
+  const mcpReg = ai.mcp;
+  const noMcp = () => Object.assign(new Error("MCP servers unavailable in this daemon"), { status: 404, code: "ATE_INTERNAL" });
+  r.register({ method: "GET", path: "/engine/mcp", scopes: ["ui", "view"], handler: ({ json }) => guard(json, () => (mcpReg ? { servers: mcpReg.status() } : Promise.reject(noMcp()))) });
+  r.register({
+    method: "POST",
+    path: "/engine/mcp/add",
+    scopes: ["ui"],
+    handler: ({ body, json }) =>
+      guard(json, async () => {
+        if (!mcpReg) throw noMcp();
+        const d = mcpReg.add((body ?? {}) as Parameters<typeof mcpReg.add>[0]);
+        return { server: await mcpReg.test(d.id), servers: mcpReg.status() };
+      }),
+  });
+  for (const op of ["remove", "test"] as const) {
+    r.register({
+      method: "POST",
+      path: `/engine/mcp/${op}`,
+      scopes: ["ui"],
+      handler: ({ body, json }) =>
+        guard(json, async () => {
+          if (!mcpReg) throw noMcp();
+          const id = String((body as { id?: unknown })?.id ?? "");
+          if (op === "remove") mcpReg.remove(id);
+          else await mcpReg.test(id);
+          return { servers: mcpReg.status() };
+        }),
+    });
+  }
+  const pendingMcp = new Map<string, { id: string; expiresAt: number; payload: ApprovalPayload }>();
+  r.register({
+    method: "POST",
+    path: "/engine/mcp/enable",
+    scopes: ["ui"],
+    handler: ({ body, json }) =>
+      guard(json, async () => {
+        if (!mcpReg) throw noMcp();
+        const b = (body ?? {}) as { id?: string; agent?: string; on?: boolean; nonce?: string; approval?: string };
+        const t = nowSec();
+        if (b.nonce) {
+          // step 2: Touch ID signature or the daemon's one-time code
+          const p = pendingMcp.get(b.nonce);
+          pendingMcp.delete(b.nonce);
+          if (!p || p.expiresAt < t) throw Object.assign(new Error("unknown or expired nonce"), { status: 401, code: "ATE_APPROVAL_REQUIRED" });
+          const a = String(b.approval ?? "");
+          const ok = /^[0-9]{8}$/.test(a) ? o.approval?.tty.redeem("config", b.nonce, a).ok : o.approval?.verifier?.verify(p.payload, a).ok;
+          if (!ok) throw Object.assign(new Error("approval rejected"), { status: 401, code: "ATE_APPROVAL_REQUIRED" });
+          mcpReg.setEnabled(p.id, "trader", true);
+          o.log?.(`engine: MCP server ${p.id} enabled for the trader (approved)`);
+          return { servers: mcpReg.status() };
+        }
+        const id = String(b.id ?? "");
+        const agent = b.agent === "trader" ? "trader" : b.agent === "chat" ? "chat" : null;
+        if (!agent || typeof b.on !== "boolean") throw Object.assign(new Error("expected { id, agent: chat|trader, on }"), { status: 400, code: "ATE_CONFIG_INVALID" });
+        if (!mcpReg.needsApproval(id, agent, b.on)) {
+          mcpReg.setEnabled(id, agent, b.on);
+          return { servers: mcpReg.status() };
+        }
+        // giving the trader another server's tools raises risk: Touch ID (or the one-time code) first
+        const name = mcpReg.list().find((x) => x.id === id)?.name ?? id;
+        const nonce = randomBytes(16).toString("hex");
+        const expiresAt = t + 60;
+        const payload = configPayload({ nonce, expiresAt, changes: [{ key: `trader.mcp.${id}`, before: "off", after: "on" }] });
+        pendingMcp.set(nonce, { id, expiresAt, payload });
+        const code = o.approval?.tty.issue("config", nonce, `Let the trader use MCP server ${name}`) ?? null;
+        return { nonce, expiresAt, payload, codeIssued: !!code };
+      }),
+  });
+
   const pendingCred = new Map<string, { id: ProviderId; action: "set" | "remove"; key: string | null; expiresAt: number; payload: ApprovalPayload }>();
   for (const id of PROVIDER_IDS) {
     r.register({ method: "POST", path: `/engine/providers/${id}/test`, scopes: ["ui"], handler: ({ json }) => guard(json, () => ai.test(id)) });
