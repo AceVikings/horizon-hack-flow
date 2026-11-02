@@ -118,3 +118,14 @@ export function dayName(at: number): string {
   return `${DOW[d.getDay()]} ${d.getDate()} ${MON[d.getMonth()]}`;
 }
 export const hm = (at: number): string => clock(at).slice(0, 5);
+
+/** Display a token balance (not a signable value): truncated to `dp` (default 8 for 8-dp tokens, else 2), grouped. */
+export function tokenAmt(raw: string | bigint | null | undefined, decimals: number, dp = decimals <= 8 ? Math.min(decimals, 8) : 2): string {
+  if (raw === null || raw === undefined || raw === "") return "—";
+  let v = BigInt(raw);
+  const neg = v < 0n;
+  if (neg) v = -v;
+  if (decimals > dp) v = v / 10n ** BigInt(decimals - dp);
+  const s = fmtUnits(v, dp, dp === 8 ? 8 : 2);
+  return neg ? "−" + s : s;
+}

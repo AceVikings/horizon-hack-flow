@@ -6,7 +6,7 @@ import { createPortal } from "react-dom";
 import { MARKETS, type JournalEntry, type MarketId } from "@ate/core";
 import { NAV, type NavId } from "../views/registry";
 import { useApp, useNow, useTraderState, type TraderState } from "./app";
-import { dur, clock, explorer, group, int, networkName, short, usd, usdE8Short } from "./format";
+import { dur, clock, explorer, group, int, money, networkName, short, usdE8Short } from "./format";
 import { FlowMark, Link } from "./ui";
 import { KillSwitchDialog } from "./killswitch";
 import { worstCase } from "@ate/core";
@@ -265,7 +265,7 @@ function Footer({ setupStep }: { setupStep?: number }) {
           {lim && wc ? `${usdE8Short(lim.maxTradeUsdE8)}/trade · ${usdE8Short(lim.maxEpochUsdE8)}/${lim.epochDuration === 86_400 ? "UTC day" : `${lim.epochDuration / 3600} h`} · ${usdE8Short(lim.maxExposureUsdE8)} exposure · max loss ${centsE8(wc.maxLossUsdE8)}/day` : <span style={{ color: "var(--sage)" }}>read from the vaults…</span>}
         </FI>
         <span className="fi">{chip}</span>
-        {st && setupStep === undefined && <FI k="HSKSwap">{int(st.hskswapTrades)} trades routed · {usd(st.routedUsd)}</FI>}
+        {st && setupStep === undefined && <FI k="HSKSwap">{int(st.hskswapTrades)} trades routed · {money(Number(st.routedUsd))}</FI>}
         <span className="sp" />
         {st && <FI k={networkName(st.chainId)}>block {group(st.blockNumber)}</FI>}
         <span className="fi">
