@@ -1710,6 +1710,17 @@ export class AteService {
     return out.sort((a, b) => b.createdAt - a.createdAt);
   }
 
+  /**
+   * Additive (Flow v1 policy): a "sells now" change (chat go-to-cash) only tightens risk, so the user's plain in-app
+   * confirmation applies it — no Touch ID. Loosening changes never come through here (they need /strategy/approve).
+   */
+  confirmPendingChange(changeId: string): { decisionId: string; changes: StrategyFieldChange[] } {
+    const c = this.pendingChanges.get(changeId);
+    if (!c || c.expiresAt < this.now()) throw new AteError("AuthError", "ATE_APPROVAL_REQUIRED", "unknown or expired changeId", { hint: "Ask again (pending changes last 60 s)" });
+    if (c.confirm !== "sells_now" || c.changes.some((x) => x.loosening)) throw new AteError("AuthError", "ATE_APPROVAL_REQUIRED", "this change raises risk and needs Touch ID", { hint: "Approve it with Touch ID" });
+    return this.applyPendingChange(changeId);
+  }
+
   /** Additive: the human rejects a pending change (nothing is applied; journalled nowhere: it never took effect). */
   rejectPendingChange(changeId: string): boolean {
     return this.pendingChanges.delete(changeId);
@@ -1724,7 +1735,7 @@ export class AteService {
       .join("\n");
     this.pendingChanges.set(changeId, { patch, scope, rationale, changes, next, expiresAt, renderedDiff, ...(confirm ? { confirm } : {}) });
     const r = confirm
-      ? fail("ATE_APPROVAL_REQUIRED", "this change makes the guard sell now and needs a Touch ID confirmation", "Confirm the rendered diff with Touch ID within 60 s")
+      ? fail("ATE_APPROVAL_REQUIRED", "this change makes the guard sell now: the user confirms it in the app (no Touch ID; it only tightens risk)", "Ask the user to press Confirm within 60 s")
       : fail("ATE_APPROVAL_REQUIRED", "this change loosens risk and needs an ate-approve signature", "Approve the rendered diff with Touch ID within 60 s");
     if (!r.ok) r.error.details = { changeId, diff: changes, renderedDiff, expiresAt, ...(confirm ? { confirm } : {}) };
     try {

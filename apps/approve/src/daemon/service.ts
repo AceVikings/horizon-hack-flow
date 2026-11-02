@@ -17,7 +17,7 @@ import type { ApprovalVerifier } from "../verify.js";
 import { NonceStore, RateLimiter } from "./nonces.js";
 import { TTY_CODE_RE, TtyFallback, type TtyPurpose } from "./tty.js";
 
-export type ApprovalMethod = "secure-enclave" | "tty";
+export type ApprovalMethod = "secure-enclave" | "tty" | "token";
 
 export interface ApprovalJournalEvent {
   purpose: TtyPurpose;
@@ -126,10 +126,14 @@ export class ApprovalService {
     if (scope !== "agent" && scope !== "ui") return err(403, "ATE_TOOL_NOT_ALLOWED", "chat session requires the agent or ui token");
     const b = (body ?? {}) as Record<string, unknown>;
     if (Object.keys(b).length === 0) {
+      // Flow v1 policy: opening a chat session needs no Touch ID. The chat scope's server-enforced allowlist is the
+      // protection (chat can never execute, raise a limit or move funds); loosening changes still need a signature.
+      // The holder of an agent/ui token gets the session handle directly. Step 2 (signature) stays for old clients.
       const sessionId = `chat_${randomBytes(8).toString("hex")}`;
       const n = this.sessionNonces.issue({ sessionId });
-      this.d.tty.issue("chat_session", n.nonce, `ate chat session ${sessionId}`);
-      return { status: 200, body: { sessionId, nonce: n.nonce, expiresAt: n.expiresAt } };
+      const t = this.d.mintSessionToken(sessionId);
+      this.journal("chat_session", "token", sessionId);
+      return { status: 200, body: { sessionId, nonce: n.nonce, expiresAt: n.expiresAt, sessionToken: t.token, sessionExpiresAt: t.expiresAt } as ChatSessionStep1Response };
     }
     if (!isStr(b.sessionId, 64) || !isStr(b.nonce, 64) || !isStr(b.approval, 200)) {
       return err(400, "ATE_APPROVAL_REQUIRED", "expected { sessionId, nonce, approval }");

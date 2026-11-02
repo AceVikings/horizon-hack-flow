@@ -130,8 +130,10 @@ export async function openChatSession(o: { env: NodeJS.ProcessEnv; io: ApprovalI
   const rt = readRuntimeJson(o.env);
   const conn: DaemonConn = { base: `http://127.0.0.1:${rt.port}`, ...(o.fetchImpl ? { fetchImpl: o.fetchImpl } : {}) };
   const s1 = await daemonPost<ChatSessionStep1Response>(conn, "/chat/session", {}, rt.agentToken);
-  const approval = await obtainApproval(chatSessionPayload(s1), { allowTty: true, io: o.io, what: `chat session ${s1.sessionId}`, ...(o.signer ? { signer: o.signer } : {}) });
-  const s2 = await daemonPost<ChatSessionStep2Response>(conn, "/chat/session", { sessionId: s1.sessionId, nonce: s1.nonce, approval }, rt.agentToken);
+  // Flow v1 daemons hand out the session handle at step 1 (no Touch ID to open a chat); older ones need the signature.
+  const s2: ChatSessionStep2Response = s1.sessionToken
+    ? { sessionId: s1.sessionId, sessionToken: s1.sessionToken, expiresAt: s1.sessionExpiresAt ?? s1.expiresAt }
+    : await daemonPost<ChatSessionStep2Response>(conn, "/chat/session", { sessionId: s1.sessionId, nonce: s1.nonce, approval: await obtainApproval(chatSessionPayload(s1), { allowTty: true, io: o.io, what: `chat session ${s1.sessionId}`, ...(o.signer ? { signer: o.signer } : {}) }) }, rt.agentToken);
   const ct = await daemonPost<{ token: string; expiresAt: number }>(conn, "/chat/token", {}, s2.sessionToken);
   return { rt, conn, home: ateHomeDir(o.env), sessionId: s2.sessionId, sessionToken: s2.sessionToken, chatToken: ct.token, expiresAt: Math.min(s2.expiresAt, ct.expiresAt) };
 }

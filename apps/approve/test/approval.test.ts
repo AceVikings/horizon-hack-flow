@@ -152,9 +152,14 @@ describe("/ui/attach", () => {
 });
 
 describe("/chat/session", () => {
-  it("requires agent/ui scope and issues a session handle for a valid signature", async () => {
+  it("opens a session for the agent/ui token without Touch ID (Flow v1 policy)", async () => {
     const s = setup();
     expect((await s.svc.chatSession({}, "chat")).status).toBe(403);
+    const r = (await s.svc.chatSession({}, "ui")).body as { sessionId: string; sessionToken: string };
+    expect(r.sessionToken).toBe(`sess-${r.sessionId}`);
+  });
+  it("still accepts the signed step 2 from older clients", async () => {
+    const s = setup();
     const r1 = (await s.svc.chatSession({}, "agent")).body as { sessionId: string; nonce: string; expiresAt: number };
     const p = chatSessionPayload(r1);
     const r2 = await s.svc.chatSession({ ...r1, approval: sig(s.priv, p) }, "agent");

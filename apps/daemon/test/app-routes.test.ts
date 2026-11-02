@@ -61,10 +61,21 @@ describe("chat go-to-cash confirmation (FLOW.md journey C)", () => {
     const rej = (await (await req("POST", "/strategy/reject", ui, { changeId: det.details.changeId })).json()) as { rejected: boolean };
     expect(rej.rejected).toBe(true);
     expect(svc.listPendingChanges()).toHaveLength(0);
+    // a plain confirm (no Touch ID) applies a sells-now change
+    const r2 = await svc.callTool("chat", "ate_strategy_set", { patch: { targetAssets: keep }, rationale: "go to cash on one asset, keep the other" });
+    const id2 = (r2 as unknown as { error: { details: { changeId: string } } }).error.details.changeId;
+    const c = (await (await req("POST", "/strategy/confirm", ui, { changeId: id2 })).json()) as { applied: boolean };
+    expect(c.applied).toBe(true);
+    expect(svc.strategy.portfolio.targetAssets).toEqual(keep);
+  });
+  it("a loosening change cannot be confirmed without Touch ID", async () => {
+    const r = await svc.callTool("chat", "ate_strategy_set", { patch: { riskProfile: "aggressive" }, rationale: "be more aggressive please now" });
+    const id = (r as unknown as { error: { details: { changeId: string } } }).error.details.changeId;
+    expect((await req("POST", "/strategy/confirm", ui, { changeId: id })).status).toBe(409);
+    await req("POST", "/strategy/reject", ui, { changeId: id });
   });
   it("the same tightening from the ui scope applies at once", async () => {
-    const before = svc.strategy.portfolio.targetAssets;
-    const r = await svc.callTool("ui", "ate_strategy_set", { patch: { targetAssets: before.slice(1) }, rationale: "desktop go to cash test" });
+    const r = await svc.callTool("ui", "ate_strategy_set", { patch: { targetAssets: [] }, rationale: "desktop go to cash test" });
     expect(r.ok).toBe(true);
   });
 });

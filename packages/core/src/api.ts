@@ -33,6 +33,9 @@ export interface ChatSessionStep1Response {
   sessionId: string;
   nonce: string;
   expiresAt: UnixSec;
+  /** Additive (Flow v1): the session handle, issued at once — opening a chat needs no Touch ID. */
+  sessionToken?: string;
+  sessionExpiresAt?: UnixSec;
 }
 export interface ChatSessionStep2Request {
   sessionId: string;

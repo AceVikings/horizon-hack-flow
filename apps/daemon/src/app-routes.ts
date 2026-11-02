@@ -617,6 +617,21 @@ export function registerAppRoutes(o: AppRoutesOptions): { trader: TraderSupervis
   r.register({ method: "GET", path: "/strategy/pending", scopes: ["ui", "session"], handler: ({ json }) => json(200, { pending: o.service.listPendingChanges() }) });
   r.register({
     method: "POST",
+    path: "/strategy/confirm",
+    scopes: ["ui", "session"],
+    handler: ({ body, json }) =>
+      guard(json, () => {
+        const id = (body as { changeId?: unknown })?.changeId;
+        if (typeof id !== "string" || !/^[A-Za-z0-9_-]{1,80}$/.test(id)) throw Object.assign(new Error("changeId required"), { status: 400, code: "ATE_APPROVAL_REQUIRED" });
+        try {
+          return { applied: true, ...o.service.confirmPendingChange(id) };
+        } catch (e) {
+          throw Object.assign(e as Error, { status: 409, code: (e as { code?: string }).code ?? "ATE_APPROVAL_REQUIRED" });
+        }
+      }),
+  });
+  r.register({
+    method: "POST",
     path: "/strategy/reject",
     scopes: ["ui", "session"],
     handler: ({ body, json }) => {
