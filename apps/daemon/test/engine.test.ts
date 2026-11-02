@@ -9,6 +9,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { AiEngine, runToolLoop, strictSchema, toolsFor, type LoopClient } from "../src/engine.js";
 import { createSdkTraderExecutor, runSdkChatTurn } from "../src/engine-agents.js";
+import { openaiStrictSchema, runGeminiLoop, runOpenAILoop, type OpenAILike, type GeminiLike } from "../src/providers.js";
 
 type Msg = { content: unknown[]; stop_reason: string; stop_details?: unknown; model?: string; usage?: Record<string, number> };
 
@@ -111,53 +112,105 @@ describe("strict schemas", () => {
 
 describe("AiEngine", () => {
   const home = () => mkdtempSync(join(tmpdir(), "ate-ai-"));
+  const anth = (client: LoopClient & Anthropic) => ({ anthropic: () => client });
 
   it("falls back to plain tool schemas after a strict-mode 400", async () => {
     const bad = new Anthropic.BadRequestError(400, { type: "error", error: { type: "invalid_request_error", message: "schema" } }, "schema", new Headers());
     const { client, calls } = mockClient([bad, { content: [{ type: "text", text: "ok" }], stop_reason: "end_turn" }]);
-    const ai = new AiEngine(home(), { ATE_KEYSTORE: "file", ANTHROPIC_API_KEY: "sk-ant-test" }, () => client);
-    const r = await ai.run("chat", { model: "claude-opus-5-5", effort: "low", system: "s", toolNames: ["ate_positions"], messages: [{ role: "user", content: "x" }], call: async () => ({ content: "", isError: false }) });
+    const ai = new AiEngine(home(), { ATE_KEYSTORE: "file", ANTHROPIC_API_KEY: "sk-ant-test" }, anth(client));
+    const c = ai.conversation();
+    ai.pushUser(c, "x");
+    const r = await ai.run("chat", c, { effort: "low", system: "s", toolNames: ["ate_positions"], call: async () => ({ content: "", isError: false }) });
     expect(r.text).toBe("ok");
     expect((calls[0]!.tools as { strict?: boolean }[])[0]!.strict).toBe(true);
     expect((calls[1]!.tools as { strict?: boolean }[])[0]).not.toHaveProperty("strict");
-    expect(ai.strictTools).toBe(false);
+    expect(ai.strictOk.anthropic).toBe(false);
   });
 
-  it("stores a pasted key in the key store (file mode), never in ai.json or health", async () => {
+  it("stores a pasted key per provider (file mode), never in ai.json or health", async () => {
     const h = home();
-    const { client } = mockClient([]);
-    const ai = new AiEngine(h, { ATE_KEYSTORE: "file" }, () => client);
-    expect(ai.credential()).toBe("none");
-    await expect(ai.setKey("not-a-key")).rejects.toThrow(/Anthropic API key/);
-    const key = "sk-ant-api03-" + "x".repeat(40);
-    const health = await ai.setKey(key);
-    expect(health.credential).toBe("file");
-    expect(health.lastCheck?.reachable).toBe(true);
-    expect(JSON.stringify(health)).not.toContain(key);
-    expect(readFileSync(join(h, "keys", "anthropic-api-key"), "utf8")).toBe(key);
-    ai.setConfig({ model: "claude-sonnet-5-5" });
-    expect(readFileSync(join(h, "ai.json"), "utf8")).not.toContain("sk-ant");
-    expect(new AiEngine(h, { ATE_KEYSTORE: "file" }, () => client).config.model).toBe("claude-sonnet-5-5");
-    expect(ai.clearKey().credential).toBe("none");
+    const openai: OpenAILike = { chat: { completions: { create: async () => ({}) } }, models: { list: async () => (async function* () { yield { id: "gpt-x" }; yield { id: "text-embedding-3" }; })() } } as never;
+    const ai = new AiEngine(h, { ATE_KEYSTORE: "file" }, { openai: () => openai });
+    expect(ai.credentialOf("openai").source).toBe("none");
+    await expect(ai.setKey("not a key", "openai")).rejects.toThrow(/API key/);
+    const key = "sk-proj-" + "x".repeat(40);
+    await ai.setKey(key, "openai");
+    const st = ai.providers().find((p) => p.id === "openai")!;
+    expect(st).toMatchObject({ configured: true, credential: { source: "file", stored: true, hint: "…xxxx" }, health: { ok: true } });
+    expect(st.models.map((m) => m.id)).toEqual(["gpt-x"]); // embeddings are filtered out
+    expect(readFileSync(join(h, "keys", "openai-api-key"), "utf8")).toBe(key);
+    ai.setConfig({ provider: "openai", model: "gpt-x" });
+    expect(readFileSync(join(h, "ai.json"), "utf8")).not.toContain("sk-");
+    expect(JSON.stringify(ai.providers())).not.toContain(key);
+    expect(new AiEngine(h, { ATE_KEYSTORE: "file" }).config).toMatchObject({ provider: "openai", model: "gpt-x" });
+    ai.clearKey("openai");
+    expect(ai.credentialOf("openai").source).toBe("none");
   });
 
-  it("defaults to Opus 5.5 with low effort for both agents", () => {
-    const ai = new AiEngine(home(), { ATE_KEYSTORE: "file" });
-    expect(ai.config).toEqual({ model: "claude-opus-5-5", engine: "sdk", traderEffort: "low", chatEffort: "low" });
-    expect(() => ai.setConfig({ model: "gpt-4" as never })).toThrow();
+  it("defaults to Anthropic / Opus 5.5 with low effort; refuses a model without tool use", () => {
+    const h = home();
+    const ai = new AiEngine(h, { ATE_KEYSTORE: "file" });
+    expect(ai.config).toMatchObject({ provider: "anthropic", model: "claude-opus-5-5", engine: "sdk", traderEffort: "low", chatEffort: "low" });
+    writeFileSync(join(h, "ai.json"), JSON.stringify({ provider: "anthropic", model: "claude-opus-5-5", models: { ollama: [{ id: "tiny", label: "tiny", tools: false, streaming: true }] } }));
+    const ai2 = new AiEngine(h, { ATE_KEYSTORE: "file" });
+    expect(() => ai2.setConfig({ provider: "ollama", model: "tiny" })).toThrow(/does not support tool use/);
+    expect(() => ai2.setConfig({ provider: "openai", engine: "claude-code" })).toThrow();
+    expect(ai2.configured("ollama")).toBe(true); // local, no key
+    expect(ai2.configured("proxy")).toBe(false); // needs a base URL
+    ai2.setProviderSettings("proxy", { baseURL: "http://127.0.0.1:8317/v1", protocol: "openai" });
+    expect(ai2.configured("proxy")).toBe(true);
+    expect(ai2.providers().find((p) => p.id === "proxy")!.warning).toMatch(/terms/);
+  });
+});
+
+describe("OpenAI-compatible and Gemini loops", () => {
+  it("OpenAI: strict nullable schemas, streamed tool-call assembly, nulls dropped before the daemon sees them", async () => {
+    const s = openaiStrictSchema({ type: "object", required: ["market"], properties: { market: { type: "string", enum: ["a"] }, candidateId: { type: "string" } } });
+    expect(s.required).toEqual(["market", "candidateId"]);
+    expect((s.properties as Record<string, { type: unknown }>).candidateId!.type).toEqual(["string", "null"]);
+    const bodies: Record<string, unknown>[] = [];
+    const turns = [
+      [{ choices: [{ delta: { tool_calls: [{ index: 0, id: "c1", function: { name: "ate_positions", arguments: '{"market":' } }] }, finish_reason: null }] }, { choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: '"a","candidateId":null}' } }] }, finish_reason: "tool_calls" }] }],
+      [{ choices: [{ delta: { content: "Done." }, finish_reason: "stop" }] }, { choices: [], usage: { prompt_tokens: 5, completion_tokens: 2 } }],
+    ];
+    const client: OpenAILike = {
+      chat: { completions: { create: async (b: Record<string, unknown>) => (bodies.push(b), (async function* () { yield* turns.shift()!; })()) } },
+      models: { list: async () => [] },
+    };
+    const seen: unknown[] = [];
+    const hist: never[] = [];
+    const r = await runOpenAILoop(client, hist, { model: "gpt-x", system: "sys", toolNames: ["ate_positions"], strict: true, stream: true, call: async (_n, i) => (seen.push(i), { content: "{}", isError: false }) });
+    expect(r).toMatchObject({ text: "Done.", stop: "end_turn", toolCalls: 1 });
+    expect(seen).toEqual([{ market: "a" }]);
+    expect(bodies[0]!.tool_choice).toBe("auto");
+    expect(((bodies[0]!.tools as { function: { strict?: boolean } }[])[0]!.function.strict)).toBe(true);
+    expect((bodies[0]!.messages as { role: string }[])[0]!.role).toBe("system");
+  });
+
+  it("Gemini: function calls run, responses go back, model content kept verbatim", async () => {
+    const replies = [
+      { candidates: [{ content: { role: "model", parts: [{ functionCall: { id: "f1", name: "ate_positions", args: {} } }] }, finishReason: "STOP" }] },
+      { candidates: [{ content: { role: "model", parts: [{ text: "All good." }] }, finishReason: "STOP" }] },
+    ];
+    const client: GeminiLike = { models: { generateContent: async () => replies.shift()!, list: async () => (async function* () {})() } } as never;
+    const hist: never[] = [];
+    let ran = 0;
+    const r = await runGeminiLoop(client, hist, { model: "gemini-x", system: "s", toolNames: ["ate_positions"], call: async () => (ran++, { content: '{"ok":true}', isError: false }) });
+    expect(r).toMatchObject({ text: "All good.", stop: "end_turn" });
+    expect(ran).toBe(1);
+    expect(hist).toHaveLength(3);
   });
 });
 
 describe("in-app agents", () => {
   const prompt = join(mkdtempSync(join(tmpdir(), "ate-p-")), "PROMPT.md");
   writeFileSync(prompt, "You are the trader.");
-
   it("the trader executor calls tools as the agent scope; dry run drops ate_execute", async () => {
     const { client, calls } = mockClient([
       { content: [toolUse("t1", "ate_decide", { decision: "no_trade", market: "hsk-dex:WHSK/USDT:3000", reason: "no_signal", rationale: "nothing worth doing this cycle" })], stop_reason: "tool_use" },
       { content: [{ type: "text", text: "No trade." }], stop_reason: "end_turn" },
     ]);
-    const ai = new AiEngine(mkdtempSync(join(tmpdir(), "ate-ai-")), { ATE_KEYSTORE: "file", ANTHROPIC_API_KEY: "sk-ant-test" }, () => client);
+    const ai = new AiEngine(mkdtempSync(join(tmpdir(), "ate-ai-")), { ATE_KEYSTORE: "file", ANTHROPIC_API_KEY: "sk-ant-test" }, { anthropic: () => client });
     const scopes: string[] = [];
     const ex = createSdkTraderExecutor({
       ai,
@@ -181,7 +234,7 @@ describe("in-app agents", () => {
       { content: [toolUse("t1", "ate_positions", {})], stop_reason: "tool_use" },
       { content: [{ type: "text", text: "Up $0.31 today." }], stop_reason: "end_turn" },
     ]);
-    const ai = new AiEngine(mkdtempSync(join(tmpdir(), "ate-ai-")), { ATE_KEYSTORE: "file", ANTHROPIC_API_KEY: "sk-ant-test" }, () => client);
+    const ai = new AiEngine(mkdtempSync(join(tmpdir(), "ate-ai-")), { ATE_KEYSTORE: "file", ANTHROPIC_API_KEY: "sk-ant-test" }, { anthropic: () => client });
     const events: { type: string; data: Record<string, unknown> }[] = [];
     const scopes: string[] = [];
     const r = await runSdkChatTurn(

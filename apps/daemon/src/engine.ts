@@ -1,29 +1,49 @@
-// In-app agent engine (Flow v1): the trader and the chat agent run inside the daemon on the Anthropic TypeScript SDK,
-// with a manual streaming tool-use loop whose tools map 1:1 to the daemon's MCP tools (agent scope for the trader,
-// the chat allowlist for chat). No external CLI is needed; the Claude Code CLI engine stays an optional fallback.
+// In-app agent engine (Flow v1): the trader and the chat agent run inside the daemon, on one internal interface over
+// several model providers (./providers.ts). Anthropic is the default: @anthropic-ai/sdk, claude-opus-5-5, manual
+// streaming tool-use loop with tools 1:1 with the daemon's MCP tools (agent scope for the trader, the chat allowlist
+// for chat). No external CLI is needed; the Claude Code CLI engine stays an optional fallback (Anthropic only).
 //
-// - Model: claude-opus-5-5 by default; claude-sonnet-5-5 / claude-haiku-5-5 selectable (Agent screen).
-// - Thinking is left at the model default (adaptive; Opus 5.5 can't disable it). Speed is set with
-//   output_config.effort, explicitly: "low" for trader cycles and chat (Opus 5.5 defaults to "medium").
-// - tool_choice stays "auto" (forced any/tool 400s on Opus/Sonnet 5.5); tools are `strict: true` with
-//   additionalProperties:false. The daemon still validates every input against the frozen MCP schema.
-// - Refusal fallbacks on by default: client.beta.messages with `server-side-fallback-2026-07-01` +
-//   `fallbacks: "default"` (not on Haiku 5.5, which has no server-side fallback). stop_reason is checked
-//   (refusal / max_tokens) before any tool call runs.
-// - Prompt caching: deterministic tool list, frozen system prompt with a cache breakpoint (no timestamps in it),
-//   top-level automatic caching for the growing conversation; usage.cache_read_input_tokens is reported.
-// - Credentials: an API key pasted in-app lives in the macOS keychain (or <home>/keys with ATE_KEYSTORE=file),
-//   never in config, logs or the renderer; otherwise `new Anthropic()` resolves ANTHROPIC_API_KEY /
-//   ANTHROPIC_AUTH_TOKEN / an `ant auth login` profile.
+// Anthropic request shape (per the claude-api guidance):
+// - thinking left at the model default (adaptive; Opus 5.5 can't disable it); speed set with output_config.effort,
+//   explicitly "low" for trader cycles and chat (Opus 5.5 defaults to "medium").
+// - tool_choice "auto" (forced any/tool 400s on Opus/Sonnet 5.5); `strict: true` tools with closed schemas. The
+//   daemon still validates every input against the frozen MCP schema.
+// - refusal fallbacks on: client.beta.messages + `server-side-fallback-2026-07-01` + `fallbacks: "default"` (not on
+//   Haiku 5.5, not through a proxy). stop_reason (refusal / max_tokens) is checked before any tool call runs.
+// - prompt caching: deterministic tool list, frozen system prompt with a breakpoint (no timestamps in it), top-level
+//   automatic caching for the growing conversation; usage.cache_read_input_tokens is reported.
 
 import Anthropic from "@anthropic-ai/sdk";
 import type { BetaContentBlockParam, BetaMessage, BetaMessageParam, BetaTool, BetaToolResultBlockParam, BetaToolUseBlock } from "@anthropic-ai/sdk/resources/beta/messages/messages";
-import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
+import type { Content } from "@google/genai";
+import OpenAI from "openai";
+import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ToolName } from "@ate/core";
 import { TOOL_DEFINITIONS } from "@ate/mcp";
+import {
+  PROVIDERS,
+  PROVIDER_IDS,
+  ProviderKeys,
+  ToolsUnsupportedError,
+  anthropicFor,
+  geminiClient,
+  isProviderId,
+  listModels,
+  openaiClient,
+  runGeminiLoop,
+  runOpenAILoop,
+  type GeminiLike,
+  type LoopResult,
+  type ModelInfo,
+  type OpenAILike,
+  type ProviderId,
+  type ProviderSettings,
+  type ToolCallResult,
+} from "./providers.js";
+
+export type { LoopResult, ToolCallResult, ProviderId } from "./providers.js";
 
 export const AI_MODELS = [
   { id: "claude-opus-5-5", label: "Claude Opus 5.5" },
@@ -36,70 +56,51 @@ export type Effort = "low" | "medium" | "high";
 export type EngineKind = "sdk" | "claude-code";
 
 export interface AiConfig {
-  model: AiModel;
+  provider: ProviderId;
+  model: string;
   engine: EngineKind;
   traderEffort: Effort;
   chatEffort: Effort;
+  providers: Partial<Record<ProviderId, ProviderSettings>>;
 }
 export type CredentialSource = "keychain" | "file" | "env" | "profile" | "none";
 export interface AiHealth {
+  provider: ProviderId;
+  providerLabel: string;
   engine: EngineKind;
-  model: AiModel;
+  model: string;
   modelLabel: string;
-  models: typeof AI_MODELS;
+  models: readonly { id: string; label: string; tools?: boolean | null }[];
   credential: CredentialSource;
   traderEffort: Effort;
   chatEffort: Effort;
   lastCheck: { at: number; reachable: boolean; error?: { kind: string; message: string } } | null;
   lastUsage: { at: number; kind: "trader" | "chat"; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number } | null;
 }
+export interface ProviderStatus {
+  id: ProviderId;
+  label: string;
+  protocol: string;
+  key: "required" | "optional" | "none";
+  warning: string | null;
+  settings: ProviderSettings;
+  credential: { source: CredentialSource; hint: string | null; stored: boolean };
+  configured: boolean;
+  selected: boolean;
+  caps: { tools: boolean; streaming: boolean };
+  health: { at: number; ok: boolean; error?: { kind: string; message: string } } | null;
+  models: ModelInfo[];
+}
 
-const isModel = (m: unknown): m is AiModel => AI_MODELS.some((x) => x.id === m);
 const isEffort = (e: unknown): e is Effort => e === "low" || e === "medium" || e === "high";
-const KEY_RE = /^sk-ant-[A-Za-z0-9_-]{20,300}$/;
-const KEYCHAIN_SERVICE = "ate-anthropic-api-key";
+const nowSec = () => Math.floor(Date.now() / 1000);
 
-// ------------------------------------------------------------------ API key store (keychain / file)
-
-export class ApiKeyStore {
-  constructor(
-    private readonly home: string,
-    private readonly env: NodeJS.ProcessEnv = process.env,
-  ) {}
-  get kind(): "keychain" | "file" {
-    return this.env.ATE_KEYSTORE !== "file" && process.platform === "darwin" && existsSync("/usr/bin/security") ? "keychain" : "file";
-  }
-  private file(): string {
-    return join(this.home, "keys", "anthropic-api-key");
-  }
-  load(): string | null {
-    try {
-      if (this.kind === "keychain") {
-        const out = execFileSync("/usr/bin/security", ["find-generic-password", "-a", "ate", "-s", KEYCHAIN_SERVICE, "-w"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
-        return out || null;
-      }
-      return existsSync(this.file()) ? readFileSync(this.file(), "utf8").trim() || null : null;
-    } catch {
-      return null;
-    }
-  }
-  save(key: string): void {
-    if (this.kind === "keychain") {
-      execFileSync("/usr/bin/security", ["add-generic-password", "-U", "-a", "ate", "-s", KEYCHAIN_SERVICE, "-l", "Flow · Anthropic API key", "-w", key], { stdio: "ignore" });
-      return;
-    }
-    mkdirSync(join(this.home, "keys"), { recursive: true, mode: 0o700 });
-    writeFileSync(this.file(), key, { mode: 0o600 });
-    chmodSync(this.file(), 0o600);
-  }
-  clear(): void {
-    try {
-      if (this.kind === "keychain") execFileSync("/usr/bin/security", ["delete-generic-password", "-a", "ate", "-s", KEYCHAIN_SERVICE], { stdio: "ignore" });
-      else rmSync(this.file(), { force: true });
-    } catch {
-      /* nothing stored */
-    }
-  }
+/** One agent conversation, in the selected provider's native message format (append-only). */
+export interface Conversation {
+  provider: ProviderId;
+  protocol: "anthropic" | "openai" | "gemini";
+  model: string;
+  items: unknown[];
 }
 
 // ------------------------------------------------------------------ tools (1:1 with the daemon's MCP tools)
@@ -144,13 +145,10 @@ export function toolsFor(names: readonly string[], strict = true): BetaTool[] {
 
 // ------------------------------------------------------------------ the tool-use loop
 
-export interface ToolCallResult {
-  /** JSON (or text) returned to the model as the tool_result content. */
-  content: string;
-  isError: boolean;
-}
 export interface LoopOptions {
-  model: AiModel;
+  model: string;
+  /** Server-side refusal fallbacks (Anthropic API only; not through a proxy). Default: on except Haiku 5.5. */
+  fallbacks?: boolean;
   effort: Effort;
   system: string;
   tools: BetaTool[];
@@ -162,22 +160,13 @@ export interface LoopOptions {
   maxTurns?: number;
   maxTokens?: number;
 }
-export interface LoopResult {
-  text: string;
-  stop: string;
-  turns: number;
-  toolCalls: number;
-  refusal?: { category: string | null; explanation: string | null };
-  usage: { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number };
-  servedBy: string;
-}
 
 /** Minimal client surface the loop needs (the real Anthropic client, or a mock in tests). */
 export interface LoopClient {
   beta: { messages: { stream(params: Record<string, unknown>, opts?: { signal?: AbortSignal }): { on(ev: "text", f: (d: string) => void): unknown; finalMessage(): Promise<BetaMessage> } } };
 }
 
-const hasFallback = (m: AiModel) => m !== "claude-haiku-5-5";
+const hasFallback = (m: string) => m !== "claude-haiku-5-5";
 
 export async function runToolLoop(client: LoopClient, o: LoopOptions): Promise<LoopResult> {
   const usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
@@ -198,7 +187,7 @@ export async function runToolLoop(client: LoopClient, o: LoopOptions): Promise<L
       messages: o.messages,
       output_config: { effort: o.effort },
       cache_control: { type: "ephemeral" },
-      ...(hasFallback(o.model) ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" } : {}),
+      ...((o.fallbacks ?? true) && hasFallback(o.model) ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" } : {}),
     };
     const stream = client.beta.messages.stream(params, o.signal ? { signal: o.signal } : undefined);
     if (o.onText) stream.on("text", o.onText);
@@ -247,131 +236,280 @@ export function toolResultContent(r: unknown): ToolCallResult {
 
 /** Typed SDK error → a short, user-facing reason (no string matching on messages). */
 export function describeAiError(e: unknown): { kind: string; message: string; retryable: boolean } {
-  if (e instanceof Anthropic.AuthenticationError) return { kind: "auth", message: "The Anthropic API key was rejected", retryable: false };
-  if (e instanceof Anthropic.PermissionDeniedError) return { kind: "permission", message: "This key may not use the selected model", retryable: false };
-  if (e instanceof Anthropic.NotFoundError) return { kind: "model", message: "The selected model is not available to this key", retryable: false };
-  if (e instanceof Anthropic.RateLimitError) return { kind: "rate_limit", message: "Rate limited by the Anthropic API", retryable: true };
-  if (e instanceof Anthropic.BadRequestError) return { kind: "bad_request", message: e.message.slice(0, 300), retryable: false };
-  if (e instanceof Anthropic.APIConnectionError) return { kind: "offline", message: "Cannot reach the Anthropic API", retryable: true };
-  if (e instanceof Anthropic.APIError) return { kind: "api", message: `Anthropic API error ${e.status ?? ""}`.trim(), retryable: (e.status ?? 0) >= 500 };
+  if (e instanceof ToolsUnsupportedError) return { kind: "no_tools", message: e.message, retryable: false };
+  if (e instanceof Anthropic.AuthenticationError || e instanceof OpenAI.AuthenticationError) return { kind: "auth", message: "The API key was rejected", retryable: false };
+  if (e instanceof Anthropic.PermissionDeniedError || e instanceof OpenAI.PermissionDeniedError) return { kind: "permission", message: "This key may not use the selected model", retryable: false };
+  if (e instanceof Anthropic.NotFoundError || e instanceof OpenAI.NotFoundError) return { kind: "model", message: "The selected model is not available to this key", retryable: false };
+  if (e instanceof Anthropic.RateLimitError || e instanceof OpenAI.RateLimitError) return { kind: "rate_limit", message: "Rate limited by the provider", retryable: true };
+  if (e instanceof Anthropic.BadRequestError || e instanceof OpenAI.BadRequestError) return { kind: "bad_request", message: e.message.replace(/(sk-[A-Za-z0-9_-]{6})[A-Za-z0-9_-]+/g, "$1…").slice(0, 300), retryable: false };
+  if (e instanceof Anthropic.APIConnectionError || e instanceof OpenAI.APIConnectionError) return { kind: "offline", message: "Cannot reach the model provider", retryable: true };
+  if (e instanceof Anthropic.APIError || e instanceof OpenAI.APIError) return { kind: "api", message: `Provider API error ${e.status ?? ""}`.trim(), retryable: (e.status ?? 0) >= 500 };
+  const st = (e as { status?: number })?.status;
+  if (st === 401 || st === 403) return { kind: "auth", message: "The API key was rejected", retryable: false };
+  if (st === 404) return { kind: "model", message: "The selected model is not available", retryable: false };
+  if (st === 429) return { kind: "rate_limit", message: "Rate limited by the provider", retryable: true };
   const m = (e as Error)?.message ?? String(e);
-  if (/authentication method|apiKey|authToken/i.test(m)) return { kind: "no_credentials", message: "No Anthropic credentials: paste an API key in Settings", retryable: false };
-  return { kind: "internal", message: m.split("\n")[0]!.slice(0, 300), retryable: false };
+  if (/authentication method|apiKey|authToken|API key/i.test(m)) return { kind: "no_credentials", message: "No credentials for this provider: add an API key", retryable: false };
+  if (/fetch failed|ECONNREFUSED|ENOTFOUND/i.test(m)) return { kind: "offline", message: "Cannot reach the model provider", retryable: true };
+  return { kind: "internal", message: m.split("\n")[0]!.replace(/(sk-[A-Za-z0-9_-]{6})[A-Za-z0-9_-]+/g, "$1…").slice(0, 300), retryable: false };
 }
 
-// ------------------------------------------------------------------ engine (config, credentials, health)
+
+// ------------------------------------------------------------------ engine (providers, credentials, health)
+
+type Clients = { anthropic?: (id: ProviderId, key: string | null, baseURL?: string) => LoopClient & Anthropic; openai?: (id: ProviderId, key: string | null, baseURL?: string) => OpenAILike; gemini?: (key: string | null) => GeminiLike };
 
 export class AiEngine {
   private cfg: AiConfig;
   private lastCheck: AiHealth["lastCheck"] = null;
   private lastUsage: AiHealth["lastUsage"] = null;
-  private cached: { key: string | null; client: LoopClient & Anthropic } | null = null;
-  readonly keys: ApiKeyStore;
-  /** False after a strict-tools 400: later loops send plain (non-strict) schemas. */
-  strictTools = true;
+  private health_: Partial<Record<ProviderId, ProviderStatus["health"]>> = {};
+  private models_: Partial<Record<ProviderId, ModelInfo[]>> = {};
+  readonly keys: ProviderKeys;
+  /** False (per provider) after a strict-schema 400: later loops send plain schemas; the daemon validates anyway. */
+  strictOk: Partial<Record<ProviderId, boolean>> = {};
 
   constructor(
     private readonly home: string,
     private readonly env: NodeJS.ProcessEnv = process.env,
-    private readonly makeClient: (apiKey: string | null) => LoopClient & Anthropic = (k) => (k ? new Anthropic({ apiKey: k }) : new Anthropic()) as LoopClient & Anthropic,
+    private readonly clients: Clients = {},
   ) {
-    this.keys = new ApiKeyStore(home, env);
-    this.cfg = { model: DEFAULT_MODEL, engine: "sdk", traderEffort: "low", chatEffort: "low" };
+    this.keys = new ProviderKeys(home, env);
+    this.cfg = { provider: "anthropic", model: DEFAULT_MODEL, engine: "sdk", traderEffort: "low", chatEffort: "low", providers: {} };
     try {
-      const j = JSON.parse(readFileSync(join(home, "ai.json"), "utf8")) as Partial<AiConfig>;
-      this.cfg = { ...this.cfg, ...(isModel(j.model) ? { model: j.model } : {}), ...(j.engine === "claude-code" ? { engine: "claude-code" } : {}), ...(isEffort(j.traderEffort) ? { traderEffort: j.traderEffort } : {}), ...(isEffort(j.chatEffort) ? { chatEffort: j.chatEffort } : {}) };
+      const j = JSON.parse(readFileSync(join(home, "ai.json"), "utf8")) as Partial<AiConfig> & { models?: Partial<Record<ProviderId, ModelInfo[]>> };
+      this.cfg = {
+        ...this.cfg,
+        ...(isProviderId(j.provider) ? { provider: j.provider } : {}),
+        ...(typeof j.model === "string" && j.model ? { model: j.model } : {}),
+        ...(j.engine === "claude-code" ? { engine: "claude-code" } : {}),
+        ...(isEffort(j.traderEffort) ? { traderEffort: j.traderEffort } : {}),
+        ...(isEffort(j.chatEffort) ? { chatEffort: j.chatEffort } : {}),
+        ...(j.providers && typeof j.providers === "object" ? { providers: j.providers } : {}),
+      };
+      if (j.models) this.models_ = j.models;
     } catch {
       /* defaults */
     }
-    if (isModel(env.ATE_AI_MODEL)) this.cfg.model = env.ATE_AI_MODEL;
+    if (typeof env.ATE_AI_MODEL === "string" && env.ATE_AI_MODEL) this.cfg.model = env.ATE_AI_MODEL;
   }
 
   get config(): AiConfig {
-    return { ...this.cfg };
+    return JSON.parse(JSON.stringify(this.cfg)) as AiConfig;
   }
-  setConfig(p: Partial<AiConfig>): AiConfig {
-    if (p.model !== undefined && !isModel(p.model)) throw Object.assign(new Error(`unknown model ${String(p.model)}`), { status: 400, code: "ATE_CONFIG_INVALID" });
+  private persist() {
+    writeFileSync(join(this.home, "ai.json"), JSON.stringify({ ...this.cfg, models: this.models_ }, null, 2), { mode: 0o600 });
+  }
+
+  /** Model info from the provider's last listing (Anthropic: built in). */
+  modelInfo(p: ProviderId, model: string): ModelInfo | null {
+    if (p === "anthropic") {
+      const m = AI_MODELS.find((x) => x.id === model);
+      if (m) return { id: m.id, label: m.label, tools: true, streaming: true };
+    }
+    return this.models_[p]?.find((x) => x.id === model) ?? null;
+  }
+
+  setConfig(p: Partial<Omit<AiConfig, "providers">> & { providerSettings?: { id: ProviderId } & ProviderSettings }): AiConfig {
+    const provider = p.provider === undefined ? this.cfg.provider : p.provider;
+    if (!isProviderId(provider)) throw Object.assign(new Error(`unknown provider ${String(provider)}`), { status: 400, code: "ATE_CONFIG_INVALID" });
+    let model = p.model ?? (provider !== this.cfg.provider ? (provider === "anthropic" ? DEFAULT_MODEL : (this.models_[provider]?.find((m) => m.tools !== false)?.id ?? "")) : this.cfg.model);
+    if (typeof model !== "string" || model.length > 200 || (provider === "anthropic" && p.model !== undefined && !/^claude-[a-z0-9.-]+$/.test(model))) throw Object.assign(new Error(`unknown model ${String(model)}`), { status: 400, code: "ATE_CONFIG_INVALID" });
+    const info = model ? this.modelInfo(provider, model) : null;
+    if (info && info.tools === false) throw Object.assign(new ToolsUnsupportedError(provider, model), { status: 400, code: "ATE_CONFIG_INVALID" });
+    if (p.engine === "claude-code" && provider !== "anthropic") throw Object.assign(new Error("the Claude Code CLI engine only runs Anthropic models"), { status: 400, code: "ATE_CONFIG_INVALID" });
+    model = model || this.cfg.model;
     this.cfg = {
       ...this.cfg,
-      ...(p.model ? { model: p.model } : {}),
+      provider,
+      model,
       ...(p.engine === "sdk" || p.engine === "claude-code" ? { engine: p.engine } : {}),
       ...(isEffort(p.traderEffort) ? { traderEffort: p.traderEffort } : {}),
       ...(isEffort(p.chatEffort) ? { chatEffort: p.chatEffort } : {}),
     };
-    writeFileSync(join(this.home, "ai.json"), JSON.stringify(this.cfg, null, 2), { mode: 0o600 });
+    if (p.providerSettings) this.setProviderSettings(p.providerSettings.id, p.providerSettings);
+    this.persist();
     return this.config;
   }
 
-  credential(): CredentialSource {
-    if (this.keys.load()) return this.keys.kind;
-    if (this.env.ANTHROPIC_API_KEY || this.env.ANTHROPIC_AUTH_TOKEN) return "env";
-    const prof = this.env.ANTHROPIC_CONFIG_DIR ?? join(homedir(), ".config", "anthropic");
-    if (this.env.ANTHROPIC_PROFILE || existsSync(prof)) return "profile";
-    return "none";
-  }
-  available(): boolean {
-    return this.credential() !== "none";
+  setProviderSettings(id: ProviderId, s: ProviderSettings): void {
+    const cur = this.cfg.providers[id] ?? {};
+    const next: ProviderSettings = { ...cur };
+    if (s.baseURL !== undefined) {
+      if (s.baseURL === "") delete next.baseURL;
+      else {
+        let u: URL;
+        try {
+          u = new URL(s.baseURL);
+        } catch {
+          throw Object.assign(new Error("base URL is not a URL"), { status: 400, code: "ATE_CONFIG_INVALID" });
+        }
+        if (u.protocol !== "http:" && u.protocol !== "https:") throw Object.assign(new Error("base URL must be http(s)"), { status: 400, code: "ATE_CONFIG_INVALID" });
+        next.baseURL = u.toString().replace(/\/$/, "");
+      }
+    }
+    if (s.protocol === "openai" || s.protocol === "anthropic") next.protocol = s.protocol;
+    this.cfg.providers = { ...this.cfg.providers, [id]: next };
+    this.persist();
   }
 
-  client(): LoopClient & Anthropic {
-    const key = this.keys.load();
-    if (!this.cached || this.cached.key !== key) this.cached = { key, client: this.makeClient(key) };
-    return this.cached.client;
+  private baseURL(id: ProviderId): string | undefined {
+    return this.cfg.providers[id]?.baseURL ?? PROVIDERS[id].baseURL;
+  }
+  private protocolOf(id: ProviderId): "anthropic" | "openai" | "gemini" {
+    return id === "proxy" ? (this.cfg.providers.proxy?.protocol ?? "openai") : PROVIDERS[id].protocol;
+  }
+
+  credentialOf(id: ProviderId): ProviderStatus["credential"] {
+    return this.keys.source(id);
+  }
+  configured(id: ProviderId): boolean {
+    const def = PROVIDERS[id];
+    if (id === "proxy") return !!this.cfg.providers.proxy?.baseURL;
+    if (def.key === "none") return true;
+    return this.credentialOf(id).source !== "none";
+  }
+  credential(): CredentialSource {
+    return this.credentialOf(this.cfg.provider).source;
+  }
+  available(): boolean {
+    return this.configured(this.cfg.provider);
+  }
+
+  private anthropicClient(id: ProviderId): LoopClient & Anthropic {
+    const key = id === "anthropic" ? null : this.keys.resolve(id);
+    return this.clients.anthropic ? this.clients.anthropic(id, key, this.baseURL(id)) : (anthropicFor(this.home, this.env, id, key, this.baseURL(id)) as LoopClient & Anthropic);
+  }
+  private openaiClient(id: ProviderId): OpenAILike {
+    const key = this.keys.resolve(id);
+    return this.clients.openai ? this.clients.openai(id, key, this.baseURL(id)) : (openaiClient(PROVIDERS[id], key, this.baseURL(id)) as unknown as OpenAILike);
+  }
+  private geminiClient(): GeminiLike {
+    const key = this.keys.resolve("gemini");
+    return this.clients.gemini ? this.clients.gemini(key) : (geminiClient(key) as unknown as GeminiLike);
+  }
+
+  providers(): ProviderStatus[] {
+    return PROVIDER_IDS.map((id) => {
+      const def = PROVIDERS[id];
+      const models = id === "anthropic" && !this.models_.anthropic?.length ? AI_MODELS.map((m) => ({ id: m.id, label: m.label, tools: true, streaming: true })) : (this.models_[id] ?? []);
+      return {
+        id,
+        label: def.label,
+        protocol: this.protocolOf(id),
+        key: def.key,
+        warning: def.warning ?? null,
+        settings: this.cfg.providers[id] ?? (def.baseURL ? { baseURL: def.baseURL } : {}),
+        credential: this.credentialOf(id),
+        configured: this.configured(id),
+        selected: this.cfg.provider === id,
+        caps: { tools: true, streaming: def.caps.streaming },
+        health: this.health_[id] ?? null,
+        models,
+      };
+    });
+  }
+
+  /** List the provider's models (and so prove the key, URL and network). No tokens are spent. */
+  async test(id: ProviderId): Promise<ProviderStatus> {
+    const at = nowSec();
+    try {
+      if (!this.configured(id)) throw Object.assign(new Error(id === "proxy" ? "Set the proxy base URL first" : "No API key for this provider"), { kind: "no_credentials" });
+      const proto = this.protocolOf(id);
+      const client = proto === "anthropic" ? this.anthropicClient(id) : proto === "gemini" ? this.geminiClient() : this.openaiClient(id);
+      const ms = await listModels(id, client, { baseURL: this.baseURL(id) });
+      this.models_[id] = id === "anthropic" ? ms.filter((m) => /^claude-/.test(m.id)) : ms;
+      this.health_[id] = { at, ok: true };
+      this.persist();
+    } catch (e) {
+      const d = (e as { kind?: string }).kind === "no_credentials" ? { kind: "no_credentials", message: (e as Error).message } : describeAiError(e);
+      this.health_[id] = { at, ok: false, error: { kind: d.kind, message: d.message } };
+    }
+    if (id === this.cfg.provider) this.lastCheck = { at, reachable: !!this.health_[id]?.ok, ...(this.health_[id]?.error ? { error: this.health_[id]!.error! } : {}) };
+    return this.providers().find((p) => p.id === id)!;
   }
 
   health(): AiHealth {
-    const m = AI_MODELS.find((x) => x.id === this.cfg.model)!;
-    return { engine: this.cfg.engine, model: this.cfg.model, modelLabel: m.label, models: AI_MODELS, credential: this.credential(), traderEffort: this.cfg.traderEffort, chatEffort: this.cfg.chatEffort, lastCheck: this.lastCheck, lastUsage: this.lastUsage };
+    const p = this.cfg.provider;
+    const info = this.modelInfo(p, this.cfg.model);
+    const st = this.providers().find((x) => x.id === p)!;
+    return {
+      provider: p,
+      providerLabel: PROVIDERS[p].label,
+      engine: this.cfg.engine,
+      model: this.cfg.model,
+      modelLabel: info?.label ?? this.cfg.model,
+      models: st.models.map((m) => ({ id: m.id, label: m.label, tools: m.tools })),
+      credential: this.credential(),
+      traderEffort: this.cfg.traderEffort,
+      chatEffort: this.cfg.chatEffort,
+      lastCheck: this.lastCheck,
+      lastUsage: this.lastUsage,
+    };
   }
-
-  /** Live reachability: GET /v1/models/{model} (no tokens spent). */
-  async check(client: LoopClient & Anthropic = this.client()): Promise<AiHealth> {
-    const at = Math.floor(Date.now() / 1000);
-    try {
-      await client.models.retrieve(this.cfg.model);
-      this.lastCheck = { at, reachable: true };
-    } catch (e) {
-      const d = describeAiError(e);
-      this.lastCheck = { at, reachable: false, error: { kind: d.kind, message: d.message } };
-    }
+  async check(): Promise<AiHealth> {
+    await this.test(this.cfg.provider);
     return this.health();
   }
 
-  /** Validate a pasted key against the API, then store it in the keychain. The key is never logged or returned. */
-  async setKey(apiKey: string): Promise<AiHealth> {
+  /** Validate a pasted key against the provider (model listing), then store it in the keychain. Never logged or returned. */
+  async setKey(apiKey: string, id: ProviderId = this.cfg.provider): Promise<AiHealth> {
     const k = String(apiKey ?? "").trim();
-    if (!KEY_RE.test(k)) throw Object.assign(new Error("That does not look like an Anthropic API key (sk-ant-…)"), { status: 400, code: "ATE_CONFIG_INVALID" });
-    try {
-      await this.makeClient(k).models.retrieve(this.cfg.model);
-    } catch (e) {
-      const d = describeAiError(e);
-      if (d.kind === "auth" || d.kind === "permission") throw Object.assign(new Error(d.message), { status: 400, code: "ATE_CONFIG_INVALID" });
-      // offline / rate limited: store anyway, the health check will tell
+    const def = PROVIDERS[id];
+    if (def.key === "none") throw Object.assign(new Error(`${def.label} needs no API key`), { status: 400, code: "ATE_CONFIG_INVALID" });
+    if (!k || k.length > 400 || /\s/.test(k) || (def.keyPattern && !def.keyPattern.test(k))) throw Object.assign(new Error(`That does not look like a ${def.label} API key`), { status: 400, code: "ATE_CONFIG_INVALID" });
+    this.keys.save(id, k);
+    const st = await this.test(id);
+    if (!st.health?.ok && (st.health?.error?.kind === "auth" || st.health?.error?.kind === "permission")) {
+      this.keys.remove(id);
+      throw Object.assign(new Error(st.health.error.message), { status: 400, code: "ATE_CONFIG_INVALID" });
     }
-    this.keys.save(k);
-    this.cached = null;
-    return this.check();
+    return this.health();
   }
-  clearKey(): AiHealth {
-    this.keys.clear();
-    this.cached = null;
-    this.lastCheck = null;
+  clearKey(id: ProviderId = this.cfg.provider): AiHealth {
+    this.keys.remove(id);
+    delete this.health_[id];
+    if (id === this.cfg.provider) this.lastCheck = null;
     return this.health();
   }
 
-  /** runToolLoop with this engine's client; strict tools fall back to plain schemas after a 400. */
-  async run(kind: "trader" | "chat", o: Omit<LoopOptions, "tools"> & { toolNames: readonly string[] }): Promise<LoopResult> {
-    const client = this.client();
-    const start = o.messages.length;
+  /** A new, empty conversation on the selected provider and model. */
+  conversation(): Conversation {
+    return { provider: this.cfg.provider, protocol: this.protocolOf(this.cfg.provider), model: this.cfg.model, items: [] };
+  }
+  /** Append a user message in the conversation's native format. */
+  pushUser(c: Conversation, text: string): void {
+    c.items.push(c.protocol === "gemini" ? ({ role: "user", parts: [{ text }] } satisfies Content) : { role: "user", content: text });
+  }
+
+  /** Run the tool loop on the conversation's provider. Strict schemas fall back to plain ones after a 400. */
+  async run(kind: "trader" | "chat", c: Conversation, o: { effort: Effort; system: string; toolNames: readonly string[]; call(name: string, input: unknown, id: string): Promise<ToolCallResult>; signal?: AbortSignal; onText?(d: string): void; maxTurns?: number; maxTokens?: number }): Promise<LoopResult> {
+    const info = this.modelInfo(c.provider, c.model);
+    if (info && info.tools === false) throw new ToolsUnsupportedError(c.provider, c.model);
+    const start = c.items.length;
+    const strict = this.strictOk[c.provider] !== false;
+    const once = async (useStrict: boolean): Promise<LoopResult> => {
+      if (c.protocol === "anthropic")
+        return runToolLoop(this.anthropicClient(c.provider), { model: c.model, effort: o.effort, system: o.system, tools: toolsFor(o.toolNames, useStrict), messages: c.items as BetaMessageParam[], call: o.call, fallbacks: c.provider === "anthropic", ...(o.signal ? { signal: o.signal } : {}), ...(o.onText ? { onText: o.onText } : {}), ...(o.maxTurns ? { maxTurns: o.maxTurns } : {}), ...(o.maxTokens ? { maxTokens: o.maxTokens } : {}) });
+      if (c.protocol === "gemini") return runGeminiLoop(this.geminiClient(), c.items as Content[], { model: c.model, system: o.system, toolNames: o.toolNames, call: o.call, ...(o.signal ? { signal: o.signal } : {}), ...(o.onText ? { onText: o.onText } : {}), ...(o.maxTurns ? { maxTurns: o.maxTurns } : {}), ...(o.maxTokens ? { maxTokens: o.maxTokens } : {}) });
+      // strict function schemas only on OpenAI itself; OpenRouter / Ollama / proxies get plain schemas
+      return runOpenAILoop(this.openaiClient(c.provider), c.items as ChatCompletionMessageParam[], { model: c.model, system: o.system, toolNames: o.toolNames, call: o.call, strict: useStrict && c.provider === "openai", stream: PROVIDERS[c.provider].caps.streaming, ...(o.signal ? { signal: o.signal } : {}), ...(o.onText ? { onText: o.onText } : {}), ...(o.maxTurns ? { maxTurns: o.maxTurns } : {}), ...(o.maxTokens ? { maxTokens: o.maxTokens } : {}) });
+    };
     let r: LoopResult;
     try {
-      r = await runToolLoop(client, { ...o, tools: toolsFor(o.toolNames, this.strictTools) });
+      r = await once(strict);
     } catch (e) {
-      if (!(e instanceof Anthropic.BadRequestError) || !this.strictTools || o.messages.length !== start) throw e;
-      this.strictTools = false; // a schema keyword strict mode rejects: the daemon validates inputs anyway
-      r = await runToolLoop(client, { ...o, tools: toolsFor(o.toolNames, false) });
+      const is400 = e instanceof Anthropic.BadRequestError || e instanceof OpenAI.BadRequestError || (e as { status?: number })?.status === 400;
+      if (!is400 || c.items.length !== start) throw e;
+      if (!strict || c.protocol === "gemini" || (c.protocol === "openai" && c.provider !== "openai")) {
+        // the model refused the tool definitions themselves
+        if (info?.tools !== true) throw new ToolsUnsupportedError(c.provider, c.model);
+        throw e;
+      }
+      this.strictOk[c.provider] = false;
+      r = await once(false);
     }
-    this.lastUsage = { at: Math.floor(Date.now() / 1000), kind, ...r.usage };
+    this.lastUsage = { at: nowSec(), kind, ...r.usage };
     return r;
   }
 }

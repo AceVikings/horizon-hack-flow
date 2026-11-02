@@ -34,7 +34,9 @@ beforeAll(async () => {
   http = new DaemonHttp({ service: svc, tokens, routes, version: "test" });
   const port = await http.listen();
   const home = mkdtempSync(join(tmpdir(), "ate-app-"));
-  registerAppRoutes({ routes, tokens, service: svc, home, port, deploymentsPath: null, ai: new AiEngine(home, { ATE_KEYSTORE: "file" }) });
+  registerAppRoutes({ routes, tokens, service: svc, home, port, deploymentsPath: null, ai: new AiEngine(home, { ATE_KEYSTORE: "file" }, { openai: () => ({ chat: { completions: { create: async () => ({}) } }, models: { list: async () => [{ id: "gpt-x" }] } }) as never }),
+    approval: { verifier: null, tty: { issue: () => "12345678", redeem: (_p, _n, code) => ({ ok: code === "12345678" }) } },
+  });
   base = `http://127.0.0.1:${port}`;
 });
 afterAll(async () => http.close());
@@ -83,5 +85,29 @@ describe("proof + trader routes", () => {
     const j = (await r.json()) as { running: boolean; supervised: boolean };
     expect(j).toMatchObject({ running: false, supervised: true });
     expect((await req("POST", "/trader/start", view, {})).status).toBe(403);
+  });
+});
+
+describe("engine providers (Accounts)", () => {
+  it("lists every provider; first key is stored directly, replace/remove need Touch ID or the one-time code", async () => {
+    const list = (await (await req("GET", "/engine/providers", ui)).json()) as { selected: { provider: string }; providers: { id: string; configured: boolean; warning: string | null }[] };
+    expect(list.selected.provider).toBe("anthropic");
+    expect(list.providers.map((p) => p.id)).toEqual(["anthropic", "openai", "gemini", "openrouter", "ollama", "proxy"]);
+    expect(list.providers.find((p) => p.id === "proxy")!.warning).toMatch(/terms/);
+    const key = "sk-proj-" + "a".repeat(40);
+    const first = (await (await req("POST", "/engine/providers/openai/credential", ui, { action: "set", apiKey: key })).json()) as { saved: boolean; provider: { configured: boolean } };
+    expect(first).toMatchObject({ saved: true, provider: { configured: true } });
+    const step1 = (await (await req("POST", "/engine/providers/openai/credential", ui, { action: "remove" })).json()) as { nonce: string; codeIssued: boolean; payload: { kind: string } };
+    expect(step1).toMatchObject({ codeIssued: true, payload: { kind: "config" } });
+    expect((await req("POST", "/engine/providers/openai/credential", ui, { nonce: step1.nonce, approval: "00000000" })).status).toBe(401);
+    const s2 = (await (await req("POST", "/engine/providers/openai/credential", ui, { action: "remove" })).json()) as { nonce: string };
+    const done = (await (await req("POST", "/engine/providers/openai/credential", ui, { nonce: s2.nonce, approval: "12345678" })).json()) as { provider: { configured: boolean } };
+    expect(done.provider.configured).toBe(false);
+    expect((await req("POST", "/engine/providers/openai/credential", view, { action: "remove" })).status).toBe(403);
+  });
+  it("selects a provider and refuses unknown ones", async () => {
+    expect((await req("POST", "/engine/select", ui, { provider: "nope" })).status).toBe(400);
+    const r = (await (await req("POST", "/engine/select", ui, { provider: "anthropic", model: "claude-sonnet-5-5" })).json()) as { selected: { model: string } };
+    expect(r.selected.model).toBe("claude-sonnet-5-5");
   });
 });

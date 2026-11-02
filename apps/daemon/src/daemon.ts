@@ -249,7 +249,7 @@ export async function startDaemon(o: StartOptions = {}): Promise<RunningDaemon> 
   // /setup/* (desktop onboarding + Settings), ui scope only.
   registerSetupRoutes({ routes, home, env, cfg, configPath, service, unlock, broadcast: (e) => http.broadcast(e), approval: approvalHandle, log });
   // Flow desktop v1 (additive): supervised trader, pending-change list/reject, in-app proof suite (testnet only).
-  const app = registerAppRoutes({ routes, tokens, service, home, port, deploymentsPath: findDeployments(env, cfg.chain.id), ai, log });
+  const app = registerAppRoutes({ routes, tokens, service, home, port, deploymentsPath: findDeployments(env, cfg.chain.id), ai, approval: approvalHandle, log });
   const runtime: RuntimeJson = { pid: process.pid, port, agentToken, startedAt: Math.floor(Date.now() / 1000), version: DAEMON_VERSION };
   const runtimePath = join(home, "runtime.json");
   writeFileSync(runtimePath, JSON.stringify(runtime, null, 2), { mode: 0o600 });

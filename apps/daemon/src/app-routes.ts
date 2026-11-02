@@ -20,7 +20,10 @@ import { join } from "node:path";
 import { MARKETS, MARKET_IDS, policyVaultAbi, type MarketId } from "@ate/core";
 import { createPublicClient, http as viemHttp, type Address, type Hex, type PublicClient } from "viem";
 import { chatMcpSpec } from "./chat.js";
-import { AI_MODELS, DEFAULT_MODEL, type AiConfig, type AiEngine, type AiModel } from "./engine.js";
+import { randomBytes } from "node:crypto";
+import { configPayload, type ApprovalPayload } from "@ate/approve";
+import { DEFAULT_MODEL, type AiConfig, type AiEngine } from "./engine.js";
+import { PROVIDERS, PROVIDER_IDS, isProviderId, type ProviderId } from "./providers.js";
 import { createSdkTraderExecutor } from "./engine-agents.js";
 import type { Routes, TokenRegistry } from "./http.js";
 import { EXPECTED, FULL_RUN, decodeRevert, runRogue, type AttackId, type AttackResult } from "./rogue.js";
@@ -37,13 +40,14 @@ export interface AppRoutesOptions {
   port: number;
   /** deployments/<chainId>.json path (deployedBlock, guardian, owner, explorer). */
   deploymentsPath: string | null;
-  /** In-app agent engine (Anthropic SDK) shared with the chat routes. */
+  /** In-app agent engine shared with the chat routes. */
   ai: AiEngine;
+  /** Lane E approval handle (Touch ID verifier + one-time codes) for credential replace/remove. */
+  approval?: { tty: { issue(purpose: "config", bindTo: string, label: string): string | null; redeem(purpose: "config", bindTo: string, code: string): { ok: boolean } }; verifier: { verify(p: ApprovalPayload, sig: string): { ok: boolean } } | null } | null;
   log?: (m: string) => void;
 }
 
 const nowSec = () => Math.floor(Date.now() / 1000);
-const isAiModel = (m: unknown): m is AiModel => AI_MODELS.some((x) => x.id === m);
 const errBody = (code: string, message: string, hint?: string) => ({ error: { code, message, ...(hint ? { hint } : {}) } });
 
 // ------------------------------------------------------------------ trader supervisor
@@ -114,10 +118,10 @@ class TraderSupervisor {
     if (this.st.running) await this.stop(false);
     const mode: TraderMode = b.mode === "propose" ? "propose" : "autonomous";
     const engine = b.engine === "rules" ? "rules" : "llm";
-    if (isAiModel(b.model) && b.model !== this.o.ai.config.model) this.o.ai.setConfig({ model: b.model });
+    if (typeof b.model === "string" && b.model && b.model !== this.o.ai.config.model) this.o.ai.setConfig({ model: b.model });
     const model = this.o.ai.config.model;
-    const viaCli = engine === "llm" && this.o.ai.config.engine === "claude-code";
-    if (engine === "llm" && !viaCli && !this.o.ai.available()) throw Object.assign(new Error("No Anthropic credentials: paste an API key in Settings (or run on the rules engine)"), { status: 409, code: "ATE_CONFIG_INVALID" });
+    const viaCli = engine === "llm" && this.o.ai.config.engine === "claude-code" && this.o.ai.config.provider === "anthropic";
+    if (engine === "llm" && !viaCli && !this.o.ai.available()) throw Object.assign(new Error(`${PROVIDERS[this.o.ai.config.provider].label} is not set up: add its API key under Accounts (or run on the rules engine)`), { status: 409, code: "ATE_CONFIG_INVALID" });
     const cycleSeconds = Math.max(30, Math.min(3600, Number(b.cycleSeconds) || 120));
     const name = "@ate/trader";
     const t = (await import(name)) as Trader;
@@ -522,9 +526,13 @@ export function registerAppRoutes(o: AppRoutesOptions): { trader: TraderSupervis
     method: "POST",
     path: "/ai/key",
     scopes: ["ui"],
-    handler: ({ body, json }) => guard(json, () => ai.setKey(String((body as { apiKey?: unknown })?.apiKey ?? ""))),
+    handler: ({ body, json }) =>
+      guard(json, () => {
+        // first key only; replacing a stored key goes through /engine/providers/<id>/credential (Touch ID)
+        if (ai.credentialOf(ai.config.provider).stored) throw Object.assign(new Error("A key is already stored: replace it under Accounts (Touch ID)"), { status: 409, code: "ATE_APPROVAL_REQUIRED" });
+        return ai.setKey(String((body as { apiKey?: unknown })?.apiKey ?? ""));
+      }),
   });
-  r.register({ method: "POST", path: "/ai/key/clear", scopes: ["ui"], handler: ({ json }) => json(200, ai.clearKey()) });
   r.register({
     method: "POST",
     path: "/ai/config",
@@ -533,12 +541,78 @@ export function registerAppRoutes(o: AppRoutesOptions): { trader: TraderSupervis
       guard(json, async () => {
         const before = ai.config;
         ai.setConfig((body ?? {}) as Partial<AiConfig>);
-        // a running LLM trader picks up a new model / engine on restart
-        const st = trader.state();
-        if (st.running && st.engine === "llm" && (before.model !== ai.config.model || before.engine !== ai.config.engine)) await trader.start({ mode: st.mode, engine: "llm", cycleSeconds: st.cycleSeconds });
+        await restartIfChanged(before);
         return ai.health();
       }),
   });
+
+  // ---- providers (D2's Accounts page): list, credential set/replace/remove (Touch ID for replace/remove), test, select
+  const restartIfChanged = async (before: AiConfig) => {
+    // a running LLM trader picks up a new provider / model / engine on restart
+    const st = trader.state();
+    if (st.running && st.engine === "llm" && (before.provider !== ai.config.provider || before.model !== ai.config.model || before.engine !== ai.config.engine)) await trader.start({ mode: st.mode, engine: "llm", cycleSeconds: st.cycleSeconds });
+  };
+  r.register({ method: "GET", path: "/engine/providers", scopes: ["ui", "view"], handler: ({ json }) => json(200, { selected: { provider: ai.config.provider, model: ai.config.model, engine: ai.config.engine }, providers: ai.providers() }) });
+  r.register({
+    method: "POST",
+    path: "/engine/select",
+    scopes: ["ui"],
+    handler: ({ body, json }) =>
+      guard(json, async () => {
+        const b = (body ?? {}) as { provider?: unknown; model?: unknown; engine?: unknown };
+        if (!isProviderId(b.provider)) throw Object.assign(new Error("unknown provider"), { status: 400, code: "ATE_CONFIG_INVALID" });
+        const before = ai.config;
+        ai.setConfig({ provider: b.provider, ...(typeof b.model === "string" ? { model: b.model } : {}), ...(b.engine === "sdk" || b.engine === "claude-code" ? { engine: b.engine } : {}) });
+        await restartIfChanged(before);
+        return { selected: { provider: ai.config.provider, model: ai.config.model, engine: ai.config.engine }, providers: ai.providers() };
+      }),
+  });
+  const pendingCred = new Map<string, { id: ProviderId; action: "set" | "remove"; key: string | null; expiresAt: number; payload: ApprovalPayload }>();
+  for (const id of PROVIDER_IDS) {
+    r.register({ method: "POST", path: `/engine/providers/${id}/test`, scopes: ["ui"], handler: ({ json }) => guard(json, () => ai.test(id)) });
+    r.register({
+      method: "POST",
+      path: `/engine/providers/${id}/credential`,
+      scopes: ["ui"],
+      handler: ({ body, json }) =>
+        guard(json, async () => {
+          const b = (body ?? {}) as { action?: string; apiKey?: string; baseURL?: string; protocol?: "openai" | "anthropic"; nonce?: string; approval?: string };
+          const t = nowSec();
+          const apply = async (action: "set" | "remove", key: string | null) => {
+            if (action === "remove") ai.clearKey(id);
+            else if (key) await ai.setKey(key, id);
+            o.log?.(`engine: ${PROVIDERS[id].label} credential ${action === "remove" ? "removed" : "stored"}`);
+            return { saved: true, provider: ai.providers().find((p) => p.id === id) };
+          };
+          // step 2: Touch ID signature over the config payload, or the daemon's one-time code
+          if (b.nonce) {
+            const p = pendingCred.get(b.nonce);
+            pendingCred.delete(b.nonce);
+            if (!p || p.id !== id || p.expiresAt < t) throw Object.assign(new Error("unknown or expired nonce"), { status: 401, code: "ATE_APPROVAL_REQUIRED" });
+            const a = String(b.approval ?? "");
+            const ok = /^[0-9]{8}$/.test(a) ? o.approval?.tty.redeem("config", b.nonce, a).ok : o.approval?.verifier?.verify(p.payload, a).ok;
+            if (!ok) throw Object.assign(new Error("approval rejected"), { status: 401, code: "ATE_APPROVAL_REQUIRED" });
+            return apply(p.action, p.key);
+          }
+          // non-secret settings (base URL, proxy protocol) need no approval
+          if (b.baseURL !== undefined || b.protocol !== undefined) ai.setProviderSettings(id, { ...(b.baseURL !== undefined ? { baseURL: String(b.baseURL) } : {}), ...(b.protocol ? { protocol: b.protocol } : {}) });
+          const action = b.action === "remove" ? "remove" : b.action === "set" ? "set" : null;
+          if (!action) return { saved: true, provider: ai.providers().find((p) => p.id === id) };
+          const key = action === "set" ? String(b.apiKey ?? "").trim() : null;
+          if (action === "set" && !key) throw Object.assign(new Error("apiKey required"), { status: 400, code: "ATE_CONFIG_INVALID" });
+          const cur = ai.credentialOf(id);
+          // the first key needs only the attached ui token; replacing or removing a stored key needs Touch ID
+          if (action === "set" && !cur.stored) return apply("set", key);
+          if (action === "remove" && !cur.stored) return { saved: true, provider: ai.providers().find((p) => p.id === id) };
+          const nonce = randomBytes(16).toString("hex");
+          const expiresAt = t + 60;
+          const payload = configPayload({ nonce, expiresAt, changes: [{ key: `engine.${id}.apiKey`, before: `stored ${cur.hint ?? ""}`.trim(), after: action === "remove" ? "none" : `…${key!.slice(-4)}` }] });
+          pendingCred.set(nonce, { id, action, key, expiresAt, payload });
+          const code = o.approval?.tty.issue("config", nonce, `${PROVIDERS[id].label} API key ${action === "remove" ? "removal" : "replacement"}`) ?? null;
+          return { nonce, expiresAt, payload, codeIssued: !!code };
+        }),
+    });
+  }
 
   r.register({ method: "GET", path: "/strategy/pending", scopes: ["ui", "session"], handler: ({ json }) => json(200, { pending: o.service.listPendingChanges() }) });
   r.register({

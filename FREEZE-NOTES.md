@@ -200,3 +200,24 @@ Lanes may **add** to frozen artifacts; changing anything here needs a lead-appro
 6. **Proof:** `GET /proof` (ui|view), `POST /proof/run { market?, waitPauseSec? }` (testnet 133 only, 403 elsewhere),
    `POST /proof/stop`. Same engine as `ate rogue` (moved to `apps/daemon/src/rogue.ts`, re-exported by the CLI) with an
    ephemeral rogue token per run. Chat-scope MCP calls emit `chat.tool { args, result }`.
+7. **Multi-provider engine (D2 Accounts page).** One internal interface (`apps/daemon/src/providers.ts`), tools 1:1 with the
+   MCP tools on every provider, same stop rules (refusal / truncation never run tools) and the same guard (all calls via
+   `AteService.callTool`). Providers: `anthropic` (default, `@anthropic-ai/sdk`), `openai` (`openai` SDK, strict nullable
+   function schemas), `gemini` (`@google/genai`), `openrouter` and `ollama` (OpenAI-compatible), `proxy` = "Local proxy
+   (advanced)": a user-run OpenAI- or Claude-compatible base URL (not bundled, requests unaltered, terms warning in
+   `warning`). Models come from each provider's model list; a model with `tools: false` is refused with a clear error.
+   Keys: one keychain item per provider (`flow/<id>-api-key`; Anthropic shares D2's `flow/anthropic-api-key` slot);
+   env fallbacks OPENAI_API_KEY / GEMINI_API_KEY|GOOGLE_API_KEY / OPENROUTER_API_KEY. Base URLs/protocol live in
+   `<home>/ai.json` (not secret).
+   - `GET /engine/providers` (ui|view) → `{ selected: { provider, model, engine }, providers: [{ id, label, protocol, key:
+     required|optional|none, warning, settings: { baseURL?, protocol? }, credential: { source, hint "…abcd", stored },
+     configured, selected, caps: { tools, streaming }, health: { at, ok, error? } | null, models: [{ id, label, tools:
+     true|false|null, streaming }] }] }`. No network call.
+   - `POST /engine/providers/<id>/test` → lists the provider's models (proves key + URL + network, no tokens); returns the
+     provider entry with `health` and `models`.
+   - `POST /engine/providers/<id>/credential`: `{ baseURL?, protocol? }` (no approval); `{ action: "set", apiKey }` stores
+     the first key directly (validated by a model listing; a rejected key is not kept); replacing or removing a stored key
+     returns `{ nonce, expiresAt, payload (kind "config"), codeIssued }` — sign `payload` with ate-approve (Touch ID) or use
+     the daemon's one-time code, then `{ nonce, approval }` applies it (same two-step as `/setup/model/key`).
+   - `POST /engine/select { provider, model?, engine? }` → switches the agents (a running LLM trader restarts).
+   `/ai` (health of the selected provider), `/ai/check`, `/ai/key` (first key only) and `/ai/config` remain.
