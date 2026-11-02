@@ -51,7 +51,7 @@ function SimpleTrade({ params }: ViewProps) {
         <div className="col" style={{ gap: 16 }}>
           {mv.vault.paused && <Banner tone="paused" icon="❚❚" title="Trading is paused" sub="Prices keep updating. Orders wait until you resume." action={<Btn kind="pri" onClick={() => go("home")}>Resume on owner device</Btn>} />}
           <section className={`card${stale ? " dim" : ""}`} style={{ padding: "22px 24px" }} aria-label={`${mkd.base} price`}>
-            <div className="lbl">{mkd.base} price on HashKey Global</div>
+            <div className="lbl">{mkd.label} price on HashKey Global</div>
             <div className="huge num" style={{ marginTop: 10 }}>{mv.cex ? price8(mv.cex.mid) : price8(mv.pool.price)}</div>
             <p style={{ fontSize: 15, marginTop: 12, maxWidth: 640 }}>{line}</p>
             <p className="sm fg2" style={{ marginTop: 6 }}>Pool {price8(mv.pool.price)} · oracle {price8(mv.oracle.price)}, updated {age(mv.oracle.ageSec + Math.max(0, now - mv.at))} ago</p>
@@ -280,10 +280,10 @@ function GapChart({ entries, market, now, cost, live }: { entries: JournalEntry[
   const d = pts.map((p, i) => `${i ? "L" : "M"}${x(p.t).toFixed(1)} ${y(p.g).toFixed(1)}`).join(" ");
   const last = pts[pts.length - 1]!;
   return (
-    <svg viewBox="0 0 300 64" height="64" role="img" aria-label={`Gap over 6 hours: now ${Math.round(last.g)} bps, cost ${cost} bps, ${pts.length} readings`}>
+    <svg viewBox="0 0 300 64" height="64" width="100%" preserveAspectRatio="none" role="img" aria-label={`Gap over 6 hours: now ${Math.round(last.g)} bps, cost ${cost} bps, ${pts.length} readings`}>
       <path d={`M0 ${y(cost).toFixed(1)}H300`} stroke="#b3202d" strokeDasharray="4 4" strokeWidth="1" />
-      <path d={d} fill="none" stroke="#171e19" strokeWidth="2" />
-      <circle cx={x(last.t)} cy={y(last.g)} r="3.5" fill="#ffe17c" stroke="#171e19" strokeWidth="1.5" />
+      <path d={d} fill="none" stroke="#171e19" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+      <circle cx={x(last.t)} cy={y(last.g)} r="3.5" fill="#ffe17c" stroke="#171e19" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
     </svg>
   );
 }
