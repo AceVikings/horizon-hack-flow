@@ -1,0 +1,19 @@
+{
+  "name": "@ate/cloud",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "description": "Flow cloud gateway: serves the app as a web app (web bridge over HTTPS + WebSocket), passkey/password auth, and supervises the daemon and the owner service as separate processes",
+  "bin": { "flow-cloud": "./dist/bin.js" },
+  "files": ["dist"],
+  "scripts": { "build": "tsup", "typecheck": "tsc --noEmit", "test": "vitest run" },
+  "dependencies": {
+    "@ate/approve": "workspace:*",
+    "@ate/core": "workspace:*",
+    "@ate/wallet": "workspace:*",
+    "@simplewebauthn/server": "^13.1.1",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": { "@types/ws": "^8.5.12" }
+}
