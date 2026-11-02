@@ -30,7 +30,7 @@ interface Doctor {
 
 const pair = (m: string) => (m.includes("WBTC") ? "WBTC/USDT" : "WHSK/USDT");
 
-function AiPart({ onState }: { onState(ok: boolean): void }) {
+function AiPart({ onState, rules, setRules }: { onState(ok: boolean): void; rules: boolean; setRules(v: boolean): void }) {
   const { ate } = useApp();
   const [h, setH] = useState<AiHealth | null>(null);
   const [key, setKey] = useState("");
@@ -75,6 +75,10 @@ function AiPart({ onState }: { onState(ok: boolean): void }) {
             <Btn kind="solid" disabled={busy || !/^sk-ant-/.test(key.trim())} onClick={() => void save()}>{busy ? "Checking…" : "Save"}</Btn>
           </div>
           <div className="xs fg2" style={{ marginTop: 6 }}>Kept in your macOS keychain. Never shown again.</div>
+          <label className="row g10 sm" style={{ marginTop: 12, cursor: "pointer" }}>
+            <input type="checkbox" checked={rules} onChange={(e) => setRules(e.target.checked)} style={{ width: 18, height: 18, accentColor: "#171e19" }} />
+            Start without AI for now: a simple rules trader runs until you add an account.
+          </label>
         </>
       ) : (
         <div className="row g12" style={{ marginTop: 12 }}>
@@ -238,6 +242,7 @@ export default function StepStart() {
   const { ate } = useApp();
   const st = useSetupGet<{ chainId: number }>("/setup/status");
   const [ai, setAi] = useState(false);
+  const [rules, setRules] = useState(false);
   const [money, setMoney] = useState(false);
   const [checks, setChecks] = useState<boolean | null>(null);
   const [mode, setMode] = useState<"autonomous" | "confirm">("autonomous");
@@ -251,12 +256,12 @@ export default function StepStart() {
       setBusy(false);
       return setError(r.error);
     }
-    const t = await ate.trader?.start({ mode: mode === "confirm" ? "propose" : "autonomous", engine: "llm" } as never);
+    const t = await ate.trader?.start({ mode: mode === "confirm" ? "propose" : "autonomous", engine: ai ? "llm" : "rules" } as never);
     setBusy(false);
     if (t && !t.ok) return setError(t.error);
     go("home");
   };
-  const ready = ai && money && checks === true;
+  const ready = (ai || rules) && money && checks === true;
   return (
     <Wizard step={3} chainId={st.data?.chainId ?? 133} shot={ready ? "03-start-ready" : "03-start"} hint="The kill switch is on every screen from now on." next={() => void start()} nextLabel="Start trading" nextDisabled={!ready} busy={busy}>
       <div className="eb">Step 3 of 3</div>
@@ -264,7 +269,7 @@ export default function StepStart() {
         Ready to <span className="hl">start</span>
       </h1>
       <p className="lead">Connect the AI, add some money, and Flow checks the rest.</p>
-      <AiPart onState={setAi} />
+      <AiPart onState={setAi} rules={rules} setRules={setRules} />
       <FundPart onState={setMoney} />
       <ChecksPart onState={setChecks} />
       <Section title="How should it trade?">

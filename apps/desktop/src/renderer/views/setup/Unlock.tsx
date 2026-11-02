@@ -58,7 +58,7 @@ export default function Unlock() {
       <div className="box">
         <Logo size={48} />
         <div className="eb" style={{ color: "var(--sage)", marginTop: 34 }}>
-          {st?.owned === false ? "Attached to a running daemon" : "Daemon managed by Flow"} · {st?.home ?? ""}
+          {st?.owned === false ? "Connected to a running Flow service" : "Flow service"}
         </div>
         <h1 className="disp" style={{ fontSize: 64, margin: "16px 0 0" }}>{locked ? "Unlock the agent key" : PHASE[st?.phase ?? "starting"]}</h1>
         {!st || ["starting", "attaching", "unlocking"].includes(st.phase) ? (
@@ -107,7 +107,6 @@ export default function Unlock() {
         <ErrLine error={error} />
         <div className="row g8" style={{ marginTop: 30 }}>
           <Badge tone={st?.touchId.approve ? "ok" : "mute"}>Touch ID approvals {st?.touchId.approve ? "on" : "off · one-time codes"}</Badge>
-          {st?.pid && <Badge>pid {st.pid}</Badge>}
         </div>
       </div>
     </div>

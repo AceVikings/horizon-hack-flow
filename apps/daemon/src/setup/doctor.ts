@@ -170,7 +170,7 @@ export async function runDoctor(d: DoctorDeps): Promise<DoctorReport> {
     });
     await guard("model", "services", `AI model · ${d.model ?? DEFAULT_MODEL}`, async () => {
       const m = await checkModel(d.home, d.env ?? process.env, d.model ?? DEFAULT_MODEL);
-      if (!m.source) return { status: "fail", value: "no key", fix: "Add an Anthropic API key above (stored in your keychain)." };
+      if (!m.source) return { status: "warn", value: "not connected", detail: "No AI account yet: the rules trader runs until you add one." };
       return m.ok ? { status: "pass", value: `${(m.ms / 1000).toFixed(1)} s`, detail: `${m.model} via ${m.source}` } : { status: "fail", value: "error", detail: m.detail, fix: "Check the API key in Settings → AI & data." };
     });
     await guard("eas", "services", "EAS schema registered", async () => {

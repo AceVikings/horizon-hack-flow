@@ -127,7 +127,7 @@ export default function Settings() {
           </Section>
 
           <Section
-            title="Flow daemon"
+            title="Flow service"
             sub={daemon ? `${daemon.phase === "ready" ? "Running" : daemon.phase} · ${daemon.owned ? "managed by Flow" : "started outside Flow"}` : "…"}
             right={
               <span className="row g8">
@@ -137,8 +137,7 @@ export default function Settings() {
             }
           >
             <Details>
-              <div className="kv sm"><span className="k">Home</span><span className="v mono">{daemon?.home}</span></div>
-              <div className="kv sm"><span className="k">Process</span><span className="v mono">pid {daemon?.pid ?? "—"} · port {daemon?.port ?? "—"}</span></div>
+              <div className="kv sm"><span className="k">Data folder</span><span className="v mono">{daemon?.home}</span></div>
               <div className="kv sm"><span className="k">Journal</span><span className="v">{d.journal.records ?? "—"} records</span></div>
             </Details>
           </Section>
