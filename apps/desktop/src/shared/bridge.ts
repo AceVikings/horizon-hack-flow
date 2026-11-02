@@ -192,7 +192,7 @@ export interface AiConfigPatch {
 }
 
 export interface EngineProvider {
-  id: "subscription" | "anthropic" | "openai" | "gemini" | "openrouter" | "ollama" | "proxy";
+  id: "opencode" | "subscription" | "anthropic" | "openai" | "gemini" | "openrouter" | "ollama" | "proxy";
   label: string;
   protocol: string;
   key: "required" | "optional" | "none";
