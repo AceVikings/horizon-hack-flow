@@ -75,7 +75,7 @@ function fmtPositions(p: PositionsOutput): string {
   for (const m of p.markets) {
     const label = MARKETS[m.market].label;
     lines.push(
-      `${label}: realised $${m.realisedUsd}; if sold now (exit-executable) $${m.unrealisedExitUsd} (${m.unrealisedExitBps} bps); at the CEX mark $${m.unrealisedCexUsd} (${m.unrealisedCexBps} bps); exposure $${m.exposureUsd}; fee drag $${m.feeDragUsd}; epoch left $${m.epoch.remainingUsd}; turnover left $${m.turnoverRemainingUsd}${m.paused ? "; PAUSED" : ""}`,
+      `${label}: realised $${m.realisedUsd}; if sold now (exit-executable) $${m.unrealisedExitUsd} (${m.unrealisedExitBps} bps); at the oracle mark $${m.unrealisedCexUsd} (${m.unrealisedCexBps} bps); exposure $${m.exposureUsd}; fee drag $${m.feeDragUsd}; epoch left $${m.epoch.remainingUsd}; turnover left $${m.turnoverRemainingUsd}${m.paused ? "; PAUSED" : ""}`,
     );
   }
   const pf = p.portfolio;

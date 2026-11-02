@@ -278,7 +278,7 @@ export function useHandoff(onDone?: (h: Handoff, p: HandoffPoll) => void) {
   return { handoff: h, poll, error, busy, start, reset: () => (setH(null), setPoll(null)) };
 }
 
-/** One transaction for the owner device: QR (EIP-681 or tx JSON), what it does, and whether it has landed. */
+/** One transaction for a wallet you scan with: QR (EIP-681 or tx JSON), what it does, and whether it has landed. */
 export function TxQR({ tx, landed, detail, size = 150, dark }: { tx: HandoffTx; landed?: boolean; detail?: string; size?: number; dark?: boolean }) {
   return (
     <div className="hx row g18 top" style={{ gap: 18 }}>
@@ -309,7 +309,7 @@ export function TxQR({ tx, landed, detail, size = 150, dark }: { tx: HandoffTx; 
 }
 
 /** Dialog that shows every transaction of a handoff as QR and closes itself once all have landed. */
-export function HandoffDialog({ open, onClose, title, intro, body, onDone, eyebrow = "Owner device" }: { open: boolean; onClose(): void; title: ReactNode; intro: ReactNode; body: Record<string, unknown> | null; onDone?(): void; eyebrow?: string }) {
+export function HandoffDialog({ open, onClose, title, intro, body, onDone, eyebrow = "Another wallet" }: { open: boolean; onClose(): void; title: ReactNode; intro: ReactNode; body: Record<string, unknown> | null; onDone?(): void; eyebrow?: string }) {
   const ho = useHandoff(() => onDone?.());
   const key = JSON.stringify(body);
   useEffect(() => {

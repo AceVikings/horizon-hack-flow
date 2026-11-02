@@ -415,6 +415,7 @@ export interface MarketPosition {
   realisedUsd: string;
   unrealisedExitUsd: string;
   unrealisedExitBps: number;
+  /** Paper P&L at the on-chain oracle price (wire name kept from the earlier CEX mark). */
   unrealisedCexUsd: string;
   unrealisedCexBps: number;
   feeDragUsd: string;

@@ -1572,8 +1572,10 @@ export class AteService {
       const b = this.book(m);
       const mark = this.exitMarkE8(m);
       const cexMid = r?.price.cex ? BigInt(r.price.cex.mid) : null;
+      // Paper mark = the on-chain oracle price (the vault's own feed); `unrealisedCex*` keeps its wire name.
+      const oracleE8 = r && r.price.oracle.price !== "0" ? BigInt(r.price.oracle.price) : null;
       const ue = unrealised(b, mark, d);
-      const uc = unrealised(b, cexMid, d);
+      const uc = unrealised(b, oracleE8, d);
       realised += b.realisedE8;
       uExit += ue.usdE8;
       uCex += uc.usdE8;
