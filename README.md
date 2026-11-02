@@ -33,6 +33,18 @@ More detail: [`SPEC.md`](SPEC.md) (full design) · [`docs/JUDGE.md`](docs/JUDGE.
 
 ---
 
+## See it
+
+| Decisions: every trade and every skipped trade, with the reason | Chat: control the agent in plain language |
+|---|---|
+| ![Decisions view](docs/img/decisions.png) | ![Chat view](docs/img/chat.png) |
+| **Trade: quote, policy checks and the oracle price** | **Agents: trader status, budgets and the kill switch** |
+| ![Trade view](docs/img/trade.png) | ![Agents view](docs/img/agents.png) |
+
+*Screens show the desktop app in fixtures mode (sample data).*
+
+---
+
 ## 1. The problem and the answer
 
 ```mermaid
@@ -392,3 +404,21 @@ flowchart LR
 - The WBTC pool price can stay below the exchange price for days.
 - HSP payments are optional. They need access from the HSP operations team.
 - Each vault supports one fixed pool. A new pool needs a new vault.
+
+---
+
+## 15. What comes next
+
+```mermaid
+timeline
+    title Roadmap
+    Now : Testnet vaults (chain 133) : AI trader running unattended
+    Next : Mainnet vaults (chain 177) : Source verified on Blockscout
+    30 days : Vault owner moves to a Safe : Published npm packages for other agent teams
+    60 days : More HSKSwap markets : Kredo prediction-market adapter
+    90 days : External audit : Agent teams use the vault for their own bots
+```
+
+Do you build an AI agent on HashKey Chain? Use the vault for your own bot.
+Refer to [`docs/INTEGRATE.md`](docs/INTEGRATE.md). Contact: team Vikings, akash.jsmith@gmail.com.
+
