@@ -43,10 +43,22 @@ restored. Every trade below used a staged gap.
 | 10:18:24 | Bought 0.00032366 tWBTC for $25.00 on Vault-BTC (spread-revert open, pool 137 bps under the CEX mid, cost 65, net +72 bps) | **LLM, Claude Code CLI** (`engine: llm`, `runtime: claude-code`) | [`0x0091…5657a`](https://testnet-explorer.hskchain.net/tx/0x00919b0764994b1a23c0b242a3b558bb3a4f16961f91d6bb3f1572bebcd5657a) | [`0xeb13…dff3`](https://testnet-explorer.hskchain.net/tx/0xeb136a1eaf5b67782c3b69ca4488d4b9e4f2965cc5fe9b453a41fcb4de7bdff3) (`0x1138a4ef2a422439cba72cc60dc868810b0dc61138f757b42b86071320c816f6`) |
 | 10:20:14 | Sold the same 0.00032366 tWBTC (spread-revert close, +70 bps fee-inclusive) after the pool was restored | **LLM, Claude Code CLI** | [`0x211e…ce89`](https://testnet-explorer.hskchain.net/tx/0x211e7b85af97cb5a164a46a4d992721017edcf39ab7a4ec36164ce3c9aa6ce89) | [`0x33b8…7830`](https://testnet-explorer.hskchain.net/tx/0x33b8112554853e5120b1eb288a969be304ac10d55a2a44fb4ea9b12975837830) (`0x6d0c…f4ea0`) |
 
+| 10:52:51 | Bought 0.00032366 tWBTC for $25.00 on Vault-BTC (spread-revert open, pool 144 bps under the CEX mid, cost 65, net +79 bps) | **LLM, OpenCode** (`engine: llm`, journal `actor.agentId = opencode:opencode/deepseek-v4.1-flash`) | [`0xcb4b…e3f8`](https://testnet-explorer.hskchain.net/tx/0xcb4b5d65e017bb8b6c3e87858ca5d0327d604cc764aee03756ca3cd6a04ee3f8) | [`0x605b…b5bb`](https://testnet-explorer.hskchain.net/tx/0x605bf1c7bfbd081acdf9b45b9de6805e7f33b965d9e42f1e511ffc8ab486b5bb) (`0x3a8177120b9ece348ffe3d1caec372576e9bd830f2e29ae69d122d20a2a4cf89`) |
+
+### OpenCode engine (the engine under test)
+
+After D3 landed the OpenCode provider, the same app home was switched to it in Accounts → OpenCode ("signed in",
+model `opencode/deepseek-v4.1-flash`, in use). The trader runs in the daemon (`runtime: sdk`, provider `opencode`):
+the daemon starts a private `opencode serve` and opencode calls Flow's MCP tools with the agent scope. Cycles ran
+about 17 to 63 s. On the staged BTC gap, the scanner triggered cycle 4, and the model called `ate_quote`,
+`ate_propose` and `ate_execute`. The buy above was journaled with `actor.agentId = opencode:opencode/deepseek-v4.1-flash`
+and attested on EAS. This is the first live tool-calling run of the OpenCode engine through Flow's MCP.
+
 Staged gaps (owner key, `contracts/script/RecenterTestnetPool.s.sol`):
 
 - HSK pool `OFFSET_BPS=200` at 10:13 (first tx `0x0439cba6…3b20`), restored at 10:16 (`0xf3df9e90…59e3`).
 - BTC pool `OFFSET_BPS=-150` at 10:17 (`0x631d5d75…2e64`), restored at 10:19 (`0x17e116e1…8b06`).
+- BTC pool `OFFSET_BPS=-150` again at 10:51 for the OpenCode run (`0x51620d87…14c7`), restored at 10:54 (`0xa72a6b02…aaea`).
 
 In Activity the buy shows as "Bought 0.00032366 WBTC for $25.00". Its full record shows the prices at the decision
 (Supra $78,140.80, pool $76,968.68, HashKey Global $78,030.69), the AI rationale (hash on-chain), gap vs cost, all 13
@@ -78,9 +90,15 @@ vault checks passed, the trade tx, gas 215,314 and the attestation link.
 | `b0d2525` | The Claude Code engine counts as a connected AI. Before this, Agent's mode switch restarted the trader on rules, and Ask said "simple answers". |
 | `ea94ed5` | The kill switch locks the agent key, and nothing unlocked it after the owner's unpause. Home said "trading", and the next Pause failed with `ATE_DAEMON_LOCKED`. The app now unlocks the key once every vault is unpaused. |
 
+| `95be9fa` | OpenCode in the app: the Accounts Test and credential paths now allow `opencode` and `subscription` (they returned "path not allowed"). An older `ai.json` that was auto-switched to opencode kept `claude-opus-5-5`, so every cycle failed with "opencode model must be provider/model". The opencode model now falls back to the recommended one. The `claude-code` engine flag only counts with the Anthropic provider. |
+| `1b8dacf` | Accounts render loop: `SubscriptionSignIn` ran `onConnected` (an inline `pr.reload`) on every render. That reloaded `/engine/providers` thousands of times a second and used up the Mac's ephemeral TCP ports (16k sockets per side). Every local connection then failed, including the CDP driver, other lanes' apps and the RPC. It now runs only when the connection state changes. |
+
 ## Still open
 
-- The SDK engine (`runtime: sdk`) needs an Anthropic API key to be proven here. Only the Claude Code CLI path traded.
+- The Anthropic SDK path needs an Anthropic API key to be proven here. The OpenCode provider (also `runtime: sdk`) and the
+  Claude Code CLI path both traded.
+- Right after the daemon started, the first OpenCode cycle twice failed in about 1 s with "offline: Cannot reach the model
+  provider". Both times the TCP ports were used up (see `1b8dacf`), so this is probably not an OpenCode bug. Later cycles were fine.
 - The first LLM cycle's summary said the vault "turned down" the HSK sell. In fact the guard's take-profit had sold
   the position a moment earlier, so the LLM's follow-up proposals found no balance and no budget.
 - Concurrency on shared keys: another app home (`~/.ate-flow-e2e`) ran a rules trader with the same agent key on

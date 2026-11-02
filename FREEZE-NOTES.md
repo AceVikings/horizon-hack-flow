@@ -348,3 +348,6 @@ Lanes may **add** to frozen artifacts; changing anything here needs a lead-appro
      "opencode", model? }`. Env: `ATE_OPENCODE_BIN`, `ATE_OPENCODE_AUTH`.
    - Live check (this Mac): opencode 1.19.3, 515 models listed, one prompt on `opencode/deepseek-v4.1-flash` answered in
      36 s (≈13k input tokens: opencode adds its own system prompt).
+5. **OpenCode (`95be9fa`, `1b8dacf`):** `setup-bridge.ts` `PROV` includes `opencode|subscription`. `effectiveModel()` for opencode
+   ignores a model id without `/`. `SubscriptionSignIn` calls `onConnected` only when `connected` changes (it holds the callback
+   in a ref). Pass inline callbacks freely, but never put a callback that reloads data in an effect's dependency list.
