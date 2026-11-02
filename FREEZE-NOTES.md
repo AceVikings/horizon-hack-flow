@@ -268,3 +268,43 @@ Lanes may **add** to frozen artifacts; changing anything here needs a lead-appro
    - `GET /engine/providers` lists `subscription` first; `selected` gains `auto: true` while the model is automatic.
      `POST /engine/select { provider: "subscription" }` (no model) returns to automatic.
    - Env: `ATE_SIDECAR=0` keeps the daemon from starting the proxy; `ATE_AI_PROVIDER` / `ATE_AI_MODEL` override.
+
+## CLOUD. Owner service, signer roles, cloud mode (lane CLOUD, additive)
+
+1. **Signer roles** (`@ate/wallet`): `agent` reads only `ATE_AGENT_*`, `owner` only `ATE_OWNER_*`. Backends:
+   keystore (keychain/file, passphrase), `secret` (`ATE_<ROLE>_KEY_ENC` = sealed blob JSON or base64, `ATE_<ROLE>_KEY_SECRET`),
+   `kms` (`ATE_<ROLE>_KMS_KEY_ID`, `ATE_<ROLE>_KMS_REGION`; ECC_SECG_P256K1). Select with `ATE_<ROLE>_SIGNER`. The blob's
+   role is bound into the AES-GCM AAD (`ate/<chain>/<role>/<id>`), so an owner blob never opens as agent. The daemon
+   **refuses to start** when any `ATE_OWNER_*` is in its environment (`assertNoOwnerCredentials`).
+2. **Owner service** (`apps/owner`, bin `flow-owner serve`): its own process, the only holder of the owner signer.
+   Loopback HTTP, bearer token given by its supervisor on stdin (`FLOW_OWNER_STDIN=1`, line `{ "token" }`), never to the
+   daemon. Prints `{ type: "owner.ready", port, owner, backend }` on stdout. Browser origins are rejected.
+   - `GET /owner/state` → `{ chainId, owner, gasHsk, vaults: [{ market, address, owner, agent, guardian, paused, limits
+     (decimal strings, USD caps × 1e8), ownedByUs }], latestDeploy, approvals: { touchId, passkeys }, defaults }`.
+   - `POST /owner/op { op, … }` with op ∈ `deploy { markets?: ["hsk","btc"], agent, guardian?, limits?, seed? }` ·
+     `setLimits { vaults?: "all"|addr[], limits }` (field names `maxTradeUsd` or `maxTradeUsdE8`, …) · `setAgent { agent,
+     vaults? }` · `setGuardian { guardian, vaults? }` · `pause { vaults? }` · `unpause { vaults? }` · `withdraw { vault,
+     token, amount, to? }` · `fundAgent { agent, wei }` · `seed { vaults? }` (testnet: mint test tokens into the vaults).
+     → 200 `{ done: true, op, approvedBy: null|"touch-id"|"passkey", txs: [{ label, hash }], result? }` (deploy:
+     `result.vaults [{ market, address, adapter }]`), or **428** `{ needsApproval: true, nonce, expiresAt, payload
+     (base64url config payload, ate-approve signs it), challenge (base64url sha256(payload bytes), the WebAuthn
+     challenge), prompt, changes }`. Step 2: `POST /owner/op { nonce, approval: { signature } | { webauthn } }`.
+   - **The owner service decides** what needs approval, by reading the chain: looser limits (any field in the
+     risk-raising direction), unpause, setAgent/setGuardian, withdraw, fundAgent, and deploy with limits looser than
+     §19 defaults. Tighter limits, pause, seed and a default deploy run at once. It verifies the approval itself
+     (Touch ID signature against the pinned key, or a passkey assertion against `<ownerHome>/passkeys.json`), so its
+     supervisor cannot approve for the user. Approvals are single-use, 120 s.
+   - `POST /owner/passkeys { id, publicKey (base64url COSE), counter, transports }`: the first passkey registers
+     freely; later ones need an approval (same 428 flow).
+3. **Renderer contract — D2's `window.ate.owner` shape is adopted as is** (`OwnerBridge` in `shared/setup-bridge.ts`):
+   `status()`, `createVaults({ markets? })`, `setAgent(agent)`, `setLimits(limits, { markets?, loosening? })`,
+   `unpause(market?)`. The bridge (Electron main / the cloud web bridge) runs step 1, and on 428 runs the approval
+   ceremony itself (Touch ID via ate-approve on the desktop, a passkey in the browser), then step 2. `loosening` is
+   advisory: the owner service classifies. `createVaults` deploys with the daemon's agent address and default limits,
+   seeds on testnet, then calls the daemon's `POST /setup/vaults { source: "deploy", vaults }` and restarts it.
+   Errors are `Res` errors; a cancelled approval is `ATE_APPROVAL_REQUIRED`. **Cloud:** `setup.confirmRisk` returns
+   `{ method: "passkey" }` without prompting (the passkey prompt comes from the owner call, bound to the exact change).
+4. **Cloud mode** (`apps/cloud`): one container, three processes. The gateway (public port, TLS by the host) supervises
+   the owner service (gets `ATE_OWNER_*`) and the daemon (`ATE_OWNER_*` stripped, gets `ATE_AGENT_*`), serves the
+   renderer with a web bridge (`window.ate` over HTTPS + WebSocket), and owns auth (passkey first, password fallback,
+   httpOnly Secure SameSite=Strict session cookie, CSRF header, rate limits). `GET /healthz` is the health check.

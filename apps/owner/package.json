@@ -1,0 +1,21 @@
+{
+  "name": "@ate/owner",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "description": "Flow owner service: the only process holding the owner signer (deploy, setLimits, setAgent/Guardian, unpause, withdraw); risk-raising ops need a Touch ID or passkey approval it verifies itself",
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": { "flow-owner": "./dist/bin.js" },
+  "files": ["dist"],
+  "scripts": { "build": "tsup", "typecheck": "tsc --noEmit", "test": "vitest run" },
+  "dependencies": {
+    "@ate/approve": "workspace:*",
+    "@ate/core": "workspace:*",
+    "@ate/wallet": "workspace:*",
+    "@simplewebauthn/server": "^13.1.1",
+    "viem": "^2.21.0"
+  }
+}
