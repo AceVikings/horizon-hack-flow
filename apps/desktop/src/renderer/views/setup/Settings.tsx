@@ -109,7 +109,7 @@ export default function Settings() {
                 <Details>
                   <div className="kv sm"><span className="k">Key id</span><span className="v mono">{d.agent.keyId}</span></div>
                   <div className="kv sm"><span className="k">Stored in</span><span className="v">{d.agent.store === "keychain" ? "macOS keychain" : "encrypted file"}</span></div>
-                  <div className="xs fg2" style={{ marginTop: 8 }}>Lost this Mac? Your owner wallet sets a new agent and the old key loses all rights.</div>
+                  <div className="xs fg2" style={{ marginTop: 8 }}>Lost this Mac? Restore your Flow wallet from its backup and set a new agent; the old agent key loses all rights.</div>
                 </Details>
               </>
             ) : (

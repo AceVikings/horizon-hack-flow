@@ -64,7 +64,7 @@ export default function Welcome() {
           <div className="pn">01</div>
           <div>
             <div className="pt">The key can never withdraw</div>
-            <div className="pd2">The agent key may trade inside your limits or pause. Only your owner device can move funds out of a vault.</div>
+            <div className="pd2">The agent key may trade inside your limits or pause. Only your Flow wallet can move money out of a vault — the agent never can.</div>
           </div>
         </div>
         <div className="pc">
