@@ -10,6 +10,7 @@ import { short } from "../src/format";
 import { PageHead, useKillSwitch, useMode } from "../src/shell";
 import { Btn, Dialog, Link, QR } from "../src/ui";
 import type { ViewProps } from "./registry";
+import { useResume } from "./Overview";
 
 const ATTACKS: Record<ProofAttack["attack"], { name: string; stops: string }> = {
   trade_cap: { name: "A $5,000 buy", stops: "Trade too big" },
@@ -80,14 +81,10 @@ export default function Proof(_: ViewProps) {
     toast({ kind: "info", text: "Stopping after this attack" });
     p.reload();
   };
-  // Flow-managed owner service (CLOUD lane): one-click unpause, no QR or wallet. Falls back to the QR when absent.
-  const owner = (ate as unknown as { owner?: { unpause(market?: string): Promise<Res<unknown>> } }).owner;
+  // Flow's own wallet owns the vaults: one Touch ID approval resumes them. Another wallet: the QR fallback.
+  const res = useResume();
   const resume = async () => {
-    if (!owner) return;
-    setBusy(true);
-    const r = await owner.unpause();
-    setBusy(false);
-    toast(r.ok ? { kind: "ok", text: "Trading resumed. The vaults are unpaused." } : { kind: "error", text: r.error.message });
+    await res.resume();
     p.reload();
   };
   const exportRun = () => {
@@ -147,12 +144,12 @@ export default function Proof(_: ViewProps) {
           s && <span className="sm fg2"><span aria-hidden="true">ⓘ</span> Tests run on testnet only. On mainnet this page shows recorded results.</span>
         )}
         {paused ? (
-          owner ? (
-            <Btn kind="pri" disabled={busy} onClick={() => void resume()}>
-              Resume trading
-            </Btn>
+          res.managed === false ? (
+            <Btn onClick={() => setQr(true)}>Unpause with another wallet</Btn>
           ) : (
-            <Btn onClick={() => setQr(true)}>Resume on owner device</Btn>
+            <Btn kind="pri" disabled={res.busy || res.managed === null} onClick={() => void resume()}>
+              {res.busy ? "Waiting for Touch ID…" : "Resume trading"}
+            </Btn>
           )
         ) : (
           <Btn kind="danger" onClick={kill}>
@@ -285,8 +282,8 @@ export default function Proof(_: ViewProps) {
           The last attack needs the vault paused: when it is reached, pause it from your guardian device.
         </div>
       </Dialog>
-      <Dialog open={qr} onClose={() => setQr(false)} eyebrow="Owner device" title="Resume trading" footer={<Btn onClick={() => setQr(false)}>Done</Btn>}>
-        <div className="sm" style={{ marginBottom: 12 }}>Scan with your owner wallet to unpause the vaults. Only the owner can unpause.</div>
+      <Dialog open={qr} onClose={() => setQr(false)} eyebrow="Vaults owned by another wallet" title="Unpause with another wallet" footer={<Btn onClick={() => setQr(false)}>Done</Btn>}>
+        <div className="sm" style={{ marginBottom: 12 }}>Scan with the wallet that owns these vaults to unpause them.</div>
         {vsOk?.status.vaults
           .filter((v) => v.paused)
           .map((v) => (

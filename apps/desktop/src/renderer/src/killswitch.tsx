@@ -11,6 +11,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export function KillSwitchDialog({ open, onClose }: { open: boolean; onClose(): void }) {
   const { ate, vsOk, refresh, toast } = useApp();
+  const hasOwner = !!(ate as unknown as { owner?: unknown }).owner;
   const [mode, setMode] = useState<"now" | "cash">("now");
   const [busy, setBusy] = useState<string | null>(null);
   const pos = vsOk?.positions.markets ?? [];
@@ -86,7 +87,7 @@ export function KillSwitchDialog({ open, onClose }: { open: boolean; onClose(): 
           "Both vaults hold only USDT right now."
         )}
       </Check>
-      <Check state="warn">Only your owner device can unpause (QR handoff).</Check>
+      <Check state="warn">{hasOwner ? "Resuming needs your approval (Touch ID)." : "Resuming needs the wallet that owns the vaults."}</Check>
       <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 14 }} role="radiogroup" aria-label="How to pause">
         <Choice name="ks" checked={mode === "now"} onChange={() => setMode("now")} title="Pause now" sub="2 txs · ~4 s" />
         <Choice name="ks" checked={mode === "cash"} onChange={() => setMode("cash")} title="Go to cash, then pause" sub="guard sells first · ~1 min" />

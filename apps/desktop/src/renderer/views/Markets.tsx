@@ -11,6 +11,7 @@ import { age, explorer, fmtUnits, money, price8, tokenAmt, usdE8Short } from "..
 import { centsE8, vaultRisk } from "../src/risk";
 import { clean, marketOf } from "../src/journal";
 import { PriceChart } from "../src/charts";
+import { useResume } from "./Overview";
 
 const ORDER: MarketId[] = [MARKET_WBTC, MARKET_WHSK];
 const FEE_BPS = 30;
@@ -49,7 +50,7 @@ function SimpleTrade({ params }: ViewProps) {
         <MarketsLoading />
       ) : (
         <div className="col" style={{ gap: 16 }}>
-          {mv.vault.paused && <Banner tone="paused" icon="❚❚" title="Trading is paused" sub="Prices keep updating. Orders wait until you resume." action={<Btn kind="pri" onClick={() => go("home")}>Resume on owner device</Btn>} />}
+          {mv.vault.paused && <Banner tone="paused" icon="❚❚" title="Trading is paused" sub="Prices keep updating. Orders wait until you resume." action={<ResumeBtn />} />}
           <section className={`card${stale ? " dim" : ""}`} style={{ padding: "22px 24px" }} aria-label={`${mkd.base} price`}>
             <div className="lbl">{mkd.label} price on HashKey Global</div>
             <div className="huge num" style={{ marginTop: 10 }}>{mv.cex ? price8(mv.cex.mid) : price8(mv.pool.price)}</div>
@@ -180,7 +181,7 @@ function Markets({ params }: ViewProps) {
         readErr ? <ErrorBox code={readErr.code} message="Can't read market data" hint={readErr.message} action={<Btn kind="solid" onClick={refresh}>Retry</Btn>} /> : <MarketsLoading />
       ) : (
         <div className="col" style={{ gap: 16 }}>
-          {paused && <Banner tone="paused" icon="❚❚" title="Vaults paused · candidates are not traded" sub="Prices keep updating. Manual orders are disabled until the owner unpauses." action={<Btn kind="pri" onClick={() => go("home")}>Unpause on owner device</Btn>} />}
+          {paused && <Banner tone="paused" icon="❚❚" title="Vaults paused · candidates are not traded" sub="Prices keep updating. Manual orders wait until you resume." action={<ResumeBtn />} />}
           {!paused && oracleStale && (
             <Banner tone="bad" icon="!" title={`Supra ${mkd.label}/USD is ${age(oracleAge)} old: over the vault's ${Math.round(mv.vault.limits.maxOracleAge / 3600)} h limit`} sub="Buys are refused on-chain (OracleStale) until it refreshes; the daemon pull-refreshes Supra before a trade. Exits still use the min(oracle, TWAP) floor." action={<Btn kind="solid" onClick={() => { refresh(); cands.reload(); }}>Refresh prices</Btn>} />
           )}
@@ -481,4 +482,12 @@ function ManualOrder({ mv, disabled, initialOpen = false }: { mv: MarketView; di
       )}
     </details>
   );
+}
+
+/** Resume with Touch ID when Flow's wallet owns the vaults; otherwise Home shows the code for the other wallet. */
+function ResumeBtn() {
+  const res = useResume();
+  const go = useNav();
+  if (res.managed === false) return <Btn kind="pri" onClick={() => go("home")}>Unpause with another wallet</Btn>;
+  return <Btn kind="pri" disabled={res.busy || res.managed === null} onClick={() => void res.resume()}>{res.busy ? "Waiting for Touch ID…" : "Resume trading"}</Btn>;
 }

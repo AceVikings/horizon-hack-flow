@@ -1,7 +1,7 @@
 // 10 Overview (+ 12 paused, 13 empty, 14 loading, 15 error). "Am I safe, is it working": worst-case loss used today
 // from the vaults' epoch() × the §4.6 bound, per-vault budget and exposure, the kill switch, last decisions, the AI
 // scoreboard; inspector with uptime, health and keys.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { MARKETS, MARKET_IDS, type JournalEntry, type MarketId, type MarketView, type MarketPosition } from "@ate/core";
 import type { ViewProps } from "./registry";
 import { useApp, useNow, useRemote, useTraderState } from "../src/app";
@@ -10,6 +10,7 @@ import { AddrLink, Badge, Banner, Btn, Card, Check, Dialog, Empty, Eyebrow, KV, 
 import { age, ago, clock, dayName, dur, e8n, hm, int, money, networkName, short, tokenAmt } from "../src/format";
 import { centsE8, portfolioRisk, vaultRisk } from "../src/risk";
 import { result, summary, tag } from "../src/journal";
+import { useOwner } from "./setup/common";
 
 const UTC_DAY = 86_400;
 
@@ -33,6 +34,7 @@ function SimpleHome() {
   const [details, setDetails] = useState(false);
   const [unpause, setUnpause] = useState(false);
   const [starting, setStarting] = useState(false);
+  const res = useResume();
   const j = useRemote(() => ate.journal.list({ limit: 40 }), []);
   if (!vsOk || !mkOk) return <div className="page1" style={{ paddingTop: 40 }} aria-busy="true"><Skeleton w={220} h={44} /><Skeleton h={32} style={{ marginTop: 28 }} /><Skeleton h={64} w={260} style={{ marginTop: 28, borderRadius: 99 }} /></div>;
   const st = vsOk.status;
@@ -44,7 +46,7 @@ function SimpleHome() {
   const sentence = stale ? (
     <>Flow can't reach its engine right now. <b>Your vaults still enforce every limit.</b></>
   ) : paused ? (
-    <>Trading is <b>paused</b>. Nothing can trade until you resume on your owner device.</>
+    <>Trading is <b>paused</b>. Nothing trades until you resume it.</>
   ) : running ? (
     <>Your agent is trading. Today: <b className={today < 0 ? "bad" : today > 0 ? "ok" : ""}>{todayTxt}</b>. It can lose at most <b>{centsE8(risk.maxE8)}</b> today.</>
   ) : (
@@ -67,8 +69,8 @@ function SimpleHome() {
       <p className="sentence" role="status">{sentence}</p>
       <div className="row g18" style={{ marginTop: 26 }}>
         {paused ? (
-          <button className="bigctl resume" onClick={() => setUnpause(true)}>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l11 7-11 7z" /></svg>Resume trading
+          <button className="bigctl resume" onClick={() => (res.managed === false ? setUnpause(true) : void res.resume())} disabled={res.busy || res.managed === null}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l11 7-11 7z" /></svg>{res.busy ? "Waiting for Touch ID…" : res.managed === false ? "Unpause with another wallet" : "Resume trading"}
           </button>
         ) : running ? (
           <button className="bigctl pause" onClick={kill} title="⌘⇧K">
@@ -79,7 +81,7 @@ function SimpleHome() {
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l11 7-11 7z" /></svg>{starting ? "Starting…" : "Start trading"}
           </button>
         )}
-        <span className="sm fg2" style={{ maxWidth: 300 }}>{paused ? "Resuming needs your owner device. Flow shows a QR code." : running ? "Pausing stops both vaults on-chain. You hold to confirm." : "The agent trades only inside the limits set on your vaults."}</span>
+        <span className="sm fg2" style={{ maxWidth: 300 }}>{paused ? (res.managed === false ? "These vaults belong to another wallet. Flow shows a code to scan with it." : "Resuming needs your approval (Touch ID).") : running ? "Pausing stops both vaults on-chain. You hold to confirm." : "The agent trades only inside the limits set on your vaults."}</span>
       </div>
 
       <div className="starts" style={{ marginTop: 40 }}>
@@ -138,6 +140,8 @@ function Overview(_: ViewProps) {
   const go = useNav();
   const ev = useEvidence();
   const [unpause, setUnpause] = useState(false);
+  const res = useResume();
+  const onResume = () => (res.managed === false ? setUnpause(true) : void res.resume());
   const j = useRemote(() => ate.journal.list({ limit: 150 }), []);
   const strat = useRemote(() => ate.strategy.get(), [], { onEvents: false });
   const journal = j.last?.entries ?? [];
@@ -198,8 +202,8 @@ function Overview(_: ViewProps) {
           tone="paused"
           icon="❚❚"
           title={allPaused ? "Both vaults are paused on-chain" : `${st.vaults.filter((v) => v.paused).map((v) => "Vault-" + MARKETS[v.market].label).join(", ")} is paused on-chain`}
-          sub="New trades are refused. Stop-loss exits are off too. Only the owner device can unpause."
-          action={<Btn kind="pri" onClick={() => setUnpause(true)}>Unpause on owner device</Btn>}
+          sub={res.managed === false ? "New trades are refused. Stop-loss exits are off too. The wallet that owns these vaults unpauses them." : "New trades are refused. Stop-loss exits are off too. Resuming needs your approval (Touch ID)."}
+          action={<Btn kind="pri" disabled={res.busy || res.managed === null} onClick={onResume}>{res.busy ? "Waiting for Touch ID…" : res.managed === false ? "Unpause with another wallet" : "Resume trading"}</Btn>}
         />
       )}
       <div className={stale ? "stale" : ""}>
@@ -244,12 +248,19 @@ function Overview(_: ViewProps) {
                 {ev.lastPause ? clock(ev.lastPause.at) : "—"}
                 {ev.lastPause?.execution && <> · <TxLink hash={ev.lastPause.execution.txHash} /></>}
               </div>
-              <div className="row g8" style={{ marginTop: 14 }}>
-                <button className="linkbtn" onClick={() => setUnpause(true)} aria-label="Show unpause QR codes" style={{ textDecoration: "none" }}>
-                  <QR data={unpauseUri(st.vaults.find((v) => v.paused)!.address, st.chainId)} size={64} pad={4} label="Unpause QR" />
-                </button>
-                <span className="xs" style={{ color: "var(--sage)" }}>Scan on the owner device to unpause {allPaused ? "both vaults" : "the paused vault"}.</span>
-              </div>
+              {res.managed === false ? (
+                <div className="row g8" style={{ marginTop: 14 }}>
+                  <button className="linkbtn" onClick={() => setUnpause(true)} aria-label="Unpause with another wallet" style={{ textDecoration: "none" }}>
+                    <QR data={unpauseUri(st.vaults.find((v) => v.paused)!.address, st.chainId)} size={64} pad={4} label="Unpause QR" />
+                  </button>
+                  <span className="xs" style={{ color: "var(--sage)" }}>Scan with the wallet that owns {allPaused ? "both vaults" : "the paused vault"} to unpause.</span>
+                </div>
+              ) : (
+                <div className="col g8" style={{ marginTop: 14, alignItems: "flex-start" }}>
+                  <Btn kind="pri" size="sm" disabled={res.busy || res.managed === null} onClick={onResume}>{res.busy ? "Waiting for Touch ID…" : "Resume trading"}</Btn>
+                  <span className="xs" style={{ color: "var(--sage)" }}>Touch ID approves it. Both vaults resume.</span>
+                </div>
+              )}
             </section>
           ) : (
             <section className="card ks" style={{ padding: "18px 20px" }} aria-label="Kill switch">
@@ -257,7 +268,7 @@ function Overview(_: ViewProps) {
                 <div className="eb">Kill switch</div>
                 <kbd className="xs fg2" style={{ font: "inherit" }}>⌘⇧K</kbd>
               </div>
-              <p className="sm fg2 mt8" style={{ lineHeight: 1.5 }}>Pauses both vaults on-chain. New trades and stop-loss exits stop until your owner device unpauses.</p>
+              <p className="sm fg2 mt8" style={{ lineHeight: 1.5 }}>Pauses both vaults on-chain. New trades and stop-loss exits stop until you resume with Touch ID.</p>
               <button className="ks-btn" onClick={kill}>
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v8" /><path d="M6.3 6.8a8 8 0 1 0 11.4 0" /></svg>
                 Pause all
@@ -441,7 +452,7 @@ function OverviewInspector({ paused, lastPauseAt }: { paused: boolean; lastPause
           <Eyebrow>Keys</Eyebrow>
           <KV k="Agent · this Mac" mono>{short(v0.agent, 6, 4)}</KV>
           <KV k="Guardian · pause" mono>{short(v0.guardian, 6, 4)}</KV>
-          <KV k="Owner · device" mono>{short(v0.owner, 6, 4)}</KV>
+          <KV k="Owner · Flow wallet" mono>{short(v0.owner, 6, 4)}</KV>
           <div className="xs mt8" style={{ color: "var(--sage)" }}>The agent key can never withdraw.</div>
         </div>
       )}
@@ -449,7 +460,35 @@ function OverviewInspector({ paused, lastPauseAt }: { paused: boolean; lastPause
   );
 }
 
-/** EIP-681 call of `unpause()` on a vault (owner-only), for the owner device to scan. */
+/**
+ * Resume paused vaults. `managed`: true when Flow's own wallet (window.ate.owner) owns every paused vault, so resume is
+ * one Touch ID approval; false when another wallet owns them (QR fallback); null while still checking.
+ */
+export function useResume(): { managed: boolean | null; busy: boolean; resume(): Promise<void> } {
+  const { mkOk, toast, refresh } = useApp();
+  const owner = useOwner();
+  const [addr, setAddr] = useState<string | null | undefined>(owner ? undefined : null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!owner) return setAddr(null);
+    let live = true;
+    void owner.status().then((r) => live && setAddr(r.ok && r.data.ready ? r.data.address : null));
+    return () => void (live = false);
+  }, [owner]);
+  const owners = (mkOk ?? []).filter((m) => m.vault.paused).map((m) => m.vault.owner.toLowerCase());
+  const managed = addr === undefined ? null : !!owner && !!addr && owners.length > 0 && owners.every((o) => o === addr.toLowerCase());
+  const resume = async () => {
+    if (!owner || busy) return;
+    setBusy(true);
+    const r = await owner.unpause();
+    setBusy(false);
+    toast(r.ok ? { kind: "ok", text: "Trading resumed. Both vaults are unpaused." } : { kind: "error", text: "Couldn't resume trading", sub: r.error.message });
+    refresh();
+  };
+  return { managed, busy, resume };
+}
+
+/** EIP-681 call of `unpause()` on a vault (owner-only), for another wallet to scan. */
 export const unpauseUri = (vault: string, chainId: number): string => `ethereum:${vault}@${chainId}/unpause`;
 
 function UnpauseDialog({ open, onClose }: { open: boolean; onClose(): void }) {
@@ -458,7 +497,7 @@ function UnpauseDialog({ open, onClose }: { open: boolean; onClose(): void }) {
   const st = vsOk.status;
   const ps = st.vaults.filter((v) => v.paused);
   return (
-    <Dialog open={open} onClose={onClose} eyebrow="Owner device · QR handoff" title={<>Unpause on your <span className="hl">owner device</span></>} width={680} footer={<><span className="xs fg2 grow">Your owner key never touches this Mac.</span><Btn onClick={onClose} data-autofocus>Done</Btn></>}>
+    <Dialog open={open} onClose={onClose} eyebrow="Vaults owned by another wallet" title="Unpause with another wallet" width={680} footer={<><span className="xs fg2 grow">That wallet signs; nothing is signed on this Mac.</span><Btn onClick={onClose} data-autofocus>Done</Btn></>}>
       {ps.length === 0 ? (
         <p className="sm">Both vaults are running.</p>
       ) : (
@@ -468,7 +507,7 @@ function UnpauseDialog({ open, onClose }: { open: boolean; onClose(): void }) {
               <QR data={unpauseUri(v.address, st.chainId)} size={180} label={`Unpause Vault-${MARKETS[v.market].label}`} />
               <b>Vault-{MARKETS[v.market].label}</b>
               <span className="mono xs" style={{ wordBreak: "break-all" }}>{v.address}</span>
-              <span className="xs fg2">Scan with the wallet that holds your owner key to resume this vault.</span>
+              <span className="xs fg2">Scan with the wallet that owns this vault to resume it.</span>
             </div>
           ))}
         </div>
