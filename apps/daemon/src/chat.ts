@@ -29,6 +29,9 @@ export interface ChatRoutesOptions {
 }
 
 const nowSec = () => Math.floor(Date.now() / 1000);
+
+/** Additive (Flow v1 tool cards): the running turn per chat session, so MCP calls can emit `chat.tool` with args + result. */
+export const activeChatTurns = new Map<string, string>();
 const SESSION_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
 interface ChatSess {
@@ -111,16 +114,19 @@ export function registerChatRoutes(o: ChatRoutesOptions) {
       o.service.o.db.prepare("INSERT INTO chat_messages (id, session_id, role, content, at) VALUES (?, ?, 'user', ?, ?)").run(`${turnId}_u`, sessionId, text, t0());
       o.emit({ type: "chat.delta", at: t0(), data: { sessionId, turnId, role: "user", text, done: false } });
       const run = o.runTurn ?? ((x) => defaultRunTurn(o.home, x));
+      activeChatTurns.set(sessionId, turnId);
       void run({ sessionId, claudeSession: s.claudeSession, firstTurn: s.first, text, chatToken: s.chatToken })
         .then((r) => {
           if (r.engine === "llm") s.first = false;
           o.service.o.db.prepare("INSERT INTO chat_messages (id, session_id, role, content, tool_name, at) VALUES (?, ?, 'assistant', ?, ?, ?)").run(`${turnId}_a`, sessionId, r.reply, r.tool ?? null, t0());
-          if (r.tool) o.emit({ type: "chat.tool", at: t0(), data: { sessionId, turnId, tool: r.tool } });
+          // (the MCP layer already emitted a full chat.tool for each call; this name-only one is kept for `ate chat`)
+          if (r.tool) o.emit({ type: "chat.tool", at: t0(), data: { sessionId, turnId, tool: r.tool, summary: true } });
           o.emit({ type: "chat.delta", at: t0(), data: { sessionId, turnId, role: "agent", text: r.reply, engine: r.engine, done: true } });
         })
         .catch((e) => o.emit({ type: "chat.delta", at: t0(), data: { sessionId, turnId, role: "agent", text: `chat turn failed: ${(e as Error).message}`, error: true, done: true } }))
         .finally(() => {
           s.busy = false;
+          if (activeChatTurns.get(sessionId) === turnId) activeChatTurns.delete(sessionId);
         });
       json(200, { sessionId, turnId, accepted: true });
     },

@@ -1,6 +1,7 @@
 // Daemon bootstrap: config → keystore → chain → TxQueue → strategy seam → journal → service → HTTP/MCP.
 
 import { registerChatRoutes } from "./chat.js";
+import { registerAppRoutes } from "./app-routes.js";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -226,6 +227,8 @@ export async function startDaemon(o: StartOptions = {}): Promise<RunningDaemon> 
   }
   // /chat/token, /chat (chat runner with a per-session chat token) and /trade/approve (confirm mode).
   registerChatRoutes({ routes, tokens, service, home, emit, log });
+  // Flow desktop v1 (additive): supervised trader, pending-change list/reject, in-app proof suite (testnet only).
+  const app = registerAppRoutes({ routes, tokens, service, home, port, deploymentsPath: findDeployments(env, cfg.chain.id), log });
   const runtime: RuntimeJson = { pid: process.pid, port, agentToken, startedAt: Math.floor(Date.now() / 1000), version: DAEMON_VERSION };
   const runtimePath = join(home, "runtime.json");
   writeFileSync(runtimePath, JSON.stringify(runtime, null, 2), { mode: 0o600 });
@@ -234,6 +237,7 @@ export async function startDaemon(o: StartOptions = {}): Promise<RunningDaemon> 
   await service.init().catch((e) => log(`init: ${(e as Error).message}`));
   txq.start();
   if (o.scan !== false) service.startScan();
+  if (env.ATE_TRADER_RESUME !== "0") void app.trader.resume();
 
   log(`listening on http://127.0.0.1:${port} (MCP: /mcp, events: /events) — ${signer.unlocked ? "unlocked" : "LOCKED (run `ate unlock`)"}`);
   tty(`read-only view: http://127.0.0.1:${port}/view#token=${viewToken}`);
@@ -250,6 +254,7 @@ export async function startDaemon(o: StartOptions = {}): Promise<RunningDaemon> 
     runtimePath,
     unlock,
     stop: async () => {
+      await app.trader.stop(false);
       service.stopScan();
       txq.stop();
       await http.close();

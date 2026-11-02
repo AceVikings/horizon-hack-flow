@@ -188,7 +188,7 @@ export class AteService {
   private lastCycleRequestAt = 0;
   private lastSupraRefreshAt = 0;
   private supraRefreshing: Promise<void> | null = null;
-  private pendingChanges = new Map<string, { patch: StrategyPatch; scope: CallerScope; rationale: string; changes: StrategyFieldChange[]; next: StrategyParams; expiresAt: number; renderedDiff: string }>();
+  private pendingChanges = new Map<string, { patch: StrategyPatch; scope: CallerScope; rationale: string; changes: StrategyFieldChange[]; next: StrategyParams; expiresAt: number; renderedDiff: string; confirm?: "sells_now" }>();
   /** Lane E hook: notified with StrategyApprovalPending when ate_strategy_set returns ATE_APPROVAL_REQUIRED. */
   onStrategyPending: ((d: unknown) => void) | null = null;
   counters = { cycles: 0, trades: 0, routedUsdE8: 0n, lastCycleAt: null as number | null };
@@ -1603,6 +1603,7 @@ export class AteService {
       }
       const r = patcher.apply(patch, pscope, this.strategy, this.anchors, vaults);
       if (r.needsApproval) return this.pendStrategy(patch, scope, a.rationale, r.changes, r.next);
+      if (scope === "chat" && this.sellsNow(r.changes)) return this.pendStrategy(patch, scope, a.rationale, r.changes, r.next, "sells_now");
       const dec = this.applyStrategy(scope, r.next, r.changes, a.rationale);
       return ok({ status: "applied", decisionId: dec, changes: r.changes, clamped: r.clamped, strategy: this.strategy }, this.meta());
     }
@@ -1665,20 +1666,54 @@ export class AteService {
       }
     }
     if (changes.some((c) => c.loosening)) return this.pendStrategy(patch, scope, a.rationale, changes, next);
+    if (scope === "chat" && this.sellsNow(changes)) return this.pendStrategy(patch, scope, a.rationale, changes, next, "sells_now");
     const dec = this.applyStrategy(scope, next, changes, a.rationale);
     return ok({ status: "applied", decisionId: dec, changes, clamped, strategy: this.strategy }, this.meta());
   }
 
+  /**
+   * Additive (Flow v1, FLOW.md journey C): a chat change that drops a target asset (or sets a 0% allocation) makes
+   * the guard sell at once. SPEC §11.5 classes it as tightening; v1 still holds it for a Touch ID confirmation.
+   */
+  private sellsNow(changes: StrategyFieldChange[]): boolean {
+    return changes.some(
+      (c) =>
+        (c.field === "targetAssets" && Array.isArray(c.before) && (c.before as string[]).some((x) => !((c.after as string[] | undefined) ?? []).includes(x))) ||
+        (c.field === "rebalanceTargetPct" && c.after === 0 && c.before !== 0),
+    );
+  }
+
+  /** Additive (desktop Agent → Waiting for you): every unexpired pending change. */
+  listPendingChanges(): { changeId: string; diff: StrategyFieldChange[]; renderedDiff: string; expiresAt: number; createdAt: number; via: CallerScope; rationale: string; confirm?: "sells_now" }[] {
+    const t = this.now();
+    const out = [];
+    for (const [changeId, c] of this.pendingChanges) {
+      if (c.expiresAt < t) {
+        this.pendingChanges.delete(changeId);
+        continue;
+      }
+      out.push({ changeId, diff: c.changes, renderedDiff: c.renderedDiff, expiresAt: c.expiresAt, createdAt: c.expiresAt - 60, via: c.scope, rationale: c.rationale, ...(c.confirm ? { confirm: c.confirm } : {}) });
+    }
+    return out.sort((a, b) => b.createdAt - a.createdAt);
+  }
+
+  /** Additive: the human rejects a pending change (nothing is applied; journalled nowhere: it never took effect). */
+  rejectPendingChange(changeId: string): boolean {
+    return this.pendingChanges.delete(changeId);
+  }
+
   /** Loosening change: held for 60 s until ate-approve (or the armed TTY code) signs it via /strategy/approve. */
-  private pendStrategy(patch: StrategyPatch, scope: CallerScope, rationale: string, changes: StrategyFieldChange[], next: StrategyParams): ToolResult<ToolOutput<"ate_strategy_set">> {
+  private pendStrategy(patch: StrategyPatch, scope: CallerScope, rationale: string, changes: StrategyFieldChange[], next: StrategyParams, confirm?: "sells_now"): ToolResult<ToolOutput<"ate_strategy_set">> {
     const changeId = `chg_${rationaleHash(`${this.now()}|${rationale}|${Math.random()}`).slice(2, 18)}`;
     const expiresAt = this.now() + 60;
     const renderedDiff = changes
       .map((c) => `${c.scope === "portfolio" ? "portfolio" : MARKETS[c.scope].label} ${String(c.field)}: ${JSON.stringify(c.before)} → ${JSON.stringify(c.after)}${c.loosening ? "  [LOOSENING]" : ""}`)
       .join("\n");
-    this.pendingChanges.set(changeId, { patch, scope, rationale, changes, next, expiresAt, renderedDiff });
-    const r = fail("ATE_APPROVAL_REQUIRED", "this change loosens risk and needs an ate-approve signature", "Approve the rendered diff with Touch ID within 60 s");
-    if (!r.ok) r.error.details = { changeId, diff: changes, renderedDiff, expiresAt };
+    this.pendingChanges.set(changeId, { patch, scope, rationale, changes, next, expiresAt, renderedDiff, ...(confirm ? { confirm } : {}) });
+    const r = confirm
+      ? fail("ATE_APPROVAL_REQUIRED", "this change makes the guard sell now and needs a Touch ID confirmation", "Confirm the rendered diff with Touch ID within 60 s")
+      : fail("ATE_APPROVAL_REQUIRED", "this change loosens risk and needs an ate-approve signature", "Approve the rendered diff with Touch ID within 60 s");
+    if (!r.ok) r.error.details = { changeId, diff: changes, renderedDiff, expiresAt, ...(confirm ? { confirm } : {}) };
     try {
       this.onStrategyPending?.(r.ok ? null : r.error.details);
     } catch {

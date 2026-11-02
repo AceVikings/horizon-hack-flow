@@ -1,0 +1,509 @@
+// Flow desktop v1 routes (additive; ui scope unless noted). Nothing here needs a terminal:
+//
+//   GET  /trader                → supervised trader state (+ whether an external `ate agent run` is cycling)
+//   POST /trader/start          { mode?: "autonomous"|"propose", engine?: "llm"|"rules", model?, cycleSeconds? }
+//   POST /trader/stop           → stops the in-daemon runner after its current cycle; vaults stay open (guard exits)
+//   GET  /strategy/pending      → every unexpired pending change (Agent → Waiting for you)
+//   POST /strategy/reject       { changeId } → drops it (never applied)
+//   GET  /proof                 (ui|view) → network, current/last in-app run, recorded rogue runs (journal, decoded
+//                                 from the chain), pause/unpause history (vault logs), target addresses
+//   POST /proof/run             { market?, waitPauseSec? } → runs the rogue suite in-process (testnet 133 only)
+//   POST /proof/stop            → stop after the current attack
+//
+// The trader runs in-process (TraderRunner + `claude -p` per cycle, or the rules engine) against this daemon's own
+// MCP over a stdio proxy with a dedicated agent token, exactly like `ate agent run`. Its wanted state persists in
+// <home>/trader.json so a daemon restart resumes it. The proof suite is the same engine as `ate rogue` (./rogue.ts),
+// talking to this daemon's /rogue routes with an ephemeral rogue token minted per run (never printed, revoked after).
+
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { MARKETS, MARKET_IDS, policyVaultAbi, type MarketId } from "@ate/core";
+import { createPublicClient, http as viemHttp, type Address, type Hex, type PublicClient } from "viem";
+import { chatMcpSpec } from "./chat.js";
+import type { Routes, TokenRegistry } from "./http.js";
+import { EXPECTED, FULL_RUN, decodeRevert, runRogue, type AttackId, type AttackResult } from "./rogue.js";
+import type { AteService } from "./service.js";
+
+type Trader = typeof import("@ate/trader");
+type Json = (status: number, v: unknown) => void;
+
+export interface AppRoutesOptions {
+  routes: Routes;
+  tokens: TokenRegistry;
+  service: AteService;
+  home: string;
+  port: number;
+  /** deployments/<chainId>.json path (deployedBlock, guardian, owner, explorer). */
+  deploymentsPath: string | null;
+  log?: (m: string) => void;
+}
+
+const nowSec = () => Math.floor(Date.now() / 1000);
+const errBody = (code: string, message: string, hint?: string) => ({ error: { code, message, ...(hint ? { hint } : {}) } });
+
+// ------------------------------------------------------------------ trader supervisor
+
+export type TraderMode = "autonomous" | "propose";
+export interface TraderState {
+  supervised: boolean;
+  running: boolean;
+  stopping: boolean;
+  mode: TraderMode;
+  engine: "llm" | "rules";
+  model: string;
+  cycleSeconds: number;
+  toolsAllowed: number;
+  startedAt: number | null;
+  cycles: number;
+  lastCycle: { cycle: number; status: string; at: number; latencyMs: number; summary?: string } | null;
+  lastError: string | null;
+}
+
+interface Wanted {
+  wanted: boolean;
+  mode: TraderMode;
+  engine: "llm" | "rules";
+  model: string;
+  cycleSeconds: number;
+}
+
+class TraderSupervisor {
+  private st: TraderState = { supervised: true, running: false, stopping: false, mode: "autonomous", engine: "llm", model: "sonnet", cycleSeconds: 120, toolsAllowed: 0, startedAt: null, cycles: 0, lastCycle: null, lastError: null };
+  private stopFns: (() => void | Promise<void>)[] = [];
+  private runner: { idle(): Promise<void>; stopTimer(): void } | null = null;
+  private token: string | null = null;
+  private readonly file: string;
+
+  constructor(private readonly o: AppRoutesOptions) {
+    this.file = join(o.home, "trader.json");
+  }
+
+  state(): TraderState & { external: boolean; lastCycleAt: number | null } {
+    const s = this.o.service.status();
+    const lastCycleAt = s.trader.lastCycleAt;
+    return { ...this.st, external: !this.st.running && s.trader.running, lastCycleAt };
+  }
+
+  private save(w: Wanted) {
+    try {
+      writeFileSync(this.file, JSON.stringify(w, null, 2), { mode: 0o600 });
+    } catch {
+      /* best effort */
+    }
+  }
+
+  /** Resume a trader the user left running (daemon restart). */
+  async resume(): Promise<void> {
+    if (!existsSync(this.file)) return;
+    try {
+      const w = JSON.parse(readFileSync(this.file, "utf8")) as Wanted;
+      if (w.wanted) await this.start(w);
+    } catch (e) {
+      this.o.log?.(`trader resume: ${(e as Error).message}`);
+    }
+  }
+
+  async start(b: Partial<Wanted>): Promise<void> {
+    if (this.st.running) await this.stop(false);
+    const mode: TraderMode = b.mode === "propose" ? "propose" : "autonomous";
+    const engine = b.engine === "rules" ? "rules" : "llm";
+    const model = typeof b.model === "string" && /^[A-Za-z0-9._-]{1,64}$/.test(b.model) ? b.model : "sonnet";
+    const cycleSeconds = Math.max(30, Math.min(3600, Number(b.cycleSeconds) || 120));
+    const name = "@ate/trader";
+    const t = (await import(name)) as Trader;
+    const dryRun = mode === "propose";
+    this.token = this.o.tokens.mint({ scope: "agent", ...(engine === "rules" ? { engine: "rules" as const } : {}) });
+    const mcp = chatMcpSpec(this.o.home, this.token);
+    const log = (m: string) => {
+      this.o.log?.(`trader: ${m}`);
+      try {
+        appendFileSync(join(this.o.home, "trader.log"), `[${new Date().toISOString()}] ${m}\n`);
+      } catch {
+        /* best effort */
+      }
+    };
+    let tools: Awaited<ReturnType<Trader["connectAte"]>> | null = null;
+    const getTools = async () => (tools ??= await t.connectAte(mcp));
+    const markets = [...MARKET_IDS];
+    const profiles = markets.map((m) => `${MARKETS[m].asset}=${this.o.service.strategy.markets[m]?.profile ?? "default"}`);
+    const context = [
+      `Profiles: ${profiles.join(", ")}${profiles.some((p) => p.endsWith("=demo")) ? " (demo: rebalance edge gate waived, $5 size; label trades profile=demo, never call them arbitrage)" : ""}.`,
+      `Markets enabled for this runner: ${markets.map((m) => MARKETS[m].label).join(", ")}.`,
+    ];
+    const executor =
+      engine === "rules"
+        ? t.createRulesExecutor(getTools, { markets, dryRun, log })
+        : t.createClaudeExecutor({ promptFile: t.TRADER_PROMPT_PATH, mcp, dryRun, context, model, effort: "low", log });
+    const cyclesFile = join(this.o.home, "trader-cycles.jsonl");
+    const runner = new t.TraderRunner({
+      executor,
+      timeoutMs: 90_000,
+      log,
+      onTimeout: async (cycle) => {
+        await t.writeTimeoutRecords(await getTools(), cycle, 90, markets).catch(() => []);
+      },
+      onRecord: (r) => {
+        this.st.cycles++;
+        this.st.lastCycle = { cycle: r.cycle, status: r.status, at: Math.floor(r.startedAt / 1000), latencyMs: r.latencyMs, ...(r.summary ? { summary: r.summary.slice(0, 400) } : {}) };
+        if (r.status !== "ok") this.st.lastError = r.summary?.slice(0, 300) ?? r.status;
+        try {
+          appendFileSync(cyclesFile, JSON.stringify({ ...r, engine, dryRun, supervised: true }) + "\n");
+        } catch {
+          /* best effort */
+        }
+        this.o.service.o.emit({ type: "trader.cycle", at: nowSec(), data: { cycle: r.cycle, status: r.status } });
+      },
+    });
+    const scan = t.createScanner(getTools);
+    const scanTimer = setInterval(() => {
+      scan()
+        .then((opened) => {
+          if (opened.length) log(`scan: entry candidate on ${opened.map((m) => MARKETS[m].label).join(", ")} → ${runner.trigger("scan")}`);
+        })
+        .catch((e: unknown) => log(`scan failed: ${e instanceof Error ? e.message : String(e)}`));
+    }, 20_000);
+    const sub = t.subscribeCycleRequests({
+      port: this.o.port,
+      token: this.token,
+      log,
+      onRequest: (r) => log(`cycle.requested (${r}) → ${runner.trigger(r === "gap" ? "scan" : r === "strategy_change" ? "strategy_change" : "manual")}`),
+    });
+    this.stopFns = [() => clearInterval(scanTimer), () => sub.close(), async () => void (await (tools as { close(): Promise<void> } | null)?.close().catch(() => {}))];
+    this.runner = runner;
+    this.st = { ...this.st, running: true, stopping: false, mode, engine, model, cycleSeconds, toolsAllowed: engine === "llm" ? t.allowedTools(dryRun).length : 0, startedAt: nowSec(), lastError: null };
+    runner.startTimer(cycleSeconds * 1000);
+    this.save({ wanted: true, mode, engine, model, cycleSeconds });
+    log(`started (supervised by the daemon): engine=${engine} mode=${mode} model=${model} cycle=${cycleSeconds}s`);
+    this.o.service.o.emit({ type: "trader.state", at: nowSec(), data: { running: true, mode, engine } });
+  }
+
+  /** Stop ticking now; the current cycle (≤ 90 s) finishes in the background. */
+  async stop(persist = true): Promise<void> {
+    const r = this.runner;
+    if (persist) this.save({ wanted: false, mode: this.st.mode, engine: this.st.engine, model: this.st.model, cycleSeconds: this.st.cycleSeconds });
+    if (!r) return;
+    r.stopTimer();
+    this.runner = null;
+    this.st.running = false;
+    this.st.stopping = true;
+    const fns = this.stopFns;
+    this.stopFns = [];
+    const token = this.token;
+    this.token = null;
+    void r.idle().finally(async () => {
+      for (const f of fns) await f();
+      if (token) this.o.tokens.revoke(token);
+      this.st.stopping = false;
+      this.o.service.o.emit({ type: "trader.state", at: nowSec(), data: { running: false } });
+    });
+  }
+}
+
+// ------------------------------------------------------------------ proof (in-app rogue suite)
+
+export interface ProofAttack {
+  attack: AttackId;
+  expected: string;
+  status: "queued" | "running" | AttackResult["status"];
+  txHash?: string;
+  decoded?: string;
+  checkCode?: string;
+  note?: string;
+  at?: number;
+}
+export interface ProofRun {
+  id: string;
+  source: "app" | "journal";
+  market: MarketId;
+  vault: string;
+  agent: string;
+  startedAt: number;
+  finishedAt: number | null;
+  status: "running" | "done" | "stopped" | "failed";
+  stopRequested?: boolean;
+  attacks: ProofAttack[];
+  log: { at: number; text: string }[];
+}
+export interface PauseEvent {
+  vault: string;
+  market: MarketId | null;
+  kind: "paused" | "unpaused";
+  by: string;
+  role: "guardian" | "owner" | "agent" | "other";
+  txHash: string;
+  blockNumber: string;
+  at: number | null;
+}
+
+const ATTACK_RE = /^\[rogue\] ([a-z_]+):/;
+
+class Proof {
+  private run: ProofRun | null = null;
+  private decoded = new Map<string, string>();
+  private pauses: { at: number; list: PauseEvent[] } | null = null;
+  private client: PublicClient | null = null;
+  private deployments: { deployedBlock?: number; guardian?: string; owner?: string; explorer?: string } = {};
+  private readonly cacheFile: string;
+
+  constructor(private readonly o: AppRoutesOptions) {
+    this.cacheFile = join(o.home, "proof-decoded.json");
+    try {
+      this.decoded = new Map(Object.entries(JSON.parse(readFileSync(this.cacheFile, "utf8")) as Record<string, string>));
+    } catch {
+      /* empty cache */
+    }
+    try {
+      if (o.deploymentsPath) this.deployments = JSON.parse(readFileSync(o.deploymentsPath, "utf8"));
+    } catch {
+      /* optional */
+    }
+  }
+
+  private chainId(): number {
+    return this.o.service.cfg.chain.id;
+  }
+  runnable(): boolean {
+    return this.chainId() === 133;
+  }
+  private pc(): PublicClient {
+    return (this.client ??= createPublicClient({ transport: viemHttp(this.o.service.cfg.chain.rpcUrls[0]) }) as PublicClient);
+  }
+  private vaultFor(m: MarketId): Address | null {
+    return (this.o.service.cfg.vaults.find((v) => v.market === m)?.address as Address | undefined) ?? null;
+  }
+
+  /** The decoded custom error of a recorded revert: replay its calldata at the parent block. Cached on disk. */
+  private async decode(txHash: string): Promise<string | null> {
+    const hit = this.decoded.get(txHash);
+    if (hit) return hit;
+    try {
+      const c = this.pc();
+      const tx = await c.getTransaction({ hash: txHash as Hex });
+      let d: string;
+      try {
+        await c.call({ account: tx.from, to: tx.to!, data: tx.input, blockNumber: (tx.blockNumber ?? 1n) - 1n });
+        d = "succeeded on replay";
+      } catch (e) {
+        d = decodeRevert(e);
+      }
+      this.decoded.set(txHash, d);
+      writeFileSync(this.cacheFile, JSON.stringify(Object.fromEntries(this.decoded)), { mode: 0o600 });
+      return d;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Rogue runs recorded in the journal (profile=rogue executions), grouped by ≤ 30 min gaps, newest first. */
+  private async recorded(): Promise<ProofRun[]> {
+    const ex = this.o.service.journal
+      .list({ kind: ["execution"], limit: 500 })
+      .filter((e) => e.profile === "rogue")
+      .reverse();
+    const runs: ProofRun[] = [];
+    let cur: ProofRun | null = null;
+    for (const e of ex) {
+      const attack = (ATTACK_RE.exec(e.rationale)?.[1] ?? "unknown") as AttackId;
+      const x = (e as { execution?: { txHash?: string; reverted?: boolean } }).execution;
+      const market = ((e as { market?: MarketId }).market ?? "hsk-dex:WHSK/USDT:3000") as MarketId;
+      if (!cur || e.at - (cur.finishedAt ?? cur.startedAt) > 1800 || cur.market !== market) {
+        cur = { id: `journal_${e.id}`, source: "journal", market, vault: this.vaultFor(market) ?? "", agent: "", startedAt: e.at, finishedAt: e.at, status: "done", attacks: [], log: [] };
+        runs.push(cur);
+      }
+      cur.finishedAt = e.at;
+      // a re-run of the same attack in one window replaces the earlier row
+      cur.attacks = cur.attacks.filter((a) => a.attack !== attack);
+      cur.attacks.push({ attack, expected: EXPECTED[attack] ?? String(e.verdict.code), status: x?.reverted ? "reverted" : "unexpected", ...(x?.txHash ? { txHash: x.txHash } : {}), at: e.at });
+    }
+    runs.reverse();
+    const latest = runs[0];
+    if (latest) {
+      latest.attacks.sort((a, b) => FULL_RUN.indexOf(a.attack) - FULL_RUN.indexOf(b.attack));
+      await Promise.all(latest.attacks.map(async (a) => a.txHash && !a.decoded && (a.decoded = (await this.decode(a.txHash)) ?? undefined)));
+    }
+    return runs.slice(0, 10);
+  }
+
+  /** Paused / Unpaused logs on both vaults since deployment (cached 60 s). */
+  private async pauseHistory(): Promise<PauseEvent[]> {
+    if (this.pauses && nowSec() - this.pauses.at < 60) return this.pauses.list;
+    const vaults = this.o.service.cfg.vaults;
+    if (!vaults.length) return [];
+    try {
+      const c = this.pc();
+      const head = await c.getBlockNumber();
+      const from = this.deployments.deployedBlock ? BigInt(this.deployments.deployedBlock) : head > 500_000n ? head - 500_000n : 0n;
+      const ev = policyVaultAbi.filter((x) => x.type === "event" && (x.name === "Paused" || x.name === "Unpaused"));
+      const logs = await c.getLogs({ address: vaults.map((v) => v.address as Address), events: ev as never, fromBlock: from, toBlock: head });
+      const roles = new Map<string, "guardian" | "owner" | "agent">();
+      for (const v of vaults) {
+        for (const fn of ["guardian", "owner", "agent"] as const) {
+          const a = (await c.readContract({ address: v.address as Address, abi: policyVaultAbi as never, functionName: fn as never }).catch(() => null)) as string | null;
+          if (a) roles.set(a.toLowerCase(), fn);
+        }
+      }
+      const times = new Map<bigint, number>();
+      const list: PauseEvent[] = [];
+      for (const l of logs as unknown as { address: string; eventName: string; args: { by: string }; transactionHash: string; blockNumber: bigint }[]) {
+        if (!times.has(l.blockNumber)) times.set(l.blockNumber, Number((await c.getBlock({ blockNumber: l.blockNumber }).catch(() => ({ timestamp: 0n }))).timestamp));
+        const market = (vaults.find((v) => v.address.toLowerCase() === l.address.toLowerCase())?.market ?? null) as MarketId | null;
+        list.push({ vault: l.address, market, kind: l.eventName === "Paused" ? "paused" : "unpaused", by: l.args.by, role: roles.get(l.args.by.toLowerCase()) ?? "other", txHash: l.transactionHash, blockNumber: l.blockNumber.toString(), at: times.get(l.blockNumber) || null });
+      }
+      list.sort((a, b) => Number(BigInt(b.blockNumber) - BigInt(a.blockNumber)));
+      this.pauses = { at: nowSec(), list };
+      return list;
+    } catch (e) {
+      this.o.log?.(`proof: pause history: ${(e as Error).message.split("\n")[0]}`);
+      return this.pauses?.list ?? [];
+    }
+  }
+
+  async get(): Promise<unknown> {
+    const s = this.o.service.status();
+    const [recorded, pauses] = await Promise.all([this.recorded(), this.pauseHistory()]);
+    const hsk = this.vaultFor("hsk-dex:WHSK/USDT:3000");
+    const paused = Object.fromEntries(s.vaults.map((v) => [v.market, v.paused]));
+    return {
+      chainId: this.chainId(),
+      runnable: this.runnable(),
+      explorer: this.deployments.explorer ?? (this.chainId() === 133 ? "https://testnet-explorer.hskchain.net" : "https://hsk.blockscout.com"),
+      target: { vault: hsk, market: "hsk-dex:WHSK/USDT:3000", agent: this.o.service.o.signer?.address ?? this.deployments.guardian ?? null, guardian: this.deployments.guardian ?? null, owner: this.deployments.owner ?? null },
+      paused,
+      run: this.run,
+      recorded,
+      pauses,
+    };
+  }
+
+  start(b: { market?: string; waitPauseSec?: number }): ProofRun {
+    if (!this.runnable()) throw Object.assign(new Error("The attack suite only runs on testnet (chain 133). Mainnet is view-only."), { status: 403, code: "ATE_TOOL_NOT_ALLOWED" });
+    if (this.run?.status === "running") throw Object.assign(new Error("a suite is already running"), { status: 409, code: "ATE_STRATEGY_BLOCKED" });
+    if (this.o.service.o.signer && !this.o.service.o.signer.unlocked) throw Object.assign(new Error("the agent key is locked: unlock the daemon first"), { status: 409, code: "ATE_DAEMON_LOCKED" });
+    const market: MarketId = b.market === "hsk-dex:WBTC/USDT:3000" || b.market === "WBTC" ? "hsk-dex:WBTC/USDT:3000" : "hsk-dex:WHSK/USDT:3000";
+    const vault = this.vaultFor(market);
+    if (!vault) throw Object.assign(new Error(`no vault configured for ${market}`), { status: 400, code: "ATE_CONFIG_INVALID" });
+    const waitPauseSec = Math.max(0, Math.min(900, Number(b.waitPauseSec ?? 240)));
+    const run: ProofRun = {
+      id: `run_${Date.now().toString(36)}`,
+      source: "app",
+      market,
+      vault,
+      agent: this.o.service.o.signer?.address ?? "",
+      startedAt: nowSec(),
+      finishedAt: null,
+      status: "running",
+      attacks: FULL_RUN.map((attack) => ({ attack, expected: EXPECTED[attack], status: "queued" as const })),
+      log: [],
+    };
+    this.run = run;
+    const token = this.o.tokens.mint({ scope: "rogue", expiresAt: nowSec() + 3600 });
+    const push = (text: string) => {
+      run.log.push({ at: nowSec(), text });
+      if (run.log.length > 400) run.log.shift();
+    };
+    const emit = () => this.o.service.o.emit({ type: "proof.progress", at: nowSec(), data: { id: run.id, status: run.status, done: run.attacks.filter((a) => a.status !== "queued" && a.status !== "running").length } });
+    void runRogue({
+      market,
+      attacks: FULL_RUN,
+      stage: false,
+      daemonUrl: `http://127.0.0.1:${this.o.port}`,
+      rogueToken: token,
+      rpcUrl: this.o.service.cfg.chain.rpcUrls[0]!,
+      vault: vault as Address,
+      gas: 800_000n,
+      waitPauseSec,
+      dryRun: false,
+      log: (s) => push(s.trim()),
+      shouldStop: () => !!run.stopRequested,
+      onProgress: (e) => {
+        const row = run.attacks[e.index]!;
+        if (e.type === "start") {
+          row.status = "running";
+          row.at = nowSec();
+          if (e.attack === "paused") push(`[7] waiting up to ${waitPauseSec}s for the guardian pause() (sign it on the guardian device)`);
+        } else {
+          Object.assign(row, { status: e.result.status, at: nowSec(), ...(e.result.txHash ? { txHash: e.result.txHash } : {}), ...(e.result.decoded ? { decoded: e.result.decoded } : {}), ...(e.result.checkCode ? { checkCode: e.result.checkCode } : {}), ...(e.result.note ? { note: e.result.note } : {}) });
+        }
+        emit();
+      },
+    })
+      .then(() => {
+        run.status = run.stopRequested ? "stopped" : "done";
+      })
+      .catch((e: Error) => {
+        run.status = "failed";
+        push(`suite failed: ${e.message.split("\n")[0]}`);
+      })
+      .finally(() => {
+        run.finishedAt = nowSec();
+        for (const a of run.attacks) if (a.status === "queued" || a.status === "running") a.status = "skipped";
+        this.o.tokens.revoke(token);
+        this.pauses = null;
+        emit();
+      });
+    push(`suite start · vault ${vault} · key ${run.agent}`);
+    emit();
+    return run;
+  }
+
+  stop(): ProofRun | null {
+    if (this.run?.status === "running") this.run.stopRequested = true;
+    return this.run;
+  }
+}
+
+// ------------------------------------------------------------------ registration
+
+export function registerAppRoutes(o: AppRoutesOptions): { trader: TraderSupervisor } {
+  const trader = new TraderSupervisor(o);
+  const proof = new Proof(o);
+  const r = o.routes;
+  const guard = async (json: Json, f: () => unknown) => {
+    try {
+      json(200, await f());
+    } catch (e) {
+      const x = e as { status?: number; code?: string; message: string };
+      json(x.status ?? 400, errBody(x.code ?? "ATE_INTERNAL", x.message));
+    }
+  };
+
+  r.register({ method: "GET", path: "/trader", scopes: ["ui", "view"], handler: ({ json }) => json(200, trader.state()) });
+  r.register({
+    method: "POST",
+    path: "/trader/start",
+    scopes: ["ui"],
+    handler: ({ body, json }) =>
+      guard(json, async () => {
+        await trader.start((body ?? {}) as Partial<Wanted>);
+        return trader.state();
+      }),
+  });
+  r.register({
+    method: "POST",
+    path: "/trader/stop",
+    scopes: ["ui"],
+    handler: ({ json }) =>
+      guard(json, async () => {
+        await trader.stop();
+        return trader.state();
+      }),
+  });
+
+  r.register({ method: "GET", path: "/strategy/pending", scopes: ["ui", "session"], handler: ({ json }) => json(200, { pending: o.service.listPendingChanges() }) });
+  r.register({
+    method: "POST",
+    path: "/strategy/reject",
+    scopes: ["ui", "session"],
+    handler: ({ body, json }) => {
+      const id = (body as { changeId?: unknown })?.changeId;
+      if (typeof id !== "string" || !/^[A-Za-z0-9_-]{1,80}$/.test(id)) return json(400, errBody("ATE_APPROVAL_REQUIRED", "changeId required"));
+      return json(200, { rejected: o.service.rejectPendingChange(id), changeId: id });
+    },
+  });
+
+  r.register({ method: "GET", path: "/proof", scopes: ["ui", "view"], handler: ({ json }) => guard(json, () => proof.get()) });
+  r.register({ method: "POST", path: "/proof/run", scopes: ["ui"], handler: ({ body, json }) => guard(json, () => proof.start((body ?? {}) as { market?: string; waitPauseSec?: number })) });
+  r.register({ method: "POST", path: "/proof/stop", scopes: ["ui"], handler: ({ json }) => guard(json, () => ({ run: proof.stop() })) });
+
+  return { trader };
+}

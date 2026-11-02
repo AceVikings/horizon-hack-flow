@@ -12,6 +12,7 @@ import { createAteMcpServer } from "@ate/mcp";
 import { WebSocketServer, type WebSocket } from "ws";
 import type { AteService } from "./service.js";
 import { VIEW_CSS, VIEW_HTML, VIEW_JS } from "./view.js";
+import { activeChatTurns } from "./chat.js";
 
 export const BODY_LIMIT = 32 * 1024;
 export const ALLOWED_ORIGIN = "ate://local";
@@ -261,7 +262,14 @@ export class DaemonHttp {
           if (!this.toolLimiter.allow(`${scope}:${name}`)) {
             return { ok: false, error: { code: "ATE_RPC_RATE_LIMITED", message: "60 req/min per tool exceeded", retryable: true } };
           }
-          return svc.callTool(scope, name, args, engine ? { engine } : {});
+          const out = await svc.callTool(scope, name, args, engine ? { engine } : {});
+          // Additive (Flow v1 chat tool cards): chat-scope calls stream as chat.tool with their args and result.
+          const sessionId = auth.sessionId;
+          if (scope === "chat" && sessionId) {
+            const at = Math.floor(Date.now() / 1000);
+            svc.o.emit({ type: "chat.tool", at, data: { sessionId, turnId: activeChatTurns.get(sessionId) ?? "", tool: name, args, result: out } });
+          }
+          return out;
         },
       },
       { version: this.o.version, instructions: `ATE daemon (scope=${scope}). Two markets: hsk-dex:WHSK/USDT:3000, hsk-dex:WBTC/USDT:3000.` },
