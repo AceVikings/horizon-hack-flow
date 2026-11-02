@@ -67,7 +67,7 @@ describe("MCP over Streamable HTTP (§7.1)", () => {
   it("scope decides the tool set; chat cannot execute", async () => {
     const agent = await connectDaemonClient(base + "/mcp", T.agent);
     const chat = await connectDaemonClient(base + "/mcp", T.chat);
-    expect((await agent.listTools()).tools).toHaveLength(13); // + ate_chart, ate_data (lane D4)
+    expect((await agent.listTools()).tools).toHaveLength(14); // + ate_chart, ate_data (lane D4), ate_backtest (lane STRAT)
     expect((await chat.listTools()).tools.map((t) => t.name)).not.toContain("ate_execute");
     expect(await call(chat, "ate_execute", { proposalId: "prop_0000000000000001" })).toMatchObject({ ok: false, error: { code: "ATE_TOOL_NOT_ALLOWED" } });
     await agent.close();
@@ -115,7 +115,7 @@ describe("MCP over Streamable HTTP (§7.1)", () => {
     const p = await runStdioProxy({ url: base + "/mcp", token: T.agent, version: "test", downstream: serverT });
     const c = new Client({ name: "t", version: "0" });
     await c.connect(clientT);
-    expect((await c.listTools()).tools).toHaveLength(13);
+    expect((await c.listTools()).tools).toHaveLength(14);
     expect((await call(c, "ate_decide", { decision: "no_trade", market: "hsk-dex:WHSK/USDT:3000", reason: "llm_veto", rationale: R })).ok).toBe(true);
     await c.close();
     await p.close();
