@@ -67,7 +67,8 @@ if (keccak256(new Uint8Array()) !== "0xc5d2460186f7233c927e7db2dcc703c0e500b653c
 
 const file = process.argv[2] ?? new URL("../docs/testnet-133-journal.json", import.meta.url);
 const exp = JSON.parse(readFileSync(file, "utf8"));
-let prev = "0x" + "00".repeat(32);
+// A continuation export starts after an earlier head (exp.startPrevHash); a full export starts at genesis.
+let prev = exp.startPrevHash ?? "0x" + "00".repeat(32);
 let bad = 0;
 for (const e of exp.entries) {
   const { seq, id, hash, ...record } = e;
