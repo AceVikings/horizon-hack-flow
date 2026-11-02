@@ -46,6 +46,7 @@ export function classify(p: ProposalDraft, cand: LiveCandidate | undefined, pf: 
   if (p.side === "sell") {
     if (guardExit) return { guardExit: true, turnoverExempt: true, entry: false };
     if (gen === "discretionary_exit") return { guardExit: false, turnoverExempt: true, entry: false };
+    if (gen === "custom" && leg === "close") return { guardExit: false, turnoverExempt: true, entry: false };
     if (gen === "spread-revert" && leg === "close") return { guardExit: false, turnoverExempt: true, entry: false };
     if (gen === "rebalance" && (pf.strategy.markets[p.market]?.rebalanceTargetPct === 0 || !isTargeted(p.market, pf.strategy))) {
       return { guardExit: false, turnoverExempt: true, entry: false };

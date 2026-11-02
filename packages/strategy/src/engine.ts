@@ -13,6 +13,11 @@ import {
 } from "@ate/core";
 import { discretionaryExitDrafts, finalize, guardExitDrafts, rebalanceDrafts, spreadRevertDrafts, type DraftCandidate } from "./generators.js";
 import { effectiveMarketParams, isTargeted, minEntryIntervalSec } from "./params.js";
+import { CustomState, customDrafts, LiveHistory, recordSnapshot } from "./custom/live.js";
+
+/** Price history and per-market state for custom strategies (one per daemon process). */
+export const customHistory = new LiveHistory();
+const customState = new CustomState();
 
 /** Supra–APRO disagreement above which entries are withheld (§5.1, config `supra.maxDisagreeBps`). */
 export const SUPRA_MAX_DISAGREE_BPS = 250;
@@ -89,8 +94,18 @@ export function runEngine(snaps: Partial<Record<MarketId, MarketSnapshot>>, pf: 
     const guard = guardExitDrafts(snap, pf);
     drafts.push(...guard);
     const gens = raw.generators;
-    drafts.push(...spreadRevertDrafts(snap, pf).filter((d) => d.leg === "close" || gens.includes("spread-revert")));
-    drafts.push(...rebalanceDrafts(snap, pf));
+    recordSnapshot(customHistory, snap);
+    const custom = raw.custom ?? null;
+    if (custom) {
+      // the user's own strategy replaces the open-entry generators (spread-revert closes of older lots stay)
+      drafts.push(...spreadRevertDrafts(snap, pf).filter((d) => d.leg === "close"));
+      const r = customDrafts(snap, pf, custom, customHistory, customState);
+      drafts.push(...r.drafts);
+      mNotes.push(...r.notes);
+    } else {
+      drafts.push(...spreadRevertDrafts(snap, pf).filter((d) => d.leg === "close" || gens.includes("spread-revert")));
+      drafts.push(...rebalanceDrafts(snap, pf));
+    }
     drafts.push(...discretionaryExitDrafts(snap, pf));
     const seen = new Set<string>();
     for (const d of drafts) {
@@ -112,7 +127,9 @@ export function runEngine(snaps: Partial<Record<MarketId, MarketSnapshot>>, pf: 
           continue;
         }
       }
-      candidates.push(finalize(d, snap, pf));
+      const c = finalize(d, snap, pf);
+      if (d.generator === "custom" && custom) c.strategy = { id: custom.id, version: custom.version, hash: custom.hash, name: custom.name, kind: custom.kind };
+      candidates.push(c);
     }
   }
   return { candidates, suppressed, notes };
@@ -129,7 +146,7 @@ export function createCandidateEngine(opts: EngineOptions = {}): CandidateEngine
 
 /** Did a scan open an entry candidate on a market that had none in the previous scan? (§11.1 out-of-schedule cycle) */
 export function newlyOpenedEntryMarkets(prev: Candidate[], next: Candidate[]): MarketId[] {
-  const isEntry = (c: Candidate) => (c.generator === "spread-revert" && c.leg === "open") || (c.generator === "rebalance" && c.side === "buy");
+  const isEntry = (c: Candidate) => (c.generator === "spread-revert" && c.leg === "open") || (c.generator === "rebalance" && c.side === "buy") || (c.generator === "custom" && c.leg === "open");
   const before = new Set(prev.filter(isEntry).map((c) => c.market));
   return [...new Set(next.filter(isEntry).map((c) => c.market))].filter((m) => !before.has(m));
 }

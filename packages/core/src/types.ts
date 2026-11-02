@@ -11,6 +11,7 @@
 import type { AteErrorCode } from "./errors.js";
 import type { Address, Hex, MarketId, Side, TargetAsset } from "./markets.js";
 import type { ReasonCode } from "./reasons.js";
+import type { CustomStrategyRef } from "./custom-strategy.js";
 
 export type DecString = string;
 export type UnixSec = number;
@@ -157,7 +158,8 @@ export interface Quote {
 
 // ------------------------------------------------------------------ candidates (§7.2, §11.3)
 
-export type GeneratorId = "spread-revert" | "rebalance" | "guard_exit" | "discretionary_exit" | "smoke";
+/** `custom` is additive (lane STRAT): candidates from the user's own strategy (`MarketStrategyParams.custom`). */
+export type GeneratorId = "spread-revert" | "rebalance" | "guard_exit" | "discretionary_exit" | "smoke" | "custom";
 /** Generators configurable per market in config (§16). */
 export type ConfigurableGenerator = "spread-revert" | "rebalance";
 export type Leg = "open" | "close";
@@ -184,6 +186,8 @@ export interface Candidate {
   createdAt?: UnixSec;
   profile?: Profile;
   guardReason?: GuardExitReason;
+  /** Additive (lane STRAT): the custom strategy behind a `custom` candidate. */
+  strategy?: { id: string; version: number; hash: string; name: string; kind: "rules" | "ai" };
 }
 
 export interface Suppressed {
@@ -261,6 +265,8 @@ export interface MarketStrategyParams {
   reentryCooldownSec: number;
   /** Additive v0.9 (§11.4 rule 7): default 0 (WHSK), 1800 (WBTC). */
   minEntryIntervalSec?: number;
+  /** Additive (lane STRAT): the user's custom strategy in use on this market; replaces the open-entry generators. */
+  custom?: CustomStrategyRef | null;
 }
 
 export interface PortfolioStrategyParams {
@@ -311,6 +317,10 @@ export interface StrategyPatch {
   discretionaryUsd?: string;
   /** Additive v0.9, human scopes only: expands per RISK_PROFILES; explicit fields in the same patch win. */
   riskProfile?: RiskProfile;
+  /** Additive (lane STRAT): change records only ("name v2 0xabcd…" or null); set through the strategies routes. */
+  customStrategy?: string | null;
+  /** Additive (lane STRAT): change records only (a custom strategy's cooldown). */
+  minEntryIntervalSec?: number;
 }
 
 export type RiskProfile = "conservative" | "balanced" | "aggressive";

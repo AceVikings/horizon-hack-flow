@@ -8,6 +8,8 @@ export type RulesAction =
   | { kind: "no_trade"; market: MarketId; reason: "no_signal" | "guard"; rationale: string; candidateId?: string };
 
 const rank = (c: Candidate): number => {
+  if (c.generator === "custom" && c.leg === "close") return 0;
+  if (c.generator === "custom") return 1;
   if (c.generator === "spread-revert" && c.leg === "close") return 0;
   if (c.generator === "spread-revert") return 1;
   if (c.generator === "rebalance") return 2;
