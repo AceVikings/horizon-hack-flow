@@ -21,6 +21,8 @@ const tokens = new TokenRegistry();
 const ui = tokens.mint({ scope: "ui" });
 const view = tokens.mint({ scope: "view" });
 let base = "";
+let trader: { starts: number; state(): { running: boolean }; stop(): Promise<void> };
+const logs: string[] = [];
 
 beforeAll(async () => {
   const db = new Database(":memory:");
@@ -34,9 +36,9 @@ beforeAll(async () => {
   http = new DaemonHttp({ service: svc, tokens, routes, version: "test" });
   const port = await http.listen();
   const home = mkdtempSync(join(tmpdir(), "ate-app-"));
-  registerAppRoutes({ routes, tokens, service: svc, home, port, deploymentsPath: null, ai: new AiEngine(home, { ATE_KEYSTORE: "file" }, { openai: () => ({ chat: { completions: { create: async () => ({}) } }, models: { list: async () => [{ id: "gpt-x" }] } }) as never }),
+  ({ trader } = registerAppRoutes({ routes, tokens, service: svc, home, port, deploymentsPath: null, log: (m) => logs.push(m), ai: new AiEngine(home, { ATE_KEYSTORE: "file" }, { openai: () => ({ chat: { completions: { create: async () => ({}) } }, models: { list: async () => [{ id: "gpt-x" }] } }) as never }),
     approval: { verifier: null, tty: { issue: () => "12345678", redeem: (_p, _n, code) => ({ ok: code === "12345678" }) } },
-  });
+  }));
   base = `http://127.0.0.1:${port}`;
 });
 afterAll(async () => http.close());
@@ -96,6 +98,17 @@ describe("proof + trader routes", () => {
     const j = (await r.json()) as { running: boolean; supervised: boolean };
     expect(j).toMatchObject({ running: false, supervised: true });
     expect((await req("POST", "/trader/start", view, {})).status).toBe(403);
+  });
+  it("starting twice at once (boot resume + Start trading) runs one trader; the same start again is a no-op", async () => {
+    const body = { engine: "rules", mode: "propose", cycleSeconds: 600 };
+    const [a, b] = await Promise.all([req("POST", "/trader/start", ui, body), req("POST", "/trader/start", ui, body)]);
+    expect([a.status, b.status]).toEqual([200, 200]);
+    expect((await req("POST", "/trader/start", ui, body)).status).toBe(200);
+    expect(trader.starts).toBe(1);
+    expect(logs.filter((m) => m.startsWith("trader: started")).length).toBe(1);
+    expect(trader.state().running).toBe(true);
+    await trader.stop();
+    expect(trader.state().running).toBe(false);
   });
 });
 

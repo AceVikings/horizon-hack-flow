@@ -85,6 +85,12 @@ class TraderSupervisor {
   private runner: { idle(): Promise<void>; stopTimer(): void } | null = null;
   private token: string | null = null;
   private readonly file: string;
+  /** start/stop run one at a time: boot's resume() and the app's Start trading used to race into two runners. */
+  private queue: Promise<unknown> = Promise.resolve();
+  /** What the running runner was started with; a start with the same settings is a no-op. */
+  private runningKey: string | null = null;
+  /** Runners started over this supervisor's life (tests: a double start makes one). */
+  starts = 0;
 
   constructor(private readonly o: AppRoutesOptions) {
     this.file = join(o.home, "trader.json");
@@ -115,15 +121,31 @@ class TraderSupervisor {
     }
   }
 
-  async start(b: Partial<Wanted>): Promise<void> {
-    if (this.st.running) await this.stop(false);
+  private serial<T>(f: () => Promise<T>): Promise<T> {
+    const p = this.queue.then(f, f);
+    this.queue = p.catch(() => {});
+    return p;
+  }
+
+  /** Start the trader; idempotent: already running with the same settings leaves the runner as it is. */
+  start(b: Partial<Wanted>): Promise<void> {
+    return this.serial(() => this.startNow(b));
+  }
+
+  private async startNow(b: Partial<Wanted>): Promise<void> {
     const mode: TraderMode = b.mode === "propose" ? "propose" : "autonomous";
     const engine = b.engine === "rules" ? "rules" : "llm";
     if (typeof b.model === "string" && b.model && b.model !== this.o.ai.config.model) this.o.ai.setConfig({ model: b.model });
     const model = this.o.ai.effectiveModel();
     const viaCli = engine === "llm" && this.o.ai.config.engine === "claude-code" && this.o.ai.config.provider === "anthropic";
-    if (engine === "llm" && !viaCli && !this.o.ai.available()) throw Object.assign(new Error(`${PROVIDERS[this.o.ai.config.provider].label} is not set up: add its API key under Accounts (or run on the rules engine)`), { status: 409, code: "ATE_CONFIG_INVALID" });
     const cycleSeconds = Math.max(30, Math.min(3600, Number(b.cycleSeconds) || 120));
+    const key = JSON.stringify([mode, engine, engine === "llm" ? [model, this.o.ai.config.provider, this.o.ai.config.engine] : null, cycleSeconds]);
+    if (this.st.running && this.runner && this.runningKey === key) {
+      this.save({ wanted: true, mode, engine, model, cycleSeconds });
+      return;
+    }
+    if (engine === "llm" && !viaCli && !this.o.ai.available()) throw Object.assign(new Error(`${PROVIDERS[this.o.ai.config.provider].label} is not set up: add its API key under Accounts (or run on the rules engine)`), { status: 409, code: "ATE_CONFIG_INVALID" });
+    if (this.st.running) await this.stopNow(false);
     const name = "@ate/trader";
     const t = (await import(name)) as Trader;
     const dryRun = mode === "propose";
@@ -201,6 +223,8 @@ class TraderSupervisor {
     this.stopFns = [() => clearInterval(scanTimer), () => sub.close()];
     this.runner = runner;
     this.st = { ...this.st, running: true, stopping: false, mode, engine, model, runtime: engine === "rules" ? "rules" : viaCli ? "claude-code" : "sdk", cycleSeconds, toolsAllowed: engine === "llm" ? toolNames.length : 0, startedAt: nowSec(), lastError: null };
+    this.runningKey = key;
+    this.starts++;
     runner.startTimer(cycleSeconds * 1000);
     this.save({ wanted: true, mode, engine, model, cycleSeconds });
     log(`started (supervised by the daemon): engine=${engine} mode=${mode} model=${model} cycle=${cycleSeconds}s`);
@@ -208,12 +232,17 @@ class TraderSupervisor {
   }
 
   /** Stop ticking now; the current cycle (≤ 90 s) finishes in the background. */
-  async stop(persist = true): Promise<void> {
+  stop(persist = true): Promise<void> {
+    return this.serial(() => this.stopNow(persist));
+  }
+
+  private async stopNow(persist: boolean): Promise<void> {
     const r = this.runner;
     if (persist) this.save({ wanted: false, mode: this.st.mode, engine: this.st.engine, model: this.st.model, cycleSeconds: this.st.cycleSeconds });
     if (!r) return;
     r.stopTimer();
     this.runner = null;
+    this.runningKey = null;
     this.st.running = false;
     this.st.stopping = true;
     const fns = this.stopFns;
