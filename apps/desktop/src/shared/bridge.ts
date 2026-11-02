@@ -95,6 +95,8 @@ export interface TraderStatus {
   mode: "autonomous" | "propose";
   engine: "llm" | "rules";
   model: string;
+  /** Where the LLM runs: in-app engine, the optional Claude Code CLI, or the rules engine. */
+  runtime?: "sdk" | "claude-code" | "rules";
   cycleSeconds: number;
   toolsAllowed: number;
   startedAt: number | null;
@@ -165,10 +167,12 @@ export interface ProofState {
 }
 
 export interface AiHealth {
+  provider: string;
+  providerLabel: string;
   engine: "sdk" | "claude-code";
   model: string;
   modelLabel: string;
-  models: readonly { id: string; label: string }[];
+  models: readonly { id: string; label: string; tools?: boolean | null }[];
   credential: "keychain" | "file" | "env" | "profile" | "none";
   traderEffort: "low" | "medium" | "high";
   chatEffort: "low" | "medium" | "high";

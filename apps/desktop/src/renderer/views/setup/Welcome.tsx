@@ -109,10 +109,6 @@ export default function Welcome() {
             </div>
           </div>
         </div>
-        <div style={{ marginTop: "auto" }} className="row sb xs">
-          <span style={{ color: "var(--sage)" }}>Contracts: Apache-2.0 · 148 tests · fuzzed invariants</span>
-          <span style={{ color: "var(--sage)" }}>v1.0.0</span>
-        </div>
       </div>
     </div>
   );
