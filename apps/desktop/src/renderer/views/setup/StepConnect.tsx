@@ -5,7 +5,10 @@ import { useEffect, useState } from "react";
 import { MARKETS, type MarketId } from "@ate/core";
 import { short } from "../../src/format";
 import { AddrLink, Btn, QR } from "../../src/ui";
-import { Details, ErrLine, Section, Spinner, StatusText, Wizard, go, useOwner, useSetup, useSetupGet } from "./common";
+import { Details, ErrLine, RetryLine, Section, Spinner, StatusText, Wizard, go, useOwner, useSetup, useSetupGet } from "./common";
+
+/** Attempts for each first read (1 s, 2 s, 4 s backoff between them; 15 s budget each). */
+const TRIES = 4;
 
 interface Net {
   chainId: 133 | 177;
@@ -54,7 +57,8 @@ const pair = (m: MarketId) => `${MARKETS[m].base}/${MARKETS[m].quote}`;
 
 function Network({ chainId, onBusy }: { chainId: number; onBusy(b: boolean): void }) {
   const s = useSetup();
-  const nets = useSetupGet<Net[]>("/setup/networks");
+  // The current network must answer; a timeout or "offline" is retried with backoff, then offered as Try again.
+  const nets = useSetupGet<Net[]>("/setup/networks", { retry: TRIES, bad: (ns) => !ns.some((n) => n.current && n.ok) });
   const [error, setError] = useState<{ message: string } | null>(null);
   const pick = async (id: 133 | 177) => {
     if (id === chainId) return;
@@ -78,7 +82,7 @@ function Network({ chainId, onBusy }: { chainId: number; onBusy(b: boolean): voi
                 <b>{id === 133 ? "Testnet" : "Mainnet"}</b>
                 <span className="xs fg2" style={{ display: "block" }}>{id === 133 ? "Free test tokens. Start here." : "Real money."}</span>
               </span>
-              {n ? <StatusText tone={n.ok ? "ok" : "bad"}>{n.ok ? `${n.ms} ms` : "offline"}</StatusText> : <span className="xs fg2">…</span>}
+              {n ? <StatusText tone={n.ok ? "ok" : "bad"}>{n.ok ? `${n.ms} ms` : "offline"}</StatusText> : <span className="xs fg2">{nets.failed ? "—" : "…"}</span>}
             </button>
           );
         })}
@@ -93,6 +97,7 @@ function Network({ chainId, onBusy }: { chainId: number; onBusy(b: boolean): voi
           </div>
         ))}
       </Details>
+      {nets.failed && !nets.loading && <RetryLine onRetry={nets.reload} />}
       <ErrLine error={error} />
     </Section>
   );
@@ -141,7 +146,8 @@ function OwnerGas({ chainId, onGas }: { chainId: number; onGas(hsk: number | nul
 function VaultsPart({ chainId, confirmed, onConfirmed }: { chainId: number; confirmed: boolean; onConfirmed(): void }) {
   const s = useSetup();
   const owner = useOwner();
-  const v = useSetupGet<Vaults>("/setup/vaults");
+  // Every vault failing to read is an RPC problem (not "not a vault"): retry, then offer Try again.
+  const v = useSetupGet<Vaults>("/setup/vaults", { retry: TRIES, bad: (x) => x.found > 0 && x.vaults.every((y) => !!y.error) });
   const [mine, setMine] = useState(confirmed);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<{ message: string } | null>(null);
@@ -206,6 +212,7 @@ function VaultsPart({ chainId, confirmed, onConfirmed }: { chainId: number; conf
   return (
     <Section title="Your vaults" done={confirmed} sub="Each vault holds your funds and checks every trade.">
       {v.loading && !d && <div style={{ marginTop: 12 }}><Spinner label="Reading the vaults from the chain…" /></div>}
+      {v.failed && !v.loading && <RetryLine onRetry={v.reload} />}
       {owner ? (
         <>
           {!confirmed && (
@@ -298,7 +305,7 @@ function AgentPart({ enabled }: { enabled: boolean }) {
 
 export default function StepConnect() {
   const s = useSetup();
-  const st = useSetupGet<Status>("/setup/status");
+  const st = useSetupGet<Status>("/setup/status", { retry: TRIES });
   const chainId = st.data?.chainId ?? 133;
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);

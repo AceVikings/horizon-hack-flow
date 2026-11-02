@@ -6,6 +6,7 @@ import type { ApprovalPath, OwnerBridge, SetupBridge, SetupPath } from "@shared/
 import { useApp } from "../../src/app";
 import { short } from "../../src/format";
 import {Btn, Dialog, FlowMark, QR} from "../../src/ui";
+import { getWithRetry } from "./retry";
 import "./setup.css";
 
 export const STEPS = ["Connect", "Set limits", "Start"] as const;
@@ -34,25 +35,34 @@ export function isLoosening(before: Record<string, string | number>, after: Reco
   });
 }
 
-/** GET a /setup route with reload + optional polling. */
-export function useSetupGet<T>(path: SetupPath, opts: { every?: number; query?: Record<string, string>; skip?: boolean } = {}): { data: T | null; res: Res<T> | null; loading: boolean; reload(): void } {
+/**
+ * GET a /setup route with reload + optional polling. With `retry`, each attempt has a time budget and failures are
+ * retried with backoff; when every attempt fails, `failed` is true (show a "Try again" that calls reload).
+ */
+export function useSetupGet<T>(path: SetupPath, opts: { every?: number; query?: Record<string, string>; skip?: boolean; retry?: number; bad?(d: T): boolean } = {}): { data: T | null; res: Res<T> | null; loading: boolean; failed: boolean; reload(): void } {
   const s = useSetup();
   const [res, setRes] = useState<Res<T> | null>(null);
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(!opts.skip);
+  const [failed, setFailed] = useState(false);
   const [n, setN] = useState(0);
   const q = JSON.stringify(opts.query ?? {});
+  const badRef = useRef(opts.bad);
+  badRef.current = opts.bad;
   useEffect(() => {
     if (opts.skip) return;
     let live = true;
+    const once = () => s.get<T>(path, opts.query);
     const run = () =>
-      void s.get<T>(path, opts.query).then((r) => {
+      void (opts.retry ? getWithRetry(once, { tries: opts.retry, bad: (d) => !!badRef.current?.(d), alive: () => live }) : once()).then((r) => {
         if (!live) return;
         setRes(r);
         if (r.ok) setData(r.data);
+        setFailed(!r.ok || !!(opts.retry && badRef.current?.(r.data)));
         setLoading(false);
       });
     setLoading(true);
+    setFailed(false);
     run();
     const iv = opts.every ? setInterval(run, opts.every) : null;
     return () => {
@@ -60,8 +70,18 @@ export function useSetupGet<T>(path: SetupPath, opts: { every?: number; query?: 
       if (iv) clearInterval(iv);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path, q, n, opts.every, opts.skip, s]);
-  return { data, res, loading, reload: useCallback(() => setN((x) => x + 1), []) };
+  }, [path, q, n, opts.every, opts.skip, opts.retry, s]);
+  return { data, res, loading, failed, reload: useCallback(() => setN((x) => x + 1), []) };
+}
+
+/** Plain failure line with a Try again button (no codes, no pills). */
+export function RetryLine({ message = "Couldn't reach the network. Try again.", onRetry }: { message?: string; onRetry(): void }) {
+  return (
+    <div className="row g12 sm" role="alert" style={{ marginTop: 12 }}>
+      <span>{message}</span>
+      <Btn kind="solid" onClick={onRetry}>Try again</Btn>
+    </div>
+  );
 }
 
 export function useChainId(): number {
