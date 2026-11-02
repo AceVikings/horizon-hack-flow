@@ -369,3 +369,20 @@ Lanes may **add** to frozen artifacts; changing anything here needs a lead-appro
    - Engines: SDK loops offer enabled servers' tools as `mcp__<server>__<tool>` and send those calls to the server; the
      private opencode server registers Flow-enabled servers, keeps the user's other opencode servers off, and enables
      their tool ids per scope only when enabled for that agent.
+5. **Agent-built charts (additive to `ate_chart`, D4):** `compare?: (pool|cex|oracle)[]`, `drawings?: ChartDrawing[]` (≤ 20;
+   kinds `hline|trend|zone|fib|text`, points `{ t?, v }` in unix s / USD; validated by `validateDrawings` in
+   `@ate/core`), `analyse?: boolean`, indicator `volume`. `ChartSpec` gains `drawings?` and `analysis? { summary,
+   findings[{ text, drawingId?, tone? }], disclaimer, from, to }` — the disclaimer is always "information, not advice".
+   Analysis is computed in the daemon (`apps/daemon/src/charts/analysis.ts`), not by the LLM, so its numbers are real.
+   - **D3 prompt addition** (with item 4): "To answer 'where is support?' or 'analyse the last 24 h', call `ate_chart` with
+     `analyse: true` and quote its findings; to draw a level the user names (e.g. a 1% gap line), pass `drawings`. Say the
+     analysis is information, not advice." Trade's "Ask about this chart" sends chat turns on session ids `trade-<hsk|btc>-…`
+     and listens for `chat.tool` (`ate_chart`) on that session. Strict-tool note: the nested `drawings` schema adds optional
+     params; if strict mode rejects the tool set, the engine's existing non-strict fallback applies.
+   - **D3 (Ask):** `<ToolResultBlock>` now also shows the findings, the disclaimer and **Keep drawings** (saves to the
+     market's Trade chart, `flow.drawings.v1.<market>` in localStorage).
+6. **For lane STRAT (simulation / backtest):** reuse `ChartView` from `apps/desktop/src/renderer/src/charts` with a
+   `ChartSpec` you build (series `candles|line|area|histogram`, `markers` for simulated fills, `lines` for thresholds,
+   `drawings` for zones), or call `ate_chart` and overlay. `ChartView` props: `look`, `logScale`, `drawings`,
+   `onCrosshair` (OHLC readout), `drawTool`/`onDraw`. Wrap several charts in `<CrosshairLink>` to link crosshairs.
+   Please don't fork the components; ask D4 for additive props.
