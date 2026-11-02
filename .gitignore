@@ -45,3 +45,10 @@ deployments/*-fork.json
 *.tfvars
 cdk.out/
 docs/aws-*.md
+
+# App icons are source assets (rendered from packages/ui/brand/app-icon.svg)
+!apps/desktop/build/
+apps/desktop/build/*
+!apps/desktop/build/icon.icns
+!apps/desktop/build/icon.ico
+!apps/desktop/build/icon.png

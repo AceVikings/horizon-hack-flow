@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell, session } from "electron";
+import { app, BrowserWindow, ipcMain, nativeImage, shell, session } from "electron";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { DaemonEvent, MarketId } from "@ate/core";
@@ -208,8 +208,12 @@ async function invoke(method: IpcMethod, arg: any, arg2?: any): Promise<unknown>
   }
 }
 
+// App icon: apps/desktop/build/icon.{png,icns,ico}, rendered from packages/ui/brand/app-icon.svg.
+const APP_ICON = resolve(__dirname, "../../build/icon.png");
+
 function createWindow(): void {
   win = new BrowserWindow({
+    icon: APP_ICON,
     width: 1480,
     height: 920,
     minWidth: 1100,
@@ -285,7 +289,10 @@ async function takeScreenshots(dir: string): Promise<void> {
   app.quit();
 }
 
+app.setName("Flow");
+
 app.whenReady().then(async () => {
+  if (process.platform === "darwin" && app.dock) app.dock.setIcon(nativeImage.createFromPath(APP_ICON));
   session.defaultSession.webRequest.onHeadersReceived((details, cb) => {
     cb({ responseHeaders: { ...details.responseHeaders, "Content-Security-Policy": [devUrl ? CSP.replace("connect-src 'self'", "connect-src 'self' ws://localhost:* http://localhost:*").replace("script-src 'self'", "script-src 'self' 'unsafe-inline'") : CSP] } });
   });

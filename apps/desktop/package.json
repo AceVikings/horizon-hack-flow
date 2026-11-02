@@ -29,5 +29,22 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "vite": "^5.4.11"
+  },
+  "build": {
+    "appId": "cloud.flowverse.app",
+    "productName": "Flow",
+    "directories": {
+      "buildResources": "build"
+    },
+    "mac": {
+      "icon": "build/icon.icns",
+      "category": "public.app-category.finance"
+    },
+    "win": {
+      "icon": "build/icon.ico"
+    },
+    "linux": {
+      "icon": "build/icon.png"
+    }
   }
 }
