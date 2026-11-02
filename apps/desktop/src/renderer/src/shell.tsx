@@ -162,7 +162,7 @@ function Rail({ nav, go, mode, setMode }: { nav: string; go(p: string): void; mo
 }
 
 export function Shell({ nav, chrome = "app", children }: { nav: string; chrome?: "app" | "setup"; setupStep?: number; children: ReactNode }) {
-  const { conn, toasts, dismiss } = useApp();
+  const { toasts, dismiss } = useApp();
   const [ctx, setCtx] = useState<HTMLElement | null>(null);
   const [insp, setInsp] = useState<HTMLElement | null>(null);
   const [kill, setKill] = useState(false);
