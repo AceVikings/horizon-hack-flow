@@ -571,7 +571,10 @@ input.inp, select.inp { font: 500 13px/1 var(--body); color: var(--c); width: 10
 .ph { -webkit-app-region: drag; }
 .ph button, .ph a, .ph input, .ph label, .ph [role="radiogroup"], .ph .acts { -webkit-app-region: no-drag; }
 /* chrome text is not selectable */
-.rail, .menu, button, .btn, .pill, .bd, .stat-pill, .net, .lbl, .eb, .h4, .ph h1, .tstat, .seg, .disclose, label { -webkit-user-select: none; user-select: none; }
+/* App chrome is not selectable (nav, headings, copy, buttons); only things worth copying are:
+   fields, addresses/hashes (mono), code, chat messages. */
+body { -webkit-user-select: none; user-select: none; cursor: default; }
+input, textarea, [contenteditable="true"], .mono, .addr, code, pre, .codeshow, .msg, .bubble { -webkit-user-select: text; user-select: text; }
 
 /* No pill-shaped status labels (user rule): badges, status and network labels are plain text + icon. */
 .bd, .bd.ok, .bd.bad, .bd.warn, .bd.info, .bd.y, .bd.lgx { background: none; border: 0; padding: 0; border-radius: 0; }
