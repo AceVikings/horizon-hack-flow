@@ -657,3 +657,6 @@ button.lnk.ico { text-decoration: none; font-size: 14px; color: var(--fg2); }
 .clegend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11.5px; color: var(--fg2); margin: 0 0 4px; }
 .clegend span { display: inline-flex; align-items: center; gap: 6px; }
 .clegend i { width: 12px; height: 2px; border-radius: 1px; }
+
+/* Ask composer: the box itself shows focus; no inner ring on the text field */
+.composer input:focus, .composer input:focus-visible { outline: none; box-shadow: none; border-radius: 0; }
