@@ -64,7 +64,7 @@ What you should see:
 For the exposure attack the owner first minted ~$100 of tWHSK into Vault-HSK
 ([0x0fa09b5b…](https://testnet-explorer.hskchain.net/tx/0x0fa09b5b00a9743a84e6f82c3626c59301e6c560a39b3275f1ecdf6f6be2c555)), because the trader had sold its tWHSK.
 
-### 4. Guardian pause and owner unpause (Vault-HSK)
+### 4. Guardian pause and owner unpause (both vaults)
 
 | Step | Tx |
 |---|---|
@@ -73,6 +73,14 @@ For the exposure attack the owner first minted ~$100 of tWHSK into Vault-HSK
 | Owner `unpause()` (from `0xFF7D…569e`) | [0x530bafc2…](https://testnet-explorer.hskchain.net/tx/0x530bafc2456b50dd35ee58359f02b1c4b8e44c9719f154caff7e599680f9e949) |
 
 The next trader cycle after the unpause closed the WBTC lot (section 2, row 2).
+
+Vault-BTC, same sequence (after the trader run, 06:36 to 06:37 UTC):
+
+| Step | Tx |
+|---|---|
+| Guardian `pause()` (from `0x8aAc…db66B`) | [0xbfe744eb…](https://testnet-explorer.hskchain.net/tx/0xbfe744ebf7e53f8375c11247b5de1a721cbf0dfa8c66487a4bdacdf4cf130de6) |
+| Agent `execute` of a $5 tUSDT buy while paused → `VaultPaused()` (`ERR_PAUSED`; `check()` returned reason 1 first) | [0x37e290d6…](https://testnet-explorer.hskchain.net/tx/0x37e290d6bc3048f77c95563c39fa0dc2d336f2628f227c7cbe9a7bdaf7c41575) |
+| Owner `unpause()` (from `0xFF7D…569e`) | [0x486ea3f2…](https://testnet-explorer.hskchain.net/tx/0x486ea3f24e20f3cc928b07a3c61bb2ad86ed51bbb614809a0946288066b77e61) |
 
 ### 5. Chat and the guard
 

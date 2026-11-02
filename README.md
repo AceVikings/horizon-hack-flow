@@ -19,7 +19,7 @@ These links are on the HashKey Chain **testnet** (chain 133), with test tokens. 
 1. [The vault](https://testnet-explorer.hskchain.net/address/0xF80A74F4D9C17Db8a2a0F32558a9FC3A63e2Bcd2?tab=contract) (Vault-HSK). Source is verified on Blockscout and [on Sourcify](https://repo.sourcify.dev/133/0xF80A74F4D9C17Db8a2a0F32558a9FC3A63e2Bcd2) (exact match).
 2. [An AI trade](https://testnet-explorer.hskchain.net/tx/0x4ff2ad5176975fed3b45e5242894cce949b68b626051e82ec3d270474fde9c0d) and [its EAS attestation](https://testnet-explorer.hskchain.net/tx/0x1f042937320537b9e3b749d327eb2648613aeb1c6319a476f48341bba0a798f8).
 3. [A rogue agent trade that reverted](https://testnet-explorer.hskchain.net/tx/0x0677fb8896195c736201374805876d0aa0122b0ea57ecdf08b5f78f40b531558) (bad price).
-4. [Pause](https://testnet-explorer.hskchain.net/tx/0xaba62b83fd096241a703c4f4ced8b7a7eb4a3e9101a127c71c60e1c11c4a221a), then [unpause](https://testnet-explorer.hskchain.net/tx/0x530bafc2456b50dd35ee58359f02b1c4b8e44c9719f154caff7e599680f9e949).
+4. [Pause](https://testnet-explorer.hskchain.net/tx/0xaba62b83fd096241a703c4f4ced8b7a7eb4a3e9101a127c71c60e1c11c4a221a), then [unpause](https://testnet-explorer.hskchain.net/tx/0x530bafc2456b50dd35ee58359f02b1c4b8e44c9719f154caff7e599680f9e949) (Vault-HSK); the same on Vault-BTC: [pause](https://testnet-explorer.hskchain.net/tx/0xbfe744ebf7e53f8375c11247b5de1a721cbf0dfa8c66487a4bdacdf4cf130de6), [trade refused](https://testnet-explorer.hskchain.net/tx/0x37e290d6bc3048f77c95563c39fa0dc2d336f2628f227c7cbe9a7bdaf7c41575), [unpause](https://testnet-explorer.hskchain.net/tx/0x486ea3f24e20f3cc928b07a3c61bb2ad86ed51bbb614809a0946288066b77e61).
 5. [The journal export](docs/testnet-133-journal.json) (70 records, hash chain). Recompute every hash offline: `node scripts/verify-journal.mjs`.
 
 What each link shows: [`docs/JUDGE.md`](docs/JUDGE.md).
@@ -34,7 +34,7 @@ What each link shows: [`docs/JUDGE.md`](docs/JUDGE.md).
 | Rogue test on testnet | Done. Every attack with the stolen agent key reverted on-chain. |
 | Mainnet (chain 177) | Next. The same scripts deploy it. The owner moves to a Safe after that. |
 | AI trader | Claude (Sonnet) through Claude Code. You can plug in any MCP agent. |
-| Result | Claude opened and closed a WBTC lot on testnet for +70 bps net. All 7 attacks with the stolen key reverted. The pause worked. |
+| Result | Claude opened and closed a WBTC lot on testnet for +70 bps net. All 7 attacks with the stolen key reverted. The guardian paused both vaults, and trades were refused until the owner unpaused. |
 | Caveats | The price gap for the trades was staged by us, because nobody else trades the test pools. Profit is not promised. The pools are thin. What Flow gives you is a hard limit on loss. |
 
 ### Proof on testnet
@@ -46,7 +46,7 @@ These links are on the HashKey Chain **testnet** (chain 133), with test tokens.
 - The EAS attestation for that trade: [attest tx](https://testnet-explorer.hskchain.net/tx/0x1f042937320537b9e3b749d327eb2648613aeb1c6319a476f48341bba0a798f8).
 - Skipped trades and the veto: in the [journal export](docs/testnet-133-journal.json) (`no_trade` records, head hash `0x5e72…ad85`).
 - Rogue agent reverts: [trade too big](https://testnet-explorer.hskchain.net/tx/0x7213dfc80d876804e3232bc572b2ecc99faae25f75e4457da71b8616ca091e24), [bad price](https://testnet-explorer.hskchain.net/tx/0x0677fb8896195c736201374805876d0aa0122b0ea57ecdf08b5f78f40b531558), [withdraw](https://testnet-explorer.hskchain.net/tx/0x6f5d929c9591a028c811eb7f841cc77bf435619f799b344f8ff4881cfb139a8c).
-- Kill switch (on Vault-HSK): [guardian pause](https://testnet-explorer.hskchain.net/tx/0xaba62b83fd096241a703c4f4ced8b7a7eb4a3e9101a127c71c60e1c11c4a221a), [trade refused while paused](https://testnet-explorer.hskchain.net/tx/0x62f96834dfa5ff64bb0ddd378c56f2a42d5b83b96d951f7a0803ca6029b31a8b), [owner unpause](https://testnet-explorer.hskchain.net/tx/0x530bafc2456b50dd35ee58359f02b1c4b8e44c9719f154caff7e599680f9e949).
+- Kill switch, Vault-HSK: [guardian pause](https://testnet-explorer.hskchain.net/tx/0xaba62b83fd096241a703c4f4ced8b7a7eb4a3e9101a127c71c60e1c11c4a221a), [trade refused while paused](https://testnet-explorer.hskchain.net/tx/0x62f96834dfa5ff64bb0ddd378c56f2a42d5b83b96d951f7a0803ca6029b31a8b), [owner unpause](https://testnet-explorer.hskchain.net/tx/0x530bafc2456b50dd35ee58359f02b1c4b8e44c9719f154caff7e599680f9e949). Vault-BTC: [guardian pause](https://testnet-explorer.hskchain.net/tx/0xbfe744ebf7e53f8375c11247b5de1a721cbf0dfa8c66487a4bdacdf4cf130de6), [trade refused while paused](https://testnet-explorer.hskchain.net/tx/0x37e290d6bc3048f77c95563c39fa0dc2d336f2628f227c7cbe9a7bdaf7c41575), [owner unpause](https://testnet-explorer.hskchain.net/tx/0x486ea3f24e20f3cc928b07a3c61bb2ad86ed51bbb614809a0946288066b77e61).
 
 All links, with what each one shows: [`docs/JUDGE.md`](docs/JUDGE.md).
 
@@ -331,7 +331,7 @@ You can see each revert on Blockscout with the decoded error.
 | "Go to cash on HSK, keep the BTC" | Sells the WHSK at once. Keeps the WBTC. |
 | "Stop out HSK at 2%" | Sets the stop-loss for the HSK market. |
 | "Why did you sell at 3 am?" | Shows the journal record and the rationale. |
-| "Stop everything" | Pauses the vaults. The testnet proof shows the pause on Vault-HSK. |
+| "Stop everything" | Pauses the vaults. The testnet proof shows a guardian pause, a refused trade and an owner unpause on both vaults. |
 | "Raise the daily cap to $800" | Refuses. Only the owner can change the limits. |
 
 A change that increases the risk needs approval: Touch ID, or a one-time code shown by the daemon.
