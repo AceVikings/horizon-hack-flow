@@ -48,7 +48,7 @@ const money = (s: string) => {
 const plain = (t: string) =>
   t
     .split("\n")
-    .filter((l) => !/changeId|ate-approve|chg_[0-9a-f]{8}/.test(l))
+    .filter((l) => !/changeId|ate-approve|chg_[0-9a-f]{8}|^(portfolio|hsk-dex:)\S* \w+: /.test(l))
     .join("\n")
     .trim();
 
