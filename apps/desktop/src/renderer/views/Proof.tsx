@@ -77,6 +77,16 @@ export default function Proof(_: ViewProps) {
     toast({ kind: "info", text: "Stopping after this attack" });
     p.reload();
   };
+  // Flow-managed owner service (CLOUD lane): one-click unpause, no QR or wallet. Falls back to the QR when absent.
+  const owner = (ate as unknown as { owner?: { unpause(market?: string): Promise<Res<unknown>> } }).owner;
+  const resume = async () => {
+    if (!owner) return;
+    setBusy(true);
+    const r = await owner.unpause();
+    setBusy(false);
+    toast(r.ok ? { kind: "ok", text: "Trading resumed. The vaults are unpaused." } : { kind: "error", text: r.error.message });
+    p.reload();
+  };
   const exportRun = () => {
     if (!run) return;
     const blob = new Blob([JSON.stringify({ chainId: s?.chainId, explorer: s?.explorer, run, pauses: s?.pauses }, null, 2)], { type: "application/json" });
@@ -134,7 +144,13 @@ export default function Proof(_: ViewProps) {
           s && <span className="sm fg2"><span aria-hidden="true">ⓘ</span> Tests run on testnet only. On mainnet this page shows recorded results.</span>
         )}
         {paused ? (
-          <Btn onClick={() => setQr(true)}>Resume on owner device</Btn>
+          owner ? (
+            <Btn kind="pri" disabled={busy} onClick={() => void resume()}>
+              Resume trading
+            </Btn>
+          ) : (
+            <Btn onClick={() => setQr(true)}>Resume on owner device</Btn>
+          )
         ) : (
           <Btn kind="danger" onClick={kill}>
             Pause trading
@@ -144,7 +160,7 @@ export default function Proof(_: ViewProps) {
 
       {hskPaused && !running && run?.attacks.some((a) => a.attack === "paused" && a.status === "reverted") && (
         <section className="card" style={{ marginTop: 20, padding: "14px 18px", background: "var(--bg3)" }} aria-label="Vault paused">
-          <b>Vault-HSK is paused.</b> The last attack needed it. Unpause on your owner device to trade HSK again.
+          <b>Vault-HSK is paused.</b> The last attack needed it. Resume trading to use HSK again.
         </section>
       )}
 
