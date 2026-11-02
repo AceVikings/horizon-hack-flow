@@ -31,6 +31,9 @@ function prettyError(d: string | undefined, attack: string): string | null {
   const usd = attack === "trade_cap" || attack === "exposure";
   return `${m[1]}(${args.map((a) => (/^0x[0-9a-fA-F]{40}$/.test(a) ? short(a, 6, 4) : usd && /^\d+$/.test(a) ? (Number(a) / 1e8).toFixed(2) : /^\d{13,}$/.test(a) ? `${a.slice(0, 6)}…` : a)).join(", ")})`;
 }
+/** Plain reason for a skipped attack (the raw check() note shows under "Show details"). */
+const skipWhy = (note?: string) =>
+  !note ? "Skipped." : /EPOCH|headroom|epoch/.test(note) ? "Skipped: today's trading budget is used up. Try after the daily reset." : /paused/i.test(note) ? "Skipped: the vault was paused at the time." : /stopped before/.test(note) ? "Skipped: you stopped the test." : /guardian pause|not paused/.test(note) ? "Skipped: the vault was not paused in time." : "Skipped: the vault's state didn't allow this test right now.";
 const when = (at: number) => new Date(at * 1000).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 const dur = (a: number, b: number) => `${Math.floor((b - a) / 60)}m ${String((b - a) % 60).padStart(2, "0")}s`;
 
@@ -178,7 +181,8 @@ export default function Proof(_: ViewProps) {
                     <div>
                       <div className="sm b7">{ATTACKS[a.attack].name}</div>
                       <div className="xs fg2">
-                        {a.status === "reverted" ? `Stopped: ${ATTACKS[a.attack].stops.toLowerCase()}` : a.note ? a.note.slice(0, 140) : `Should stop: ${ATTACKS[a.attack].stops.toLowerCase()}`}
+                        {a.status === "reverted" ? `Stopped: ${ATTACKS[a.attack].stops.toLowerCase()}` : a.status === "skipped" ? skipWhy(a.note) : a.note && details ? a.note.slice(0, 140) : `Should stop: ${ATTACKS[a.attack].stops.toLowerCase()}`}
+                        {details && a.status === "skipped" && a.note && <span className="mono"> · {a.note.slice(0, 120)}</span>}
                         {details && a.decoded && <span className="mono"> · {prettyError(a.decoded, a.attack)}</span>}
                       </div>
                     </div>
