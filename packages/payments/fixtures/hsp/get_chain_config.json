@@ -1,0 +1,4 @@
+{ "code": 0, "message": "success", "data": {
+  "network": "hashkey-testnet", "chain_id": 133,
+  "token": { "address": "0x8FE3cB719Ee4410E236Cd6b72ab1fCDC06eF53c6", "symbol": "USDC", "decimals": 6 },
+  "payment_protocol": "x402-v2", "rpc_url": "https://testnet.hsk.xyz" } }

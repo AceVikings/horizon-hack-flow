@@ -73,3 +73,35 @@ Lanes may **add** to frozen artifacts; changing anything here needs a lead-appro
 3. Config requires both markets' strategy blocks; `vaults` may hold 1–2 entries (each must have a venue market).
 4. CLI: lanes add one file per command in `src/commands/<lane>/` exporting `default: CommandModule`; names reserved per §3.3 (`b/` includes `smoke`). The `rogue` token scope (v0.9) is in `TokenScope` only; no MCP tools for it.
 5. MCP stub: `scope` from `ATE_STUB_SCOPE` (agent|chat), `ATE_STUB_HSP=1` registers `ate_signal_buy`. Results are JSON text content; `isError` mirrors `ok:false`.
+
+## L. Lane E additions (additive only)
+
+1. **New packages:** `@ate/approve` (`apps/approve/`: Swift `ate-approve` + TS payload codec/verifier/client, and the daemon
+   approval service under `@ate/approve/daemon`), `@ate/payments` (`packages/payments/`), `@ate/worker` (`apps/worker/`).
+2. **`@ate/journal` (additive):** dependency `viem`, subpath export `@ate/journal/attest` (tsup entry `src/attest/index.ts`),
+   script `attest:register-schema`. Lane B's journal code is untouched.
+3. **Approval payload wire format (frozen by Lane E):** `base64url(canonicalJson({ v:1, kind, aud, nonce, issuedAt, expiresAt, body }))`,
+   kinds `payment|trade|chat_session|ui_attach|strategy|config`; the Secure Enclave signs the decoded bytes (ECDSA P-256/SHA-256,
+   DER, base64 in the `approval` field). Verifiers rebuild the payload with the shared builders
+   (`uiAttachPayload`, `chatSessionPayload`, `strategyPayload(StrategyApprovalPending)`, `paymentPayload`); `issuedAt = expiresAt − 60`.
+   Pinned key: `~/.ate/approve-pubkey.json` `{ publicKey: <65-byte SEC1 hex>, keyId }`. An `approval` matching `^\d{8}$` is a TTY code.
+4. **Lane B mount points:**
+   - Approval endpoints: add `"@ate/approve": "workspace:*"` to `apps/daemon/package.json`; `createDaemonApproval(...)` from
+     `apps/daemon/src/approval/index.ts` returns `{ routes, nodeHandler, tty, service }`. Routes: `POST /ui/attach`
+     (step 1 `{}` unauthenticated, 5/min; step 2 needs a bearer — agent token from runtime.json — plus the signature),
+     `POST /chat/session` (agent|ui), `POST /strategy/approve` (ui|session). Wire daemon stdin lines →
+     `approval.tty.handleTtyLine(line)` (`approval-fallback enable|disable|status`; no HTTP route). When `ate_strategy_set`
+     returns `ATE_APPROVAL_REQUIRED`, also call `approval.service.onStrategyPending(details)`.
+     Callbacks Lane B supplies: `mintUiToken`, `mintSessionToken(sessionId)`, `getPendingStrategyChange(changeId)`,
+     `applyStrategyChange(changeId, { method })`, `journalApproval({ purpose, method: "secure-enclave"|"tty", ref })`.
+   - EAS attester: `import { Attester, buildAttestTx } from "@ate/journal/attest"`. After each `TradeExecuted` receipt:
+     `attester.plan({ proposalId: <full hash>, rationaleHash, txHash, notionalUsdE8, exitPath, engine, origin, vault }, propDecisionId, agentBalanceWei)`
+     → `enqueue` (`tx = { to, data, value: 0n, priority: "attest", gasHint }` for the TxQueue, lowest priority) | `defer` (below
+     `attestFloorHsk`) | `give_up`. Report `onSubmitted(proposalId, txHash)`, then `onMined(receipt, bal)` → `{ record }`
+     (an `attestation` journal input with `easUid`) or `{ retry }`; `onFailed(...)`; `failureRecord(id, "deferred"|"failed")`;
+     `drainDeferred(bal)` after top-up; `deferredCount()` for `/status`. The module never signs or sends.
+   - Schema UID (deterministic, no resolver, non-revocable): `0x1c0c01e337924a140372f0043e9a9a3125e0e276b6dae78382676b3d0e53a04f`
+     — pin in `deployments/177.json`; ops registers with the `cast send` printed by `pnpm --filter @ate/journal attest:register-schema`.
+5. **ate-pay HTTP API** (worker, via SSM forward, `Bearer <worker token>`): `GET /offers`, `POST /buy { offerId, context? }`,
+   `GET /payments[/:id]` (includes `approvalRequest { stage, payload (base64url), prompt, expiresAt }` for `ate-approve sign`),
+   `POST /payments/:id/approve { stage, approval }`, `POST /payments/:id/deny { stage }`, `GET /payments/:id/signal`.

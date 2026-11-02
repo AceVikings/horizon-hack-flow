@@ -1,0 +1,1 @@
+{ "code": 0, "message": "success", "data": { "fee_raw": "{{feeRaw}}", "gas_fee_advanced": true } }

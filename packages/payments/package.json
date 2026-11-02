@@ -1,0 +1,35 @@
+{
+  "name": "@ate/payments",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "description": "HSP client (Streamable HTTP MCP), payment conditions, mandate builder, settlement state machine, caps (SPEC §9)",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "fixtures"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ate/approve": "workspace:*",
+    "@ate/core": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.20.0",
+    "viem": "^2.21.0"
+  }
+}

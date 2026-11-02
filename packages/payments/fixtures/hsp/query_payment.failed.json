@@ -1,0 +1,1 @@
+{ "code": 0, "message": "success", "data": { "payment_request_id": "{{paymentRequestId}}", "status": "payment-failed", "failure_reason": "authorization rejected on-chain", "attribution_verified": false } }

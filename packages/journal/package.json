@@ -10,7 +10,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./migrations/*.sql": "./migrations/*.sql"
+    "./migrations/*.sql": "./migrations/*.sql",
+    "./attest": {
+      "types": "./dist/attest/index.d.ts",
+      "import": "./dist/attest/index.js"
+    }
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -21,11 +25,13 @@
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "attest:register-schema": "tsx src/attest/register-schema.ts"
   },
   "dependencies": {
     "better-sqlite3": "^11.7.0",
-    "@ate/core": "workspace:*"
+    "@ate/core": "workspace:*",
+    "viem": "^2.21.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.12"

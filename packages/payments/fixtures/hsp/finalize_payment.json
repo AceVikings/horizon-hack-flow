@@ -1,0 +1,1 @@
+{ "code": 0, "message": "success", "data": { "flow_id": "{{flowId}}", "payment_request_id": "{{paymentRequestId}}", "status": "authorized" } }

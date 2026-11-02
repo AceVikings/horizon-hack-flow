@@ -1,0 +1,4 @@
+{ "tools": [
+  { "name": "get_chain_config" }, { "name": "create_order" }, { "name": "get_order" }, { "name": "prepare_payment" },
+  { "name": "finalize_payment" }, { "name": "estimate_fee" }, { "name": "submit_payment" }, { "name": "query_payment" }
+] }

@@ -1,0 +1,24 @@
+{
+  "name": "@ate/approve",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "description": "ate-approve: Secure Enclave approval helper (Swift) + TS payload codec, verifier, invoker and daemon approval service (SPEC §10.1)",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+    "./daemon": { "types": "./dist/daemon/index.d.ts", "import": "./dist/daemon/index.js" }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist", "swift", "scripts"],
+  "scripts": {
+    "build": "tsup",
+    "build:swift": "sh scripts/build-swift.sh",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ate/core": "workspace:*"
+  }
+}

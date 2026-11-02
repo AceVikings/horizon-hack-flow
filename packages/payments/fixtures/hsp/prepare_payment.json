@@ -1,0 +1,12 @@
+{ "code": 0, "message": "success", "data": {
+  "flow_id": "{{flowId}}", "payment_request_id": "{{paymentRequestId}}",
+  "token_total_raw": "{{tokenTotalRaw}}", "fee_raw": "{{feeRaw}}", "valid_until": "{{validUntil}}",
+  "typed_data": {
+    "domain": { "name": "USD Coin", "version": "2", "chainId": 133, "verifyingContract": "0x8FE3cB719Ee4410E236Cd6b72ab1fCDC06eF53c6" },
+    "types": {
+      "EIP712Domain": [ { "name": "name", "type": "string" }, { "name": "version", "type": "string" }, { "name": "chainId", "type": "uint256" }, { "name": "verifyingContract", "type": "address" } ],
+      "TransferWithAuthorization": [ { "name": "from", "type": "address" }, { "name": "to", "type": "address" }, { "name": "value", "type": "uint256" }, { "name": "validAfter", "type": "uint256" }, { "name": "validBefore", "type": "uint256" }, { "name": "nonce", "type": "bytes32" } ]
+    },
+    "primaryType": "TransferWithAuthorization",
+    "message": { "from": "{{payer}}", "to": "{{payTo}}", "value": "{{tokenTotalRaw}}", "validAfter": "0", "validBefore": "{{validUntil}}", "nonce": "{{nonce}}" }
+  } } }

@@ -14,3 +14,4 @@ infra/aws/
 *.db
 *.db-wal
 *.db-shm
+apps/approve/bin/

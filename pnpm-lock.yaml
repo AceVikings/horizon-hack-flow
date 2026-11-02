@@ -24,6 +24,18 @@ importers:
         specifier: ^2.1.4
         version: 2.1.9(@types/node@22.20.5)
 
+  agents/trader:
+    dependencies:
+      '@ate/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@ate/strategy':
+        specifier: workspace:*
+        version: link:../../packages/strategy
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.20.0
+        version: 1.32.2(zod@3.25.76)
+
   apps/approve:
     dependencies:
       '@ate/core':
@@ -35,9 +47,21 @@ importers:
       '@ate/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@ate/daemon':
+        specifier: workspace:*
+        version: link:../daemon
+      '@ate/strategy':
+        specifier: workspace:*
+        version: link:../../packages/strategy
+      '@ate/trader':
+        specifier: workspace:*
+        version: link:../../agents/trader
 
   apps/daemon:
     dependencies:
+      '@ate/approve':
+        specifier: workspace:*
+        version: link:../approve
       '@ate/chain':
         specifier: workspace:*
         version: link:../../packages/chain
@@ -53,6 +77,9 @@ importers:
       '@ate/oracle':
         specifier: workspace:*
         version: link:../../packages/oracle
+      '@ate/strategy':
+        specifier: workspace:*
+        version: link:../../packages/strategy
       '@ate/venues':
         specifier: workspace:*
         version: link:../../packages/venues

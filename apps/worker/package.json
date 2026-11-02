@@ -1,0 +1,23 @@
+{
+  "name": "@ate/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "description": "AWS payment worker: ate-pay (payment agent) + ate-signal (receiving agent) (SPEC §3.4, §9)",
+  "bin": { "ate-pay": "./dist/bin/ate-pay.js", "ate-signal": "./dist/bin/ate-signal.js" },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "pay": "tsx src/bin/ate-pay.ts",
+    "signal": "tsx src/bin/ate-signal.ts"
+  },
+  "dependencies": {
+    "@ate/approve": "workspace:*",
+    "@ate/core": "workspace:*",
+    "@ate/payments": "workspace:*",
+    "viem": "^2.21.0"
+  }
+}

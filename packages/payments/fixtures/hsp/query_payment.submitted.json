@@ -1,0 +1,2 @@
+{ "code": 0, "message": "success", "data": { "payment_request_id": "{{paymentRequestId}}", "order_id": "{{orderId}}", "status": "payment-submitted",
+  "tx_hash": "0xabababababababababababababababababababababababababababababababab", "attribution_verified": {{attributionVerified}}, "expected_merchant_name": "Vikings" } }
