@@ -8,7 +8,7 @@ import { formatUnits, parseAbi, type Address, type PublicClient } from "viem";
 import { MARKETS, e8ToUsd, parseConfig, policyVaultAbi, worstCase, type AteConfig, type MarketId } from "@ate/core";
 import { probeRpcs } from "@ate/chain";
 import { configPayload, validatePayload, type ApprovalVerifier, type ConfigApproval } from "@ate/approve";
-import { loadEncryptedKey } from "@ate/wallet";
+import { loadEncryptedKey, signerKind } from "@ate/wallet";
 import type { Routes } from "../http.js";
 import type { AteService } from "../service.js";
 import { createAgentKey, keyStores } from "../daemon.js";
@@ -168,6 +168,12 @@ export function registerSetupRoutes(d: SetupRouteDeps): void {
     });
 
   const keyInfo = () => {
+    // Additive (cloud): an env-secret / KMS agent signer has no keystore entry; report the unlocked account.
+    const sk = signerKind("agent", env);
+    if (sk === "secret" || sk === "kms") {
+      const address = service.o.signer.address ?? null;
+      return { keyId: cfg.agentKeyId, exists: true, address, store: sk, unlocked: !service.locked };
+    }
     const found = loadEncryptedKey(cfg.agentKeyId, keyStores(home, env));
     return { keyId: cfg.agentKeyId, exists: !!found, address: found?.blob.address ?? null, store: found?.store.kind ?? keyStores(home, env)[0]!.kind, unlocked: !service.locked };
   };

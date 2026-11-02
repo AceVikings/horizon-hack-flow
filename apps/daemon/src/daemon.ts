@@ -11,7 +11,7 @@ import Database from "better-sqlite3";
 import { AteError, MIN_CANDIDATE_TTL_SEC, WHSK_DEMO_PROFILE_OVERRIDES, type TokenScope, isMarketId, parseConfig, applyConfigNetwork, type AteConfig, type MarketId, type Profile, type RuntimeJson } from "@ate/core";
 import { createChainClient } from "@ate/chain";
 import { Journal, migrate } from "@ate/journal";
-import { AgentSigner, FileKeyStore, defaultKeyStore, encryptKey, generatePrivateKey, loadEncryptedKey, type KeyStore } from "@ate/wallet";
+import { AgentSigner, FileKeyStore, assertNoOwnerCredentials, defaultKeyStore, encryptKey, generatePrivateKey, loadEncryptedKey, signerFromEnv, signerKind, type KeyStore } from "@ate/wallet";
 import { DaemonHttp, Routes, TokenRegistry } from "./http.js";
 import { AteService, type Attesterish } from "./service.js";
 import { loadStrategy } from "./strategy-stub.js";
@@ -119,6 +119,8 @@ export async function startDaemon(o: StartOptions = {}): Promise<RunningDaemon> 
   const home = o.home ?? ateHome(env);
   const log = o.log ?? ((m: string) => process.stderr.write(`[ate-daemon] ${m}\n`));
   const tty = o.tty ?? ((m: string) => process.stderr.write(`${m}\n`));
+  // The agent runtime never sees owner credentials (owner ops run in the separate owner service, apps/owner).
+  assertNoOwnerCredentials(env);
   mkdirSync(home, { recursive: true, mode: 0o700 });
   const configPath = o.config ?? join(home, "config.json");
   if (o.setup && ensureSetupConfig(home, configPath, env)) log(`setup: wrote a fresh testnet config to ${configPath}`);
@@ -167,7 +169,18 @@ export async function startDaemon(o: StartOptions = {}): Promise<RunningDaemon> 
     if (prof === "demo" && m === "hsk-dex:WHSK/USDT:3000") Object.assign(service.strategy.markets[m], WHSK_DEMO_PROFILE_OVERRIDES);
   }
   const stores = keyStores(home, env);
+  // Env-configured agent backends (cloud): ATE_AGENT_SIGNER=secret (sealed blob + secret) | kms. No passphrase prompt.
+  const envBackend = signerKind("agent", env);
+  const unlockFromEnv = async (): Promise<string> => {
+    const s = await signerFromEnv("agent", env);
+    const addr = signer.unlockSigner(s!);
+    db.prepare("UPDATE agents SET address = ? WHERE id = ?").run(addr, cfg.agentKeyId);
+    emit({ type: "daemon.locked", at: Math.floor(Date.now() / 1000), data: { locked: false } });
+    log(`unlocked agent ${addr} (${envBackend})`);
+    return addr;
+  };
   const unlock = async (passphrase: string): Promise<string> => {
+    if (envBackend === "secret" || envBackend === "kms") return unlockFromEnv();
     const found = loadEncryptedKey(cfg.agentKeyId, stores);
     if (!found) throw new AteError("WalletError", "ATE_DAEMON_LOCKED", `agent key ${cfg.agentKeyId} not found in ${stores.map((s) => s.kind).join("/")}`, { hint: "Create it with `ate-daemon keygen`" });
     const addr = signer.unlock(found.blob, passphrase);
@@ -176,7 +189,9 @@ export async function startDaemon(o: StartOptions = {}): Promise<RunningDaemon> 
     log(`unlocked agent ${addr}`);
     return addr;
   };
-  if (env.ATE_AGENT_PRIVATE_KEY && env.ATE_ALLOW_RAW_KEY === "1") {
+  if (envBackend === "secret" || envBackend === "kms") {
+    await unlockFromEnv().catch((e) => log(`agent signer (${envBackend}) failed: ${(e as Error).message}`));
+  } else if (env.ATE_AGENT_PRIVATE_KEY && env.ATE_ALLOW_RAW_KEY === "1") {
     signer.unlockRaw(env.ATE_AGENT_PRIVATE_KEY as `0x${string}`);
     log(`unlocked from ATE_AGENT_PRIVATE_KEY (dev/fork only): ${signer.address}`);
   } else if (env.ATE_AGENT_PASSPHRASE) {
@@ -212,6 +227,8 @@ export async function startDaemon(o: StartOptions = {}): Promise<RunningDaemon> 
         pid: process.pid,
         port,
         approvalFallback: o.approvalFallback ?? cfg.daemon.approvalFallback,
+        // Additive (cloud): the pinned approval key may live in ATE_HOME (the web gateway's passkey-gated key).
+        ...(env.ATE_APPROVE_PUBKEY ? { pinnedKeyPath: env.ATE_APPROVE_PUBKEY } : existsSync(join(home, "approve-pubkey.json")) ? { pinnedKeyPath: join(home, "approve-pubkey.json") } : {}),
         ...(codeSink ? { ttyWrite: (line: string) => void codeSink.write(`${JSON.stringify({ type: "approval.tty", line, code: /\b([0-9]{8})\b/.exec(line)?.[1] ?? null })}\n`) } : {}),
         mintUiToken: () => tokens.mint({ scope: "ui" }),
         mintSessionToken: (sessionId: string) => {
