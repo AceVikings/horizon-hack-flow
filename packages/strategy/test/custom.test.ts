@@ -132,3 +132,32 @@ describe("activation", () => {
     expect(currentRisk(MARKET_WBTC, small.next).sizeUsd).toBe(5);
   });
 });
+
+describe("price-action signals", () => {
+  // a range, then a breakout and an uptrend
+  const closes = [...Array.from({ length: 80 }, (_, i) => 100 + Math.sin(i / 2)), ...Array.from({ length: 40 }, (_, i) => 101 + i * 0.3)];
+  const bars: Bar[] = closes.map((v, i) => ({ t: i * 300, pool: v, cex: v, oracle: v, vol: i > 100 ? 50 : 10 }));
+  const sb = new SignalBook(bars, 300);
+  it("breakout above resistance fires on the crossing bar only", () => {
+    const c = { signal: "resistance", op: "crosses_above", value: 0, period: 48 } as const;
+    const hits = bars.map((_, i) => sb.holds(c, i)).flatMap((x, i) => (x ? [i] : []));
+    expect(hits.some((i) => i >= 80 && i <= 85)).toBe(true);
+    // during the steady climb the price keeps making new highs, but "crosses" needs the previous bar at or under it
+    expect(hits.filter((i) => i > 85).length).toBeLessThan(5);
+  });
+  it("golden cross, trend, volatility and volume", () => {
+    const cross = bars.map((_, i) => sb.holds({ signal: "ma_cross", op: "crosses_above", value: 0, period: 5, period2: 20 }, i));
+    expect(cross.some(Boolean)).toBe(true);
+    expect(sb.value({ signal: "trend", op: "above", value: 0, period: 20 }, 119)!).toBeGreaterThan(0);
+    expect(sb.value({ signal: "volatility", op: "below", value: 1, period: 24 }, 119)!).toBeGreaterThan(0);
+    expect(sb.value({ signal: "volume", op: "above", value: 150, period: 6 }, 119)!).toBeGreaterThan(150);
+  });
+  it("reads back in plain words", () => {
+    expect(describeStrategy(spec({ entry: { when: "all", conditions: [{ signal: "ma_cross", op: "crosses_above", value: 0, period: 20, period2: 50 }, { signal: "rsi", op: "below", value: 70 }, { signal: "volatility", op: "below", value: 0.5, period: 24 }] } }))[0]).toBe(
+      "Buys $25 of BTC when the 20-bar EMA crosses above the 50-bar one, RSI(14) is below 70 and the market is calm (price swings under 0.5% per bar).",
+    );
+    expect(describeStrategy(spec({ entry: { when: "all", conditions: [{ signal: "resistance", op: "crosses_above", value: 0, period: 48 }, { signal: "trend", op: "above", value: 0, period: 50 }] } }))[0]).toBe(
+      "Buys $25 of BTC when the price breaks above its 48-bar high and the trend is up (50-bar EMA rising).",
+    );
+  });
+});

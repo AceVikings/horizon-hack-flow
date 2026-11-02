@@ -32,8 +32,14 @@ const SIGNAL_LABEL: Record<SignalId, string> = {
   bollinger: "Bollinger position (0 = low band, 1 = high)",
   hour: "Hour (UTC)",
   pnl: "Trade result (%)",
+  ma_cross: "Fast vs slow average (%)",
+  resistance: "Price vs recent high (%)",
+  support: "Price vs recent low (%)",
+  volatility: "Swings per bar (%)",
+  trend: "Trend (%)",
+  volume: "Pool volume (100 = usual)",
 };
-const needsPeriod = (s: SignalId) => s === "ema" || s === "sma" || s === "vwap" || s === "rsi" || s === "bollinger";
+const needsPeriod = (s: SignalId) => s !== "gap_cex" && s !== "gap_oracle" && s !== "change" && s !== "hour" && s !== "pnl";
 
 export default function Strategy({ params }: ViewProps) {
   const { ate, toast } = useApp();
@@ -245,6 +251,8 @@ function CondRow({ c, onChange, onRemove, exit }: { c: Condition; onChange(c: Co
         <option value="below">is below</option>
         <option value="above">is above</option>
         <option value="between">is between</option>
+        <option value="crosses_above">crosses above</option>
+        <option value="crosses_below">crosses below</option>
       </select>
       <span className="inp" style={{ width: 96 }}>
         <input type="number" step={0.1} aria-label="Value" value={c.value} onChange={(e) => onChange({ ...c, value: Number(e.target.value) })} />
@@ -258,6 +266,12 @@ function CondRow({ c, onChange, onRemove, exit }: { c: Condition; onChange(c: Co
         <span className="inp" style={{ width: 120 }}>
           <input type="number" step={1} aria-label="Bars" value={c.period ?? 20} onChange={(e) => onChange({ ...c, period: Number(e.target.value) })} />
           <span className="u">bars</span>
+        </span>
+      )}
+      {c.signal === "ma_cross" && (
+        <span className="inp" style={{ width: 130 }}>
+          <input type="number" step={1} aria-label="Slow bars" value={c.period2 ?? 50} onChange={(e) => onChange({ ...c, period2: Number(e.target.value) })} />
+          <span className="u">slow</span>
         </span>
       )}
       {c.signal === "change" && (

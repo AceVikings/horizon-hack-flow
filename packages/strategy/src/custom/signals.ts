@@ -29,11 +29,17 @@ type Series = (number | null)[];
 export class SignalBook {
   private cache = new Map<string, Series>();
   readonly closes: Series;
+  private cexBook: SignalBook | null = null;
   constructor(
     readonly bars: readonly Bar[],
     readonly barSec: number,
+    readonly src: "pool" | "cex" = "pool",
   ) {
-    this.closes = bars.map((b) => b.pool);
+    // the exchange series falls back to the pool where HashKey Global has no price
+    this.closes = src === "pool" ? bars.map((b) => b.pool) : bars.map((b) => b.cex ?? b.pool);
+  }
+  private cex(): SignalBook {
+    return (this.cexBook ??= new SignalBook(this.bars, this.barSec, "cex"));
   }
 
   private memo(key: string, f: () => Series): Series {
@@ -169,10 +175,60 @@ export class SignalBook {
     });
   }
 
+  /** Highest / lowest close over the `n` bars before i (the current bar excluded). */
+  private extreme(n: number, hi: boolean): Series {
+    return this.memo(`${hi ? "hi" : "lo"}${n}`, () => {
+      const xs = this.filled();
+      return xs.map((_, i) => {
+        if (i < n) return null;
+        let m: number | null = null;
+        for (let j = i - n; j < i; j++) {
+          const x = xs[j] ?? null;
+          if (x !== null && (m === null || (hi ? x > m : x < m))) m = x;
+        }
+        return m;
+      });
+    });
+  }
+  /** Standard deviation of bar-to-bar % moves over n bars. */
+  volatility(n: number): Series {
+    return this.memo(`vol${n}`, () => {
+      const xs = this.filled();
+      return xs.map((_, i) => {
+        if (i < n) return null;
+        const r: number[] = [];
+        for (let j = i - n + 1; j <= i; j++) {
+          const a = xs[j - 1] ?? null;
+          const b = xs[j] ?? null;
+          if (a && b) r.push(((b - a) / a) * 100);
+        }
+        if (r.length < 2) return null;
+        const m = r.reduce((x, y) => x + y, 0) / r.length;
+        return Math.sqrt(r.reduce((x, y) => x + (y - m) ** 2, 0) / r.length);
+      });
+    });
+  }
+  /** Pool volume of the last n bars vs the average n-bar volume of the 4n bars before (100 = normal). */
+  volumeRatio(n: number): Series {
+    return this.memo(`vr${n}`, () =>
+      this.bars.map((_, i) => {
+        if (i < 5 * n - 1) return null;
+        let now = 0;
+        let before = 0;
+        for (let j = i - n + 1; j <= i; j++) now += this.bars[j]!.vol;
+        for (let j = i - 5 * n + 1; j <= i - n; j++) before += this.bars[j]!.vol;
+        const avg = before / 4;
+        return avg > 0 ? (now / avg) * 100 : now > 0 ? 1000 : 100;
+      }),
+    );
+  }
+
   /** Value of a condition's signal at bar i (null = not enough data). */
   value(c: Condition, i: number, pos: PositionFacts = { pnlPct: null }): number | null {
     const b = this.bars[i];
     if (!b) return null;
+    // price-action signals read HashKey Global by default (the pool trades rarely); fills stay on the pool
+    if (this.src === "pool" && PRICE_ACTION.has(c.signal) && (c.source ?? "cex") === "cex") return this.cex().value(c, i, pos);
     const p = this.filled()[i] ?? null;
     const dist = (ref: number | null) => (p === null || ref === null || ref <= 0 ? null : ((p - ref) / ref) * 100);
     switch (c.signal) {
@@ -199,13 +255,41 @@ export class SignalBook {
         return new Date((b.t + this.barSec) * 1000).getUTCHours();
       case "pnl":
         return pos.pnlPct;
+      case "ma_cross": {
+        const f = c.ma === "sma" ? this.sma(c.period ?? 20) : this.ema(c.period ?? 20);
+        const sl = c.ma === "sma" ? this.sma(c.period2 ?? 50) : this.ema(c.period2 ?? 50);
+        const a = f[i] ?? null;
+        const b = sl[i] ?? null;
+        return a === null || b === null || b <= 0 ? null : ((a - b) / b) * 100;
+      }
+      case "resistance":
+        return dist(this.extreme(c.period ?? 48, true)[i] ?? null);
+      case "support":
+        return dist(this.extreme(c.period ?? 48, false)[i] ?? null);
+      case "volatility":
+        return this.volatility(c.period ?? 24)[i] ?? null;
+      case "trend": {
+        const n = c.period ?? 50;
+        const e = this.ema(n);
+        const now = e[i] ?? null;
+        const then = i - n >= 0 ? (e[i - n] ?? null) : null;
+        return now === null || then === null || then <= 0 ? null : ((now - then) / then) * 100;
+      }
+      case "volume":
+        return this.volumeRatio(c.period ?? 12)[i] ?? null;
     }
   }
 
   /** Does the condition hold at bar i? Missing data → false. */
   holds(c: Condition, i: number, pos?: PositionFacts): boolean {
     const v = this.value(c, i, pos);
-    return v !== null && test(c, v);
+    if (v === null) return false;
+    if (c.op === "crosses_above" || c.op === "crosses_below") {
+      const p = i > 0 ? this.value(c, i - 1, pos) : null;
+      if (p === null) return false;
+      return c.op === "crosses_above" ? p <= c.value && v > c.value : p >= c.value && v < c.value;
+    }
+    return test(c, v);
   }
 
   entryHolds(s: StrategySpec, i: number): boolean {
@@ -227,13 +311,21 @@ export class SignalBook {
       if (c.signal === "change") n = Math.max(n, Math.ceil(((c.windowMin ?? 60) * 60) / barSec) + 1);
       else if (c.signal === "rsi") n = Math.max(n, (c.period ?? 14) + 1);
       else if (c.signal === "ema" || c.signal === "sma" || c.signal === "vwap" || c.signal === "bollinger") n = Math.max(n, c.period ?? 20);
+      else if (c.signal === "ma_cross") n = Math.max(n, c.period2 ?? 50, c.period ?? 20) + 1;
+      else if (c.signal === "resistance" || c.signal === "support") n = Math.max(n, (c.period ?? 48) + 1);
+      else if (c.signal === "volatility") n = Math.max(n, (c.period ?? 24) + 1);
+      else if (c.signal === "trend") n = Math.max(n, 2 * (c.period ?? 50) + 1);
+      else if (c.signal === "volume") n = Math.max(n, 5 * (c.period ?? 12));
     }
     return n;
   }
 }
 
+const PRICE_ACTION = new Set<string>(["change", "ema", "sma", "vwap", "rsi", "bollinger", "ma_cross", "resistance", "support", "volatility", "trend"]);
+
 export function test(c: Condition, v: number): boolean {
-  if (c.op === "above") return v > c.value;
+  if (c.op === "above" || c.op === "crosses_above") return v > c.value;
+  if (c.op === "crosses_below") return v < c.value;
   if (c.op === "below") return v < c.value;
   const lo = c.value;
   const hi = c.value2 ?? c.value;

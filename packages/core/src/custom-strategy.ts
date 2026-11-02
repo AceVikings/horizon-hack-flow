@@ -19,17 +19,31 @@ export const SIGNAL_IDS = [
   "bollinger", // %B of Bollinger(period, 2σ): 0 = lower band, 1 = upper band
   "hour", // UTC hour 0–23 (use op "between")
   "pnl", // open position P&L in % (exit-executable); exits only
+  // price action and market conditions (all causal, from the pool bars)
+  "ma_cross", // fast MA (period) vs slow MA (period2) distance in %; crosses_above 0 = golden cross
+  "resistance", // price vs the highest close of the previous `period` bars, in % (> 0 = breakout)
+  "support", // price vs the lowest close of the previous `period` bars, in % (< 0 = breakdown)
+  "volatility", // standard deviation of bar-to-bar moves over `period` bars, in %
+  "trend", // EMA(period) change over the last `period` bars, in % (> 0 = uptrend)
+  "volume", // pool volume over the last `period` bars vs its usual level (100 = normal)
 ] as const;
 export type SignalId = (typeof SIGNAL_IDS)[number];
 
 export const ConditionSchema = z
   .object({
     signal: z.enum(SIGNAL_IDS),
-    op: z.enum(["above", "below", "between"]),
+    /** crosses_above / crosses_below: true only on the bar where the value crosses `value`. */
+    op: z.enum(["above", "below", "between", "crosses_above", "crosses_below"]),
     value: z.number().finite(),
     value2: z.number().finite().optional(),
     /** Bars for ema/sma/vwap/rsi/bollinger. */
     period: z.number().int().min(2).max(200).optional(),
+    /** Slow MA bars for ma_cross. */
+    period2: z.number().int().min(2).max(400).optional(),
+    /** Price the indicator reads: "cex" = HashKey Global (default, liquid), "pool" = the HSKSwap pool. Gaps and P&L ignore it. */
+    source: z.enum(["cex", "pool"]).optional(),
+    /** ma_cross: "ema" (default) or "sma". */
+    ma: z.enum(["ema", "sma"]).optional(),
     /** Minutes for `change`. */
     windowMin: z.number().int().min(1).max(7 * 24 * 60).optional(),
   })
@@ -150,7 +164,39 @@ const ASSET: Record<"HSK" | "BTC", string> = { HSK: "HSK", BTC: "BTC" };
 /** One condition as words ("the pool price is more than 1% under HashKey Global"). */
 export function describeCondition(c: Condition): string {
   const v = c.value;
+  if (c.op === "crosses_above" || c.op === "crosses_below") {
+    const up = c.op === "crosses_above";
+    if (c.signal === "ma_cross" && v === 0) return `the ${c.period ?? 20}-bar ${(c.ma ?? "ema").toUpperCase()} crosses ${up ? "above" : "below"} the ${c.period2 ?? 50}-bar one`;
+    if (c.signal === "rsi") return `RSI(${c.period ?? 14}) crosses ${up ? "above" : "below"} ${trim(v)}`;
+    if ((c.signal === "ema" || c.signal === "sma") && v === 0) return `the price crosses ${up ? "above" : "below"} its ${c.period ?? 20}-bar ${c.signal.toUpperCase()}`;
+    if (c.signal === "resistance" && up) return `the price breaks above its ${c.period ?? 48}-bar high${v ? ` by ${pct(v)}` : ""}`;
+    if (c.signal === "support" && !up) return `the price breaks below its ${c.period ?? 48}-bar low${v ? ` by ${pct(v)}` : ""}`;
+    return `${describeCondition({ ...c, op: up ? "above" : "below" }).replace(/ is (more|less) than /, " moves $1 than ")} (just now)`;
+  }
   switch (c.signal) {
+    case "ma_cross": {
+      const m = (c.ma ?? "ema").toUpperCase();
+      const f = `the ${c.period ?? 20}-bar ${m}`;
+      const sl = `the ${c.period2 ?? 50}-bar ${m}`;
+      if (c.op === "above") return v === 0 ? `${f} is above ${sl}` : `${f} is more than ${pct(v)} ${v > 0 ? "above" : "below"} ${sl}`;
+      if (c.op === "below") return v === 0 ? `${f} is below ${sl}` : `${f} is less than ${pct(v)} ${v > 0 ? "above" : "below"} ${sl}`;
+      return `${f} is between ${signed(v)} and ${signed(c.value2!)} from ${sl}`;
+    }
+    case "resistance":
+      if (c.op === "above") return v >= 0 ? `the price is ${v ? `more than ${pct(v)} ` : ""}above its ${c.period ?? 48}-bar high (a breakout)` : `the price is within ${pct(v)} of its ${c.period ?? 48}-bar high`;
+      return `the price is more than ${pct(v)} under its ${c.period ?? 48}-bar high`;
+    case "support":
+      if (c.op === "below") return v <= 0 ? `the price is ${v ? `more than ${pct(v)} ` : ""}below its ${c.period ?? 48}-bar low (a breakdown)` : `the price is within ${pct(v)} of its ${c.period ?? 48}-bar low`;
+      return `the price is more than ${pct(v)} above its ${c.period ?? 48}-bar low`;
+    case "volatility":
+      if (c.op === "between") return `the price swings between ${trim(v)}% and ${trim(c.value2!)}% per bar`;
+      return c.op === "below" ? `the market is calm (price swings under ${trim(v)}% per bar)` : `the market is busy (price swings over ${trim(v)}% per bar)`;
+    case "trend":
+      if (c.op === "above") return v === 0 ? `the trend is up (${c.period ?? 50}-bar EMA rising)` : `the trend is up more than ${pct(v)} (${c.period ?? 50}-bar EMA)`;
+      if (c.op === "below") return v === 0 ? `the trend is down (${c.period ?? 50}-bar EMA falling)` : `the trend is down more than ${pct(v)} (${c.period ?? 50}-bar EMA)`;
+      return `the ${c.period ?? 50}-bar EMA moved between ${signed(v)} and ${signed(c.value2!)}`;
+    case "volume":
+      return c.op === "above" ? `pool trading is above ${trim(v)}% of its usual level` : c.op === "below" ? `pool trading is below ${trim(v)}% of its usual level` : `pool trading is between ${trim(v)}% and ${trim(c.value2!)}% of usual`;
     case "gap_cex":
     case "gap_oracle": {
       const ref = c.signal === "gap_cex" ? "HashKey Global" : "the oracle price";

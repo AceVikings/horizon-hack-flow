@@ -81,6 +81,14 @@ Signals (values in %):
 - bollinger: %B, 0 = lower band, 1 = upper band (period default 20). "under the lower band" = { "op":"below","value":0 }
 - hour: UTC hour, use "between" (value, value2)
 - pnl: open trade P&L in % (exit conditions only)
+- ma_cross: fast MA (period) vs slow MA (period2), "ma": "ema"|"sma". Golden cross = { "signal":"ma_cross","op":"crosses_above","value":0,"period":20,"period2":50 }; "20 EMA above 50 EMA" = op "above", value 0
+- resistance: price vs the highest close of the previous period bars. Breakout = { "signal":"resistance","op":"crosses_above","value":0,"period":48 }
+- support: price vs the lowest close of the previous period bars. Breakdown = { "signal":"support","op":"crosses_below","value":0,"period":48 }; "near support" = { "op":"below","value":0.3 }
+- volatility: std dev of bar moves over period bars in %. Calm market filter = { "signal":"volatility","op":"below","value":0.3,"period":24 }
+- trend: EMA(period) change over period bars in %. Uptrend = { "signal":"trend","op":"above","value":0,"period":50 }
+- volume: pool volume of the last period bars vs usual (100 = normal). Busy = { "op":"above","value":150 }
+- momentum / 24h move: use change with windowMin 1440. RSI oversold = { "signal":"rsi","op":"below","value":30 }; overbought (sell) = { "op":"above","value":70 }
+Ops: "above" | "below" | "between" | "crosses_above" | "crosses_below" (crosses_* is true only on the bar it happens). There is no funding-rate signal on spot; say so in the name if asked and use momentum instead.
 Rules: Flow only buys the token and sells it back (no shorting). Every strategy must say when to sell. Use "ai" kind only when the user asks for judgement the rules cannot express (news, "use your judgement", "skip when …" in words). Defaults when unsaid: sizing $10, maxTradesPerDay 4, cooldownMin 30, stopLossPct 2. Never invent numbers the user gave differently.`;
 
 interface PracticeRun {
