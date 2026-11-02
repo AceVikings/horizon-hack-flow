@@ -1,5 +1,5 @@
 // §10.1 v0.1 degradation: TTY one-time codes, for /ui/attach, /chat/session and pending loosening strategy
-// changes ONLY. Modes: "off" (never), "armed" (disabled until `approval-fallback enable` is typed on the
+// changes ONLY (plus desktop Settings saves, purpose "config"). Modes: "off" (never), "armed" (disabled until `approval-fallback enable` is typed on the
 // daemon's own controlling TTY — no HTTP route, no restart), "tty" (enabled from start).
 // Codes: 8 digits, printed solely to the TTY writer, TTL 60 s, single use, 5 attempts per code.
 // Switches itself off — and refuses `enable` — once ate-approve has passed on this machine.
@@ -7,7 +7,7 @@ import { randomInt, timingSafeEqual } from "node:crypto";
 import { APPROVAL_TTL_SEC } from "../builders.js";
 
 export type FallbackMode = "off" | "armed" | "tty";
-export type TtyPurpose = "ui_attach" | "chat_session" | "strategy";
+export type TtyPurpose = "ui_attach" | "chat_session" | "strategy" | "config";
 
 export const TTY_CODE_RE = /^[0-9]{8}$/;
 export const TTY_MAX_ATTEMPTS = 5;

@@ -5,6 +5,8 @@ import type { StrategyApprovalPending } from "@ate/core";
 import {
   APPROVAL_PAYLOAD_VERSION,
   type ChatSessionApproval,
+  type ConfigApproval,
+  type ConfigApprovalBody,
   type PaymentApproval,
   type PaymentApprovalBody,
   type StrategyApproval,
@@ -73,5 +75,18 @@ export function paymentPayload(a: { issuedAt: number; body: PaymentApprovalBody 
     issuedAt: a.issuedAt,
     expiresAt: a.issuedAt + PAYMENT_APPROVAL_TTL_SEC,
     body: a.body,
+  };
+}
+
+/** Settings save (desktop, Flow 90): every changed config key before → after, bound to a daemon nonce. */
+export function configPayload(a: { nonce: string; expiresAt: number; changes: ConfigApprovalBody["changes"] }): ConfigApproval {
+  return {
+    v: APPROVAL_PAYLOAD_VERSION,
+    kind: "config",
+    aud: "ate-daemon",
+    nonce: a.nonce,
+    issuedAt: a.expiresAt - APPROVAL_TTL_SEC,
+    expiresAt: a.expiresAt,
+    body: { changes: a.changes },
   };
 }

@@ -91,6 +91,7 @@ export async function daemonStart(ctx: Ctx): Promise<number> {
     ...(flag(a, "approval-fallback") ? { approvalFallback: flag(a, "approval-fallback") as "armed" } : {}),
     profiles: parseProfiles(flags(a, "profile")),
     scan: flag(a, "no-scan") !== "true",
+    setup: flag(a, "setup") === "true",
     tty: (m) => ctx.stderr.write(`${m}\n`),
   });
   const stop = async () => {

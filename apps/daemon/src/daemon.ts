@@ -15,6 +15,8 @@ import { DaemonHttp, Routes, TokenRegistry } from "./http.js";
 import { AteService, type Attesterish } from "./service.js";
 import { loadStrategy } from "./strategy-stub.js";
 import { TxQueue, viemTxChain } from "./txqueue.js";
+import { ensureSetupConfig, registerSetupRoutes, type SetupTty } from "./setup/routes.js";
+import { createWriteStream } from "node:fs";
 
 export const DAEMON_VERSION = "0.1.0";
 
@@ -90,6 +92,11 @@ export interface StartOptions {
   log?: (m: string) => void;
   /** Printed once to the controlling TTY (rogue token, view URL). */
   tty?: (m: string) => void;
+  /**
+   * Additive (desktop onboarding): the app owns this daemon. A fresh home gets a testnet config from
+   * deployments/133.json (strategy off) instead of failing, and the /setup/* routes drive the rest.
+   */
+  setup?: boolean;
 }
 
 export interface RunningDaemon {
@@ -111,7 +118,9 @@ export async function startDaemon(o: StartOptions = {}): Promise<RunningDaemon> 
   const log = o.log ?? ((m: string) => process.stderr.write(`[ate-daemon] ${m}\n`));
   const tty = o.tty ?? ((m: string) => process.stderr.write(`${m}\n`));
   mkdirSync(home, { recursive: true, mode: 0o700 });
-  const cfg = loadConfigFile(o.config ?? join(home, "config.json"));
+  const configPath = o.config ?? join(home, "config.json");
+  if (o.setup && ensureSetupConfig(home, configPath, env)) log(`setup: wrote a fresh testnet config to ${configPath}`);
+  const cfg = loadConfigFile(configPath);
   const { ttl, source } = resolveCandidateTtl(cfg, env);
   log(`candidateTtlSec = ${ttl} (${source})`);
 
@@ -179,6 +188,11 @@ export async function startDaemon(o: StartOptions = {}): Promise<RunningDaemon> 
   const port = await http.listen();
 
   // Lane E's approval routes (/ui/attach, /chat/session, /strategy/approve) + armed TTY fallback (§10.1).
+  // Desktop-owned daemon: one-time codes go to the parent app over an inherited pipe (ATE_APPROVAL_CODE_FD),
+  // never to a log, and `approval-fallback enable` arrives on the stdin pipe (ATE_APPROVAL_STDIN=1).
+  let approvalHandle: { tty: SetupTty; verifier: import("@ate/approve").ApprovalVerifier | null; hasPinnedKey: boolean } | null = null;
+  const codeFd = env.ATE_APPROVAL_CODE_FD ? Number(env.ATE_APPROVAL_CODE_FD) : null;
+  const codeSink = codeFd !== null && Number.isInteger(codeFd) && codeFd > 2 ? createWriteStream("", { fd: codeFd }) : null;
   try {
     const mod = (await import("./approval/index.js" as string)) as {
       createDaemonApproval?: (o: Record<string, unknown>) => {
@@ -192,6 +206,7 @@ export async function startDaemon(o: StartOptions = {}): Promise<RunningDaemon> 
         pid: process.pid,
         port,
         approvalFallback: o.approvalFallback ?? cfg.daemon.approvalFallback,
+        ...(codeSink ? { ttyWrite: (line: string) => void codeSink.write(`${JSON.stringify({ type: "approval.tty", line, code: /\b([0-9]{8})\b/.exec(line)?.[1] ?? null })}\n`) } : {}),
         mintUiToken: () => tokens.mint({ scope: "ui" }),
         mintSessionToken: (sessionId: string) => {
           const expiresAt = Math.floor(Date.now() / 1000) + 30 * 60;
@@ -215,7 +230,8 @@ export async function startDaemon(o: StartOptions = {}): Promise<RunningDaemon> 
           },
         });
       }
-      if (process.stdin.isTTY) {
+      approvalHandle = approval as unknown as typeof approvalHandle;
+      if (process.stdin.isTTY || env.ATE_APPROVAL_STDIN === "1") {
         const { createInterface } = await import("node:readline");
         createInterface({ input: process.stdin }).on("line", (l) => void approval.tty.handleTtyLine(l));
       }
@@ -227,6 +243,8 @@ export async function startDaemon(o: StartOptions = {}): Promise<RunningDaemon> 
   }
   // /chat/token, /chat (chat runner with a per-session chat token) and /trade/approve (confirm mode).
   registerChatRoutes({ routes, tokens, service, home, emit, log });
+  // /setup/* (desktop onboarding + Settings), ui scope only.
+  registerSetupRoutes({ routes, home, env, cfg, configPath, service, unlock, broadcast: (e) => http.broadcast(e), approval: approvalHandle, log });
   // Flow desktop v1 (additive): supervised trader, pending-change list/reject, in-app proof suite (testnet only).
   const app = registerAppRoutes({ routes, tokens, service, home, port, deploymentsPath: findDeployments(env, cfg.chain.id), log });
   const runtime: RuntimeJson = { pid: process.pid, port, agentToken, startedAt: Math.floor(Date.now() / 1000), version: DAEMON_VERSION };

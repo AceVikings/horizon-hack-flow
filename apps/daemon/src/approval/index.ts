@@ -55,6 +55,8 @@ export function createDaemonApproval(opts: DaemonApprovalOptions) {
     routes: approvalRoutes(service),
     nodeHandler: createNodeApprovalHandler(service, opts.resolveScope ?? (() => null)),
     hasPinnedKey: verifier !== null,
+    /** Additive (desktop setup): the pinned-key verifier for Settings saves (`config` payloads); null = codes only. */
+    verifier,
   };
 }
 export type DaemonApproval = ReturnType<typeof createDaemonApproval>;
