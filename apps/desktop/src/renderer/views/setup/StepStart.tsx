@@ -6,7 +6,8 @@ import { useApp } from "../../src/app";
 import {Btn, QR} from "../../src/ui";
 import { SubscriptionSignIn } from "./Subscriptions";
 import { OpencodeCard } from "./Opencode";
-import { Details, ErrLine, HandoffDialog, Section, Spinner, Wizard, go, useOwner, useSetup, useSetupGet, StatusText } from "./common";
+import { Details, ErrLine, HandoffDialog, Section, Spinner, Wizard, go, useOwner, useSetup, useSetupGet, useVaultOwnership, StatusText } from "./common";
+import { foreignOwnerLine } from "./ownership";
 
 interface Fund {
   chainId: number;
@@ -129,6 +130,7 @@ function AiPart({ onState, rules, setRules }: { onState(ok: boolean): void; rule
 function FundPart({ onState }: { onState(ok: boolean): void }) {
   const s = useSetup();
   const f = useSetupGet<Fund>("/setup/fund", { every: 6000 });
+  const own = useVaultOwnership();
   const d = f.data;
   const [dep, setDep] = useState<{ market: string; token: string; amount: string } | null>(null);
   const [tok, setTok] = useState<string | null>(null);
@@ -138,7 +140,7 @@ function FundPart({ onState }: { onState(ok: boolean): void }) {
   const gasOk = gas >= (d?.chainId === 133 ? 0.01 : 2);
   useEffect(() => onState(total > 0 && gasOk), [total, gasOk, onState]);
   return (
-    <Section title="Money" done={total > 0 && gasOk} sub="Send money into the vaults from any wallet. Only your Flow wallet can take it out.">
+    <Section title="Money" done={total > 0 && gasOk} sub={`Send money into the vaults from any wallet. ${foreignOwnerLine(own.foreign) ?? "Only your Flow wallet can take it out."}`}>
       {!d ? (
         <div style={{ marginTop: 12 }}><Spinner label="Reading balances…" /></div>
       ) : (
@@ -226,6 +228,7 @@ const FIX: Record<string, { label: string; to?: string; owner?: "setAgent" | "un
 function ChecksPart({ onState }: { onState(ok: boolean | null): void }) {
   const d = useSetupGet<Doctor>("/setup/doctor");
   const owner = useOwner();
+  const own = useVaultOwnership();
   const ag = useSetupGet<{ address: string | null }>("/setup/agent");
   const [fixing, setFixing] = useState<string | null>(null);
   const fix = async (id: string, what: "setAgent" | "unpause") => {
@@ -252,7 +255,7 @@ function ChecksPart({ onState }: { onState(ok: boolean | null): void }) {
                   <div className="b5">{c.label}</div>
                   <div className="xs fg2">{c.fix ?? c.detail ?? c.value}</div>
                 </div>
-                {fx?.owner && owner ? <Btn size="sm" kind="solid" disabled={fixing === c.id} onClick={() => void fix(c.id, fx.owner!)}>{fixing === c.id ? "Working…" : fx.label}</Btn> : fx?.to ? <Btn size="sm" kind="solid" onClick={() => go(fx.to!)}>{fx.label}</Btn> : <Btn size="sm" kind="solid" onClick={d.reload}>Check again</Btn>}
+                {fx?.owner && owner && own.foreign.length ? <span className="xs fg2" style={{ maxWidth: 260 }}>{foreignOwnerLine(own.foreign)}</span> : fx?.owner && owner ? <Btn size="sm" kind="solid" disabled={fixing === c.id} onClick={() => void fix(c.id, fx.owner!)}>{fixing === c.id ? "Working…" : fx.label}</Btn> : fx?.to ? <Btn size="sm" kind="solid" onClick={() => go(fx.to!)}>{fx.label}</Btn> : <Btn size="sm" kind="solid" onClick={d.reload}>Check again</Btn>}
               </div>
             );
           })}

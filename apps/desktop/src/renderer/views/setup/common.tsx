@@ -7,6 +7,7 @@ import { useApp } from "../../src/app";
 import { short } from "../../src/format";
 import {Btn, Dialog, FlowMark, QR} from "../../src/ui";
 import { getWithRetry } from "./retry";
+import { vaultOwnership, type Ownership } from "./ownership";
 import "./setup.css";
 
 export const STEPS = ["Connect", "Set limits", "Start"] as const;
@@ -82,6 +83,25 @@ export function RetryLine({ message = "Couldn't reach the network. Try again.", 
       <Btn kind="solid" onClick={onRetry}>Try again</Btn>
     </div>
   );
+}
+
+/**
+ * The Flow wallet's address next to each vault's on-chain owner(). Vaults picked under "I already have vaults" are
+ * owned by another wallet (the deployer), so copy must not say the Flow wallet owns them.
+ */
+export function useVaultOwnership(): Ownership & { flow: string | null } {
+  const owner = useOwner();
+  const [flow, setFlow] = useState<string | null>(null);
+  const v = useSetupGet<{ vaults: { address: string; owner?: string }[] }>("/setup/vaults", { query: { source: "config" }, every: 60_000 });
+  useEffect(() => {
+    if (!owner) return;
+    let live = true;
+    void owner.status().then((r) => live && r.ok && setFlow(r.data.address));
+    return () => {
+      live = false;
+    };
+  }, [owner]);
+  return { ...vaultOwnership(flow, v.data?.vaults), flow };
 }
 
 export function useChainId(): number {

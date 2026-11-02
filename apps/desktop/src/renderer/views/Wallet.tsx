@@ -1,5 +1,6 @@
 // Wallet: the two wallets Flow made for the user and the money in the vaults. The owner (Flow-managed, its own
-// process) holds the vaults and is the only key that can withdraw; the agent only trades and pays gas. Withdraw,
+// process) holds the vaults Flow created and is the only key that can withdraw them (vaults from "I already have
+// vaults" are owned by another wallet: Withdraw is off for those, with the reason); the agent only trades and pays gas. Withdraw,
 // gas top-up and the key backup are owner ops that raise risk, so main runs Touch ID before the owner service acts.
 import { useEffect, useState } from "react";
 import type { ViewProps } from "./registry";
@@ -7,7 +8,8 @@ import { useApp } from "../src/app";
 import { PageHead } from "../src/shell";
 import { Btn, Dialog, QR } from "../src/ui";
 import { short } from "../src/format";
-import { ErrLine, HandoffDialog, Section, Spinner, StatusText, useOwner, useSetup, useSetupGet } from "./setup/common";
+import { ErrLine, HandoffDialog, Section, Spinner, StatusText, useOwner, useSetup, useSetupGet, useVaultOwnership } from "./setup/common";
+import { foreignOwnerLine, foreignOwnerOf, type Ownership } from "./setup/ownership";
 
 interface Token {
   symbol: string;
@@ -61,6 +63,9 @@ export default function Wallet(_: ViewProps) {
   const chainId = d?.chainId ?? o?.chainId ?? 133;
   const faucet = d?.hskFaucet ?? (chainId === 133 ? "https://faucet.hsk.xyz/faucet" : null);
   const ownerGas = Number(o?.gasHsk ?? 0);
+  // Vaults from "I already have vaults" are owned by another wallet (the deployer), not the Flow wallet.
+  const own = useVaultOwnership();
+  const foreignLine = foreignOwnerLine(own.foreign);
 
   return (
     <div className="sw-col" data-shot="wallet" style={{ paddingTop: 10 }}>
@@ -69,7 +74,7 @@ export default function Wallet(_: ViewProps) {
         <p className="sm fg2" style={{ marginTop: 10 }}>This build has no Flow wallet. Your vaults are owned outside Flow.</p>
       ) : (
         <>
-          <Section title="Your Flow wallet" sub="Flow created this wallet for you. It owns your vaults and is the only key that can withdraw. It never trades.">
+          <Section title="Your Flow wallet" sub={foreignLine ? "Flow created this wallet for you. It does not own these vaults. It never trades." : "Flow created this wallet for you. It owns your vaults and is the only key that can withdraw. It never trades."}>
             {!o?.address ? (
               <div style={{ marginTop: 12 }}><Spinner label="Starting your wallet…" /></div>
             ) : (
@@ -94,8 +99,8 @@ export default function Wallet(_: ViewProps) {
           </Section>
 
           <AgentPart d={d} reload={reload} toast={toast} ownerGas={ownerGas} />
-          <VaultsPart d={d} loading={f.loading} ownerAddr={o?.address ?? null} reload={reload} toast={toast} />
-          <BackupPart />
+          <VaultsPart d={d} loading={f.loading} ownerAddr={o?.address ?? null} own={own} reload={reload} toast={toast} />
+          <BackupPart foreign={!!foreignLine} />
         </>
       )}
     </div>
@@ -160,7 +165,7 @@ function AgentPart({ d, reload, toast, ownerGas }: { d: Fund | null; reload(): v
   );
 }
 
-function VaultsPart({ d, loading, ownerAddr, reload, toast }: { d: Fund | null; loading: boolean; ownerAddr: string | null; reload(): void; toast: ToastFn }) {
+function VaultsPart({ d, loading, ownerAddr, own, reload, toast }: { d: Fund | null; loading: boolean; ownerAddr: string | null; own: Ownership & { flow: string | null }; reload(): void; toast: ToastFn }) {
   const owner = useOwner()!;
   const [form, setForm] = useState<{ kind: "deposit" | "withdraw"; vault: string; market: string; token: string; amount: string; to: string } | null>(null);
   const [dep, setDep] = useState<{ market: string; token: string; amount: string } | null>(null);
@@ -187,14 +192,16 @@ function VaultsPart({ d, loading, ownerAddr, reload, toast }: { d: Fund | null; 
     reload();
   };
   return (
-    <Section title="Vaults" sub="Your money. Only your Flow wallet can take it out." right={d && <span className="h3">${Number(d.totalUsd).toFixed(2)}</span>}>
+    <Section title="Vaults" sub={foreignOwnerLine(own.foreign) ?? "Your money. Only your Flow wallet can take it out."} right={d && <span className="h3">${Number(d.totalUsd).toFixed(2)}</span>}>
       {!d ? (
         loading && <div style={{ marginTop: 12 }}><Spinner label="Reading balances…" /></div>
       ) : d.vaults.length === 0 ? (
         <p className="sm fg2" style={{ marginTop: 10 }}>No vaults yet. Setup creates them.</p>
       ) : (
         <div className="col" style={{ gap: 8, marginTop: 14 }}>
-          {d.vaults.map((x) => (
+          {d.vaults.map((x) => {
+            const other = foreignOwnerOf(own, own.flow, x.address);
+            return (
             <div key={x.address} className="hx">
               <div className="row g12">
                 <span className="b7">{pair(x.market)}</span>
@@ -202,8 +209,9 @@ function VaultsPart({ d, loading, ownerAddr, reload, toast }: { d: Fund | null; 
                 <span className="grow" />
                 <span className="sm b7">${x.usd}</span>
                 <Btn size="sm" onClick={() => open("deposit", x)}>Deposit</Btn>
-                {owner.withdraw && <Btn size="sm" onClick={() => open("withdraw", x)}>Withdraw</Btn>}
+                {owner.withdraw && !other && <Btn size="sm" onClick={() => open("withdraw", x)}>Withdraw</Btn>}
               </div>
+              {other && <div className="xs fg2" style={{ marginTop: 6 }}>Withdraw is off here: this vault is owned by <span className="mono">{other}</span> (another wallet). Only that wallet can withdraw or resume.</div>}
               {form && form.vault === x.address && (
                 <div style={{ marginTop: 12 }}>
                   <div className="row g12" style={{ flexWrap: "wrap" }}>
@@ -241,7 +249,8 @@ function VaultsPart({ d, loading, ownerAddr, reload, toast }: { d: Fund | null; 
                 </div>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
       <ErrLine error={error} />
@@ -250,7 +259,7 @@ function VaultsPart({ d, loading, ownerAddr, reload, toast }: { d: Fund | null; 
   );
 }
 
-function BackupPart() {
+function BackupPart({ foreign }: { foreign: boolean }) {
   const owner = useOwner()!;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<Err>(null);
@@ -265,7 +274,7 @@ function BackupPart() {
     setKey(r.data);
   };
   return (
-    <Section title="Back up your Flow wallet" sub="Keep a copy of its key somewhere safe. With it you can reach your vaults from any wallet app.">
+    <Section title="Back up your Flow wallet" sub={foreign ? "Keep a copy of its key somewhere safe." : "Keep a copy of its key somewhere safe. With it you can reach your vaults from any wallet app."}>
       <Btn size="sm" style={{ marginTop: 12 }} disabled={busy} onClick={() => void show()}>{busy ? "Waiting for Touch ID…" : "Show the key"}</Btn>
       <div className="xs fg2" style={{ marginTop: 6 }}>Touch ID first. Flow shows it once.</div>
       <ErrLine error={error} />
@@ -283,7 +292,7 @@ function BackupPart() {
           </>
         }
       >
-        <p className="sm"><b>Anyone with this key can take everything in your vaults.</b></p>
+        <p className="sm"><b>{foreign ? "Anyone with this key controls your Flow wallet." : "Anyone with this key can take everything in your vaults."}</b></p>
         <p className="sm fg2" style={{ marginTop: 6 }}>Write it down or keep it in a password manager. Never paste it into a website or a chat.</p>
         <div className="hx mono sm" style={{ marginTop: 14, wordBreak: "break-all", userSelect: "text" }} aria-label="Owner private key">{key?.privateKey}</div>
         <div className="row g12" style={{ marginTop: 10 }}>

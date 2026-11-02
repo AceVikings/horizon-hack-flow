@@ -10,7 +10,7 @@ import { AddrLink, Badge, Banner, Btn, Card, Check, Dialog, Empty, Eyebrow, KV, 
 import { age, ago, clock, dayName, dur, e8n, hm, int, money, networkName, short, tokenAmt } from "../src/format";
 import { centsE8, portfolioRisk, vaultRisk } from "../src/risk";
 import { result, summary, tag } from "../src/journal";
-import { useOwner } from "./setup/common";
+import { useOwner, useVaultOwnership } from "./setup/common";
 
 const UTC_DAY = 86_400;
 
@@ -409,6 +409,7 @@ function VaultCard({ mv, p, last, paused }: { mv: MarketView; p?: MarketPosition
 function OverviewInspector({ paused, lastPauseAt }: { paused: boolean; lastPauseAt?: number }) {
   const { vsOk, mkOk, fetchedAt } = useApp();
   const now = useNow();
+  const own = useVaultOwnership();
   if (!vsOk || !mkOk) return null;
   const st = vsOk.status;
   const up = st.uptimeSec + Math.max(0, now - fetchedAt);
@@ -452,7 +453,7 @@ function OverviewInspector({ paused, lastPauseAt }: { paused: boolean; lastPause
           <Eyebrow>Keys</Eyebrow>
           <KV k="Agent · this Mac" mono>{short(v0.agent, 6, 4)}</KV>
           <KV k="Guardian · pause" mono>{short(v0.guardian, 6, 4)}</KV>
-          <KV k="Owner · Flow wallet" mono>{short(v0.owner, 6, 4)}</KV>
+          <KV k={own.foreign.length ? "Owner · another wallet" : "Owner · Flow wallet"} mono>{short(v0.owner, 6, 4)}</KV>
           <div className="xs mt8" style={{ color: "var(--sage)" }}>The agent key can never withdraw.</div>
         </div>
       )}
