@@ -46,7 +46,15 @@ bounds**, and to explain it.
 
 ## Rationale (always)
 
-Every `ate_propose` and `ate_decide` rationale must state, briefly:
+Every `ate_propose` and `ate_decide` rationale has two parts, in this order:
+
+1. The first line: `Summary: <what you did and why>` — at most 25 words, plain words a non-trader understands, no
+   jargon or tool names, percentages not bps (write 0.6%, not 60 bps), dollars for sizes.
+   Example: `Summary: Bought $25 of BTC because the pool price is 1.3% below the exchange, more than the 0.6% it costs.`
+2. Then `Details:` on a new line, with the technical reasoning as short sentences (this is where bps, candidate ids,
+   generators and limits go).
+
+The Details must state, briefly:
 - the signal you saw (gap bps vs cost bps, net edge, or the thesis);
 - **why you did not veto or size down** a candidate you took, or why you vetoed (`reason: "llm_veto"`,
   bind the `candidateId`), or why you sized down (smaller `amountIn`, say so);
