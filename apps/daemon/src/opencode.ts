@@ -118,6 +118,9 @@ export class OpencodeEngine {
           },
         });
         url = this.server.url;
+        // never leave the private opencode server running without its daemon
+        const srv = this.server;
+        process.once("exit", () => srv.close());
         this.o.log?.(`opencode: server on ${url} (Flow MCP registered, built-in tools off)`);
       }
       this.client = createOpencodeClient({ baseUrl: url, directory: this.work });
