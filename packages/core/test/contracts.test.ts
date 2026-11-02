@@ -158,7 +158,7 @@ describe("tools / scopes", () => {
     expect(toolsForScope("chat", { hsp: true })).toEqual([...CHAT_TOOL_ALLOWLIST]);
     expect(toolsForScope("chat", { hsp: true })).not.toContain("ate_execute");
     expect(toolsForScope("agent", { hsp: false })).not.toContain("ate_signal_buy");
-    expect(toolsForScope("agent", { hsp: true })).toHaveLength(14); // + ate_chart, ate_data (lane D4, read-only)
+    expect(toolsForScope("agent", { hsp: true })).toHaveLength(15); // + ate_chart, ate_data (lane D4, read-only), ate_backtest (lane STRAT)
   });
 });
 

@@ -17,15 +17,25 @@ import { FIXTURE_NOW, MARKET_WBTC, MARKET_WHSK, freshPf, pf, snaps } from "./hel
 const WHSK_CHUNK = sellAmountForUsdCap(2_500_000_000n, 8_800_000n, 8_792_000n, 18).toString(); // floor(25 ÷ 0.088 × 0.99) ≈ 281.25 WHSK
 
 describe("market view", () => {
-  it("WBTC gap is ~112.6 bps below the CEX mid (8 dp token)", () => {
+  it("default reference is the on-chain oracle: WBTC pool ~100.1 bps below it (8 dp token)", () => {
     const v = viewOf(snaps()[MARKET_WBTC]);
+    expect(v.reference).toBe("oracle");
+    expect(v.refPrice).toBe(7_792_502_000_000n);
     expect(v.d).toBe(8);
-    expect(v.gapBps).toBeCloseTo(-112.6, 0);
+    expect(v.gapBps).toBeCloseTo(-100.1, 0);
+    expect(v.halfSpreadBps).toBe(0);
   });
-  it("WHSK gap is ~30 bps below the CEX mid (18 dp token)", () => {
+  it("WHSK pool ~11.4 bps below the oracle (18 dp token)", () => {
     const v = viewOf(snaps()[MARKET_WHSK]);
     expect(v.d).toBe(18);
-    expect(v.gapBps).toBeCloseTo(-29.9, 0);
+    expect(v.gapBps).toBeCloseTo(-11.4, 0);
+  });
+  it("optional references: pool TWAP, and HashKey Global (context only, counts its half-spread)", () => {
+    expect(viewOf(snaps()[MARKET_WBTC], "twap").gapBps).toBeCloseTo(-2, 0);
+    const c = viewOf(snaps()[MARKET_WBTC], "cex");
+    expect(c.gapBps).toBeCloseTo(-112.6, 0);
+    expect(c.halfSpreadBps).toBe(1);
+    expect(viewOf(snaps()[MARKET_WHSK], "cex").gapBps).toBeCloseTo(-29.9, 0);
   });
   it("impact interpolates and extrapolates; sizeForImpact inverts it", () => {
     const pts = snaps()[MARKET_WBTC].impact.buy; // 5 USDT → 1 bps, 25 USDT → 5 bps
@@ -42,22 +52,24 @@ describe("market view", () => {
 });
 
 describe("spread-revert", () => {
-  it("fires a default-profile WBTC buy at tradeSizeUsd with ~77 bps net edge", () => {
+  it("fires a default-profile WBTC buy at tradeSizeUsd with ~65 bps net edge vs the oracle", () => {
     const r = runEngine(snaps(), freshPf());
     const c = r.candidates.find((x) => x.market === MARKET_WBTC && x.generator === "spread-revert");
     expect(c).toBeDefined();
     expect(c!.side).toBe("buy");
     expect(c!.leg).toBe("open");
     expect(c!.maxAmountIn).toBe("25000000");
-    expect(c!.costBps).toBe(36);
-    expect(c!.netEdgeBps).toBeCloseTo(76.6, 0);
+    expect(c!.costBps).toBe(35);
+    expect(c!.netEdgeBps).toBeCloseTo(65.1, 0);
+    expect(c!.reason).toMatch(/below the on-chain oracle \$77925\.02 \(pool \$77144\.61, TWAP \$77160\)/);
+    expect(c!.reason).not.toMatch(/HashKey Global/);
     expect(c!.expiresAt).toBe(FIXTURE_NOW + 180);
     expect(c!.profile).toBe("default");
   });
-  it("WHSK 30 bps gap vs ~37 bps cost → no spread-revert candidate", () => {
+  it("WHSK 11 bps gap vs the oracle < cost → no spread-revert candidate", () => {
     const r = runEngine(snaps(), freshPf());
     expect(r.candidates.filter((x) => x.market === MARKET_WHSK && x.generator === "spread-revert")).toHaveLength(0);
-    expect(explainMarket(snaps()[MARKET_WHSK], freshPf())).toMatch(/below CEX by 29\.9/);
+    expect(explainMarket(snaps()[MARKET_WHSK], freshPf())).toMatch(/below the on-chain oracle by 11\.36/);
   });
   it("rule 7: WBTC entry 900 s after the last one (< 1800 s) → suppressed entry_interval", () => {
     const r = runEngine(snaps(), pf());
@@ -109,15 +121,15 @@ describe("spread-revert", () => {
     p.strategy.markets[MARKET_WBTC].maxPositionUsd = "1000";
     p.strategy.portfolio.maxPortfolioExposureUsd = "2000";
     const c = runEngine(s, p).candidates.find((x) => x.market === MARKET_WBTC && x.leg === "open")!;
-    // edge/3 ≈ 37.5 bps → ~$187.7 with 5 bps per $25
-    expect(Number(c.maxAmountIn)).toBeGreaterThan(180_000_000);
-    expect(Number(c.maxAmountIn)).toBeLessThan(190_000_000);
+    // edge/3 ≈ 33.4 bps → ~$166.9 with 5 bps per $25
+    expect(Number(c.maxAmountIn)).toBeGreaterThan(160_000_000);
+    expect(Number(c.maxAmountIn)).toBeLessThan(170_000_000);
     expect(c.reason).toMatch(/impact≤edge\/3/);
   });
-  it("pool above CEX with inventory → spread-revert open SELL in token units", () => {
+  it("reference cex (optional): pool above HashKey Global with inventory → spread-revert open SELL in token units", () => {
     const s = snaps();
     s[MARKET_WBTC].price.cex!.mid = "7630000000000"; // pool 77144.61 is ~110 bps above 76300
-    const c = runEngine(s, freshPf()).candidates.find((x) => x.market === MARKET_WBTC && x.leg === "open")!;
+    const c = runEngine(s, freshPf((x) => (x.strategy.markets[MARKET_WBTC].reference = "cex"))).candidates.find((x) => x.market === MARKET_WBTC && x.leg === "open")!;
     expect(c.side).toBe("sell");
     expect(BigInt(c.maxAmountIn)).toBeLessThanOrEqual(32_083n);
   });
@@ -157,8 +169,8 @@ describe("rebalance", () => {
     const s = snaps();
     s[MARKET_WHSK].vault.balancePrice = "100000000000000000000"; // 100 WHSK ≈ $8.8 of ~$82 → 10.7%
     expect(runEngine(s, freshPf()).candidates.some((c) => c.generator === "rebalance")).toBe(false);
-    s[MARKET_WHSK].price.cex!.mid = "8900000"; // pool 0.0879 now ~124 bps below CEX → favourable buy
-    const c = runEngine(s, freshPf()).candidates.find((x) => x.generator === "rebalance" && x.market === MARKET_WHSK);
+    s[MARKET_WHSK].price.cex!.mid = "8900000"; // pool 0.0879 now ~124 bps below CEX → favourable buy (reference cex)
+    const c = runEngine(s, freshPf((x) => (x.strategy.markets[MARKET_WHSK].reference = "cex"))).candidates.find((x) => x.generator === "rebalance" && x.market === MARKET_WHSK);
     expect(c?.side).toBe("buy");
     expect(c!.netEdgeBps).toBeGreaterThanOrEqual(0);
   });

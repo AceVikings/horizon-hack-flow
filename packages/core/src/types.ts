@@ -267,6 +267,12 @@ export interface MarketStrategyParams {
   minEntryIntervalSec?: number;
   /** Additive (lane STRAT): the user's custom strategy in use on this market; replaces the open-entry generators. */
   custom?: CustomStrategyRef | null;
+  /**
+   * Additive: the price the spread-revert gap is measured against. Default (absent) "oracle" — the on-chain
+   * Supra feed the vault checks. "twap" = the pool's 300 s TWAP. "cex" = HashKey Global mid (optional context,
+   * the earlier reference; off by default). Every trade fills on HSKSwap whichever is chosen.
+   */
+  reference?: "oracle" | "twap" | "cex";
 }
 
 export interface PortfolioStrategyParams {

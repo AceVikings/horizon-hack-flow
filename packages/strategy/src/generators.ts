@@ -1,5 +1,6 @@
 // Candidate generators (§11.3): spread-revert (open/close), rebalance, guard_exit, discretionary_exit.
-// Pure and synchronous: every chain/CEX read is in the MarketSnapshot (FREEZE-NOTES §S3).
+// Pure and synchronous: every chain read is in the MarketSnapshot (FREEZE-NOTES §S3).
+// Spread-revert measures the pool against an on-chain reference: the vault's oracle by default (`reference`).
 
 import {
   MARKETS,
@@ -14,7 +15,7 @@ import {
   type PortfolioState,
   type Side,
 } from "@ate/core";
-import { candidateId, costBps, signedEdgeFor, sizeForImpact, viewOf, type MarketView } from "./market.js";
+import { REFERENCE_LABEL, candidateId, costBps, signedEdgeFor, sizeForImpact, viewOf, type MarketView } from "./market.js";
 import { effectiveMarketParams, isDemo, isTargeted, rebalanceTarget } from "./params.js";
 import { entryBuyCap, entrySellCap, exitChunk } from "./sizing.js";
 import { E8, absBps, e8ToUsdt, minB, roundBps, signedBps, tokenValueE8, usdE8, usdStr, usdtToE8 } from "./units.js";
@@ -61,6 +62,11 @@ export function finalize(d: DraftCandidate, snap: MarketSnapshot, pf: PortfolioS
 }
 
 const fmtUsdt = (x: bigint) => usdStr(usdtToE8(x));
+/** "the on-chain oracle $0.08800" — the reference and its price, for rationales. */
+const px = (e8: bigint) => `$${usdStr(e8, e8 < 100n * E8 ? 6 : 2)}`;
+export function refWords(v: MarketView): string {
+  return `${REFERENCE_LABEL[v.reference]}${v.refPrice !== null ? ` ${px(v.refPrice)}` : ""} (pool ${px(v.pool)}${v.twap !== null ? `, TWAP ${px(v.twap)}` : ""})`;
+}
 const label = (m: MarketId) => MARKETS[m].label;
 
 function positionQty(snap: MarketSnapshot, pf: PortfolioState): bigint {
@@ -75,7 +81,7 @@ export function spreadRevertDrafts(snap: MarketSnapshot, pf: PortfolioState): Dr
   const raw = pf.strategy.markets[market];
   if (!raw) return [];
   const m = effectiveMarketParams(market, raw);
-  const v = viewOf(snap);
+  const v = viewOf(snap, m.reference);
   const out: DraftCandidate[] = [];
 
   // Close leg: FIFO open spread-revert lots, while each lot's fee-inclusive exit mark beats its entry by ≥ minNetEdgeBps.
@@ -113,8 +119,8 @@ export function spreadRevertDrafts(snap: MarketSnapshot, pf: PortfolioState): Dr
     }
   }
 
-  // Open leg (needs a target asset and a CEX reference).
-  if (!isTargeted(market, pf.strategy) || v.gapBps === null || v.cexMid === null) return out;
+  // Open leg (needs a target asset and a readable reference price — the on-chain oracle by default).
+  if (!isTargeted(market, pf.strategy) || v.gapBps === null || v.refPrice === null) return out;
   const edge = Math.abs(v.gapBps);
   const side: Side = v.gapBps < 0 ? "buy" : "sell";
   if (edge < m.entrySpreadBps) return out;
@@ -149,7 +155,9 @@ export function spreadRevertDrafts(snap: MarketSnapshot, pf: PortfolioState): Dr
     costBps: cost,
     netEdgeBps: net,
     reason:
-      `${label(market)} pool ${roundBps(edge)} bps ${dir} HashKey Global ${MARKETS[market].cexSymbol} mid; cost ${v.feeBps} fee + ${impact} impact + ${v.halfSpreadBps} half-spread = ${cost} bps; ` +
+      `${label(market)} pool ${roundBps(edge)} bps ${dir} ${refWords(v)}; cost ${v.feeBps} fee + ${impact} impact` +
+      (v.reference === "cex" ? ` + ${v.halfSpreadBps} half-spread` : "") +
+      ` = ${cost} bps; ` +
       `net ${roundBps(net)} ≥ ${m.minNetEdgeBps}; size bound: ${capNote}` +
       (side === "buy" ? ` (${fmtUsdt(amountIn)} USDT)` : ""),
     entry: true,
@@ -167,7 +175,7 @@ export function rebalanceDrafts(snap: MarketSnapshot, pf: PortfolioState): Draft
   if (target === null) return [];
   if (!raw.generators.includes("rebalance") && raw.rebalanceTargetPct === null) return [];
   const m = effectiveMarketParams(market, raw);
-  const v = viewOf(snap);
+  const v = viewOf(snap, m.reference);
   const qty = positionQty(snap, pf);
   const tokenVal = tokenValueE8(qty, v.oracle, v.d);
   const total = tokenVal + usdtToE8(BigInt(snap.vault.balanceQuote));
@@ -215,7 +223,7 @@ export function rebalanceDrafts(snap: MarketSnapshot, pf: PortfolioState): Draft
   const { cost } = costBps(v, snap, side, amountIn);
   const e = signedEdgeFor(v, side);
   const net = e - cost;
-  // Default-profile edge gate: direction-adjusted net edge vs CEX mid ≥ 0. Waived under the WHSK demo profile.
+  // Default-profile edge gate: direction-adjusted net edge vs the reference price ≥ 0. Waived under the WHSK demo profile.
   if (!demo && (v.gapBps === null || net < 0)) return [];
   return [
     {
@@ -347,15 +355,15 @@ export const GENERATORS: readonly CandidateGenerator[] = [guardExit, spreadRever
 export function explainMarket(snap: MarketSnapshot, pf: PortfolioState): string {
   const market = snap.market;
   const raw = pf.strategy.markets[market];
-  const v = viewOf(snap);
   if (!raw) return `${label(market)}: no strategy params`;
   const m = effectiveMarketParams(market, raw);
-  if (v.gapBps === null) return `${label(market)}: no CEX reference`;
+  const v = viewOf(snap, m.reference);
+  if (v.gapBps === null) return `${label(market)}: no ${REFERENCE_LABEL[v.reference]} price`;
   const side: Side = v.gapBps < 0 ? "buy" : "sell";
   const probe = side === "buy" ? e8ToUsdt(usdE8(m.tradeSizeUsd)) : sellAmountForUsdCap(usdE8(m.tradeSizeUsd), v.oracle, v.twap, v.d);
   const { cost } = costBps(v, snap, side, probe);
   const edge = Math.abs(v.gapBps);
-  return `${label(market)}: pool ${v.gapBps < 0 ? "below" : "above"} CEX by ${roundBps(edge)} bps vs cost ${cost} bps (net ${roundBps(edge - cost)}; needs edge ≥ ${m.entrySpreadBps} and net ≥ ${m.minNetEdgeBps}, profile=${m.profile})`;
+  return `${label(market)}: pool ${v.gapBps < 0 ? "below" : "above"} ${REFERENCE_LABEL[v.reference]} by ${roundBps(edge)} bps vs cost ${cost} bps (net ${roundBps(edge - cost)}; needs edge ≥ ${m.entrySpreadBps} and net ≥ ${m.minNetEdgeBps}, profile=${m.profile})`;
 }
 
 export { E8 };

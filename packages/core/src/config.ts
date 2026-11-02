@@ -29,6 +29,8 @@ export const marketStrategySchema = z
     reentryCooldownSec: z.number().int().min(0).max(86_400),
     /** Additive v0.9 (§11.4 rule 7), optional: default 0 (WHSK), 1800 (WBTC). */
     minEntryIntervalSec: z.number().int().min(0).max(86_400).optional(),
+    /** Additive, optional: spread-revert reference price. Default "oracle" (on-chain Supra); "cex" is optional context. */
+    reference: z.enum(["oracle", "twap", "cex"]).optional(),
   })
   .strict();
 
