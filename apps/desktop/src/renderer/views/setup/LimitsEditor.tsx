@@ -121,6 +121,17 @@ export function LimitsEditor({ value: l, onChange, base, baseLabel = "before", v
           Even if every trade it makes goes the worst way the vault allows{vaults > 1 ? ", across both vaults" : ""}. The vault refuses anything outside these limits.
         </div>
       </section>
+      {!err && (() => {
+        // The agent keeps enough of the daily budget to sell everything it may hold, so it buys with the rest.
+        const room = d8(l.maxEpochUsdE8) - d8(l.maxExposureUsdE8);
+        return (
+          <div className="sm" style={{ marginTop: 10 }}>
+            {room > 0
+              ? `The agent can buy up to $${room.toFixed(0)} a day: it keeps $${d8(l.maxExposureUsdE8).toFixed(0)} of the daily budget to sell what it holds.`
+              : "With the daily budget at or below most held, the agent cannot buy: it keeps that much of the budget to sell what it holds. Raise the daily budget above most held."}
+          </div>
+        );
+      })()}
       {err ? (
         <div className="sm" role="alert" style={{ marginTop: 10 }}>{err}</div>
       ) : (
