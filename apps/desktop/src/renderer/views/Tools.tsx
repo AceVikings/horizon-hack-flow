@@ -65,11 +65,25 @@ function usePoolPrice(m: MarketId): number {
   return mv ? Number(mv.pool.price) / 1e8 : NaN;
 }
 
+/** Price inputs start from the live HSK pool price (once it arrives), scaled by `k`; the user can then edit them. */
+function useLiveSeed(k: number[], set: ((v: number) => void)[]): void {
+  const p = usePoolPrice(HSK);
+  const [done, setDone] = useState(false);
+  useEffect(() => {
+    if (done || !(p > 0)) return;
+    const dp = p < 1 ? 5 : 2;
+    k.forEach((x, i) => set[i]!(Number((p * x).toFixed(dp))));
+    setDone(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [p, done]);
+}
+
 function PositionSize({ focus }: { focus: boolean }) {
   const [capital, setCapital] = useState(250);
   const [risk, setRisk] = useState(1);
   const [entry, setEntry] = useState(0.0875);
   const [stop, setStop] = useState(0.085);
+  useLiveSeed([1, 0.97], [setEntry, setStop]);
   const lossPerDollar = (entry - stop) / entry + 2 * FEE;
   const riskUsd = (capital * risk) / 100;
   const size = lossPerDollar > 0 ? riskUsd / lossPerDollar : NaN;
@@ -92,6 +106,7 @@ function RiskReward({ focus }: { focus: boolean }) {
   const [entry, setEntry] = useState(0.0875);
   const [stop, setStop] = useState(0.085);
   const [target, setTarget] = useState(0.093);
+  useLiveSeed([1, 0.97, 1.06], [setEntry, setStop, setTarget]);
   const down = (entry - stop) / entry + 2 * FEE;
   const up = (target - entry) / entry - 2 * FEE;
   const r = up / down;
@@ -166,11 +181,21 @@ function Impact({ focus }: { focus: boolean }) {
 
 function Fees({ focus }: { focus: boolean }) {
   const hsk = usePoolPrice(HSK);
+  const { vsOk } = useApp();
+  const testnet = vsOk?.status.chainId === 133;
   const [usd, setUsd] = useState(25);
   const [gasUnits, setGasUnits] = useState(250_000);
   const [gwei, setGwei] = useState(500);
+  const [seeded, setSeeded] = useState(false);
+  // testnet gas is about 1 gwei; on mainnet type the current gas price from the explorer
+  useEffect(() => {
+    if (seeded || !vsOk) return;
+    if (testnet) setGwei(1);
+    setSeeded(true);
+  }, [vsOk, testnet, seeded]);
   const gasHsk = (gasUnits * gwei) / 1e9;
-  const gasUsd = gasHsk * (hsk > 0 ? hsk : 0.0875);
+  // no live HSK price: gas is shown in HSK only, never at a made-up dollar price
+  const gasUsd = hsk > 0 ? gasHsk * hsk : 0;
   const fee = usd * FEE;
   return (
     <Tool id="fees" focus={focus} title="Fees and gas" what="What one trade costs: the 0.30% pool fee plus network gas, paid in HSK.">
@@ -181,7 +206,7 @@ function Fees({ focus }: { focus: boolean }) {
       </div>
       <Out main label="Total cost">{money(fee + gasUsd)}</Out>
       <Out label="Pool fee">{money(fee)}</Out>
-      <Out label="Gas">{`${money(gasUsd)} (${gasHsk.toFixed(4)} HSK)`}</Out>
+      <Out label="Gas">{hsk > 0 ? `${money(gasUsd)} (${gasHsk.toFixed(4)} HSK)` : `${gasHsk.toFixed(4)} HSK (no live HSK price, not in the total)`}</Out>
       <Out label="Round trip (buy and sell)">{money(2 * (fee + gasUsd))}</Out>
     </Tool>
   );
@@ -231,6 +256,7 @@ function BreakEven({ focus }: { focus: boolean }) {
   const [entry, setEntry] = useState(0.0875);
   const [usd, setUsd] = useState(25);
   const [gas, setGas] = useState(0.02);
+  useLiveSeed([1], [setEntry]);
   const be = entry * ((1 + FEE) / (1 - FEE)) * (1 + (2 * gas) / usd);
   return (
     <Tool id="breakeven" focus={focus} title="Break-even price" what="The price you must sell at to get your money back after fees on both trades.">
@@ -248,6 +274,7 @@ function BreakEven({ focus }: { focus: boolean }) {
 function PnlSim({ focus }: { focus: boolean }) {
   const [entry, setEntry] = useState(0.0875);
   const [exit, setExit] = useState(0.0905);
+  useLiveSeed([1, 1.034], [setEntry, setExit]);
   const [usd, setUsd] = useState(25);
   const qty = (usd * (1 - FEE)) / entry;
   const back = qty * exit * (1 - FEE);
@@ -285,10 +312,10 @@ const GUIDES: { id: string; title: string; sub: string; body: string[]; links: L
     title: "The gap and the cost",
     sub: "When a price gap is worth a trade.",
     body: [
-      "The pool price and the exchange price are not always the same. The difference is the gap.",
+      "The pool price and the on-chain oracle price are not always the same. The difference is the gap.",
       "A trade closes part of the gap. But each trade has a cost: the 0.30% pool fee, the price impact and gas.",
       "Trade only when the gap is larger than the cost. If the gap is smaller, the trade loses money even when you are right.",
-      "Watch the gap over time. A gap that stays open for hours can mean the exchange price is stale, not that the pool is cheap.",
+      "Watch the gap over time. A gap that stays open for hours can mean the oracle price is stale, not that the pool is cheap. The HashKey Global exchange price is extra context, not the reference.",
     ],
     links: [
       { label: "Pin the HSK gap chart", chart: { kind: "spread", market: HSK, interval: "1h", bars: 72 } },
