@@ -1,6 +1,6 @@
 {
   "name": "ate_data",
-  "description": "Return a small data table for the user (read-only; the app draws it inline). table: swaps = recent HSKSwap pool swaps; book = HashKey Global top-of-book depth (bids and asks); fills = the vault's executed fills with prices; lots = open and closed spread-revert lots; oracle = current Supra, APRO, pool and CEX prices side by side with ages.",
+  "description": "Return a small data table for the user (read-only; the app draws it inline). table: swaps = recent HSKSwap pool swaps; book = HashKey Global top-of-book depth (bids and asks); fills = the vault's executed fills with prices; lots = open and closed spread-revert lots; oracle = current Supra, APRO, pool and (context) HashKey Global prices side by side with ages.",
   "inputSchema": {
     "type": "object",
     "required": [

@@ -1,5 +1,5 @@
 // Trade's chart (lane D4): simple by default — one price line — with a compact toolbar for the usual tools:
-// line/candles, timeframes, indicators, compare (pool · HashKey Global · oracle), drawings saved per market
+// line/candles, timeframes, indicators, compare (pool · on-chain oracle · HashKey Global as optional context), drawings saved per market
 // (level, trendline, zone, Fibonacci, note), log scale, an OHLC readout, a cost-by-size view and recent trades.
 // "Ask about this chart" sends the question to the chat agent (chat-scope tools only); a chart it builds with
 // ate_chart (indicators, drawings, analysis) shows here, with "Keep drawings". Analysis is information, not advice.
@@ -22,8 +22,8 @@ const TOOLS: { id: DrawingKind; name: string; hint: string }[] = [
   { id: "text", name: "Note", hint: "Type the note, then click where it goes." },
 ];
 const COMPARE: { id: "cex" | "oracle"; name: string }[] = [
-  { id: "cex", name: "HashKey Global" },
-  { id: "oracle", name: "Oracle" },
+  { id: "oracle", name: "On-chain oracle" },
+  { id: "cex", name: "HashKey Global (context)" },
 ];
 const BARS: Record<ChartInterval, number> = { "1m": 120, "5m": 144, "1h": 72, "1d": 60 };
 

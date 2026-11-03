@@ -1,6 +1,6 @@
 // ate_chart / ate_data (lane D4, read-only). Builds typed ChartSpec / DataTable values for the chat agent and the
 // app: pool candles from HSKSwap Swap logs (cached, see swaps.ts), HashKey Global klines, Supra/APRO oracle
-// history, pool-vs-CEX spread, QuoterV2 depth ladder, volume, and the vault's P&L / exposure / epoch budget
+// history, pool-vs-oracle spread, QuoterV2 depth ladder, volume, and the vault's P&L / exposure / epoch budget
 // curves rebuilt from fills, with journal decision markers and server-side indicators.
 
 import type Database from "better-sqlite3";
@@ -266,7 +266,7 @@ export class ChartService {
           if (p.apro) rows.push({ source: "APRO (cross-check)", price: e8(p.apro.price), age: p.apro.ageSec, note: "" });
           rows.push({ source: "HSKSwap pool", price: e8(p.pool.price), age: t - p.at, note: `${p.pool.deviationBps} bps from oracle` });
           if (p.pool.twap) rows.push({ source: "Pool 5-min average", price: e8(p.pool.twap), age: t - p.at, note: "" });
-          if (p.cex) rows.push({ source: "HashKey Global mid", price: e8(p.cex.mid), age: t - p.cex.at, note: `half-spread ${p.cex.halfSpreadBps} bps` });
+          if (p.cex) rows.push({ source: "HashKey Global mid (context)", price: e8(p.cex.mid), age: t - p.cex.at, note: `half-spread ${p.cex.halfSpreadBps} bps` });
         } else base.notes.push("No market read yet; the daemon has not completed a scan.");
         return {
           ...base,
@@ -279,20 +279,20 @@ export class ChartService {
             { key: "note", label: "Note", unit: "text" },
           ],
           rows,
-          sources: [this.src("Daemon market read (Multicall3 + HashKey Global)", [r?.price.at ?? t], this.d.vaultChain.chainId)],
+          sources: [this.src("Daemon market read (Multicall3; HashKey Global mid as context)", [r?.price.at ?? t], this.d.vaultChain.chainId)],
         };
       }
     }
   }
 
-  /** Comparison lines on a price/cex chart: pool, HashKey Global and oracle (Supra at decisions + live, APRO rounds). */
+  /** Comparison lines on a price/cex chart: pool, oracle and HashKey Global (optional context) (Supra at decisions + live, APRO rounds). */
   private async addCompare(spec: ChartSpec, m: MarketId, iv: ChartInterval, bars: number, input: ChartInput): Promise<void> {
     const base = spec.series[0]?.id;
     const want = new Set(input.compare);
     if (want.has("cex") && base !== "cex") {
       const k = await this.cexCandles(m, iv, bars).catch(() => null);
       if (k) {
-        spec.series.push({ id: "cmp_cex", label: "HashKey Global", type: "line", unit: "usd", pane: 0, role: "accent", points: k.candles.map((x) => ({ t: x.t, v: x.c })) });
+        spec.series.push({ id: "cmp_cex", label: "HashKey Global (context)", type: "line", unit: "usd", pane: 0, role: "accent", points: k.candles.map((x) => ({ t: x.t, v: x.c })) });
         spec.sources.push(k.source);
       }
     }
@@ -414,11 +414,26 @@ export class ChartService {
     };
   }
 
+  /** Pool vs the on-chain oracle (the reference the strategy and the vault use), in bps per bar. The oracle line is
+   * the Supra price at each recorded decision plus the live read, and APRO rounds; each bar uses the latest oracle
+   * value at or before its close. */
   private async spreadChart(base: Base, m: MarketId, iv: ChartInterval, bars: number, n?: ChartNetwork): Promise<ChartSpec> {
-    const [p, k] = await Promise.all([this.poolCandles(m, iv, bars, n), this.cexCandles(m, iv, bars)]);
-    const cexAt = new Map(k.candles.map((c) => [c.t, c.c]));
+    const sec = INTERVAL_SEC[iv];
+    const fromT = this.now() - bars * sec;
+    const [p, apro] = await Promise.all([this.poolCandles(m, iv, bars, n), this.aproHistory(m, fromT - 86_400).catch(() => null)]);
+    const supra = this.d.journal
+      .list({ market: m, since: fromT - 86_400, limit: 2000 })
+      .filter((e) => e.context?.oracle?.price && e.context.oracle.price !== "0")
+      .map((e) => ({ t: e.context.oracle.updatedAt || e.at, v: e8(e.context.oracle.price) }));
+    const live = (await this.d.snapshot())?.markets[m]?.price;
+    if (live && live.oracle.price !== "0") supra.push({ t: live.oracle.updatedAt, v: e8(live.oracle.price) });
+    // Supra (the vault's own feed) wins over APRO where both exist; APRO fills the gaps.
+    const ref = dedupe(supra.length ? supra : (apro ?? []));
+    let j = -1;
     const pts = p.candles.flatMap((c) => {
-      const x = cexAt.get(c.t);
+      const close = c.t + sec;
+      while (j + 1 < ref.length && ref[j + 1]!.t <= close) j++;
+      const x = j >= 0 ? ref[j]!.v : null;
       return x ? [{ t: c.t, v: Math.round(((c.c - x) / x) * 10_000) }] : [];
     });
     const s = this.d.strategy().markets[m];
@@ -428,14 +443,17 @@ export class ChartService {
       { v: -s.entrySpreadBps, label: `-${s.entrySpreadBps} bps`, role: "accent" },
       { v: FEE_BPS * 2, label: "Round-trip pool fee", role: "down" },
     ];
+    const notes = [...p.notes];
+    if (!pts.length) notes.push("No on-chain oracle prices in this window yet: they come from the agent's recorded decisions and the live read, so the gap fills in as it runs.");
+    else if (supra.length < 3) notes.push("Few oracle points in this window: between them the last known oracle price is used.");
     return {
       ...base,
-      title: `${LABEL[m]} pool vs exchange gap`,
-      caption: `How far the pool price is from HashKey Global, in basis points (100 bps = 1%).`,
-      series: [{ id: "spread", label: "Pool − exchange (bps)", type: "line", unit: "bps", pane: 0, role: "primary", points: pts }],
+      title: `${LABEL[m]} pool vs oracle gap`,
+      caption: `How far the pool price is from the on-chain oracle price, in basis points (100 bps = 1%).`,
+      series: [{ id: "spread", label: "Pool − oracle (bps)", type: "line", unit: "bps", pane: 0, role: "primary", points: pts }],
       lines,
-      sources: [p.source, k.source],
-      notes: p.notes,
+      sources: [p.source, this.src(supra.length ? "Supra price at each decision (journal) + live read" : "APRO feed rounds (getRoundData)", ref.map((x) => x.t), supra.length ? this.d.vaultChain.chainId : 177)],
+      notes,
     };
   }
 
