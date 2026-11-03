@@ -15,6 +15,7 @@ import { Markdown } from "../src/Markdown";
 import { CodeApprove, approveRiskier } from "./approveCode";
 import { ChatModelPicker, McpToolsSheet } from "./AskTools";
 import { BacktestCard, SaveCard, isAskBacktest } from "./AskStrategy";
+import { pct } from "./strategyKit";
 import type { ViewProps } from "./registry";
 
 const PROMPTS = ["How am I doing?", "Chart the BTC pool on HSKSwap, 1h candles for 3 days with EMA 50 and RSI 14. Draw support and resistance and tell me what you find.", "Stop trading", "Go to cash"];
@@ -105,7 +106,7 @@ export default function Ask(_: ViewProps) {
     const r = m.tool?.result as ToolRes;
     if (m.tool?.name !== "ate_backtest" || !r?.ok || !isAskBacktest(r.data)) continue;
     if (lastBt) prevBt[m.id] = lastBt;
-    lastBt = { label: `Previous version (${r.data.returnPct >= 0 ? "+" : ""}${r.data.returnPct.toFixed(2)}%)`, curve: r.data.curve };
+    lastBt = { label: `The previous version (${pct(r.data.returnPct)})`, curve: r.data.curve };
   }
 
   const send = async (q: string) => {

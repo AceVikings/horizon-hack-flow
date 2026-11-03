@@ -56,7 +56,6 @@ export function BacktestCard({ d, prev }: { d: AskBacktest; prev?: { label: stri
         <div className="sm" style={{ marginTop: 10 }}>
           {better ? "Beat" : "Trailed"} just holding by <b>{Math.abs(d.returnPct - d.justHolding.returnPct).toFixed(2)} points</b>
           {d.currentSettings ? ` · your current ${d.currentSettings.name} settings: ${pct(d.currentSettings.returnPct)}` : ""}
-          {prev ? ` · grey line: ${prev.label.toLowerCase()}` : ""}
         </div>
       </div>
     </section>
