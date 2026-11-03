@@ -36,7 +36,7 @@ p { margin: 0; }
   font-size: 13px; line-height: 1.5; display: grid; grid-template-columns: 76px minmax(0,1fr); grid-template-rows: minmax(0,1fr);
 }
 .frame.norail { grid-template-columns: minmax(0,1fr); }
-.frame > .body { min-width: 0; min-height: 0; height: 100%; }
+.frame > .body { min-width: 0; min-height: 0; height: 100%; grid-template-rows: minmax(0,1fr); }
 
 .rail { background: var(--c); color: #fff; display: flex; flex-direction: column; align-items: center; padding: 14px 0 12px; gap: 2px; border-right: 1px solid rgba(183,198,194,.1); position: relative; }
 .rail .logo { margin: 0 0 16px; }

@@ -40,7 +40,7 @@
 .setbar { position: sticky; bottom: 0; }
 .linkbtn { background: none; border: 0; padding: 0; color: inherit; text-decoration: underline; text-decoration-color: var(--y); text-underline-offset: 3px; cursor: pointer; font: inherit; }
 /* simplified setup (SIMPLIFY.md): one column, three steps */
-.sw { grid-column: 1 / -1; height: 100%; display: grid; grid-template-rows: auto minmax(0,1fr); background: #fff;
+.sw { grid-column: 1 / -1; height: 100%; min-height: 0; display: grid; grid-template-rows: auto minmax(0,1fr); background: #fff;
   background-image: linear-gradient(to right, var(--gridline) 1px, transparent 1px), linear-gradient(to bottom, var(--gridline) 1px, transparent 1px); background-size: 40px 40px; }
 .sw-top { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 18px 40px 18px 96px; -webkit-app-region: drag; user-select: none; border-bottom: 1px solid var(--line); background: rgba(255,255,255,.94); }
 .sw-top .logo { color: var(--c); }
