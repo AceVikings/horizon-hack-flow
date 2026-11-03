@@ -144,7 +144,15 @@ class TraderSupervisor {
     if (typeof b.model === "string" && b.model && b.model !== this.o.ai.config.model) this.o.ai.setConfig({ model: b.model });
     const model = this.o.ai.effectiveModel();
     const viaCli = engine === "llm" && this.o.ai.config.engine === "claude-code" && this.o.ai.config.provider === "anthropic";
-    const cycleSeconds = Math.max(30, Math.min(3600, Number(b.cycleSeconds) || 120));
+    // No cycle length given (Home's Start trading): keep the one this home last ran with (trader.json), else 120 s.
+    const saved = (() => {
+      try {
+        return Number((JSON.parse(readFileSync(this.file, "utf8")) as Partial<Wanted>).cycleSeconds) || 0;
+      } catch {
+        return 0;
+      }
+    })();
+    const cycleSeconds = Math.max(30, Math.min(3600, Number(b.cycleSeconds) || saved || 120));
     const key = JSON.stringify([mode, engine, engine === "llm" ? [model, this.o.ai.config.provider, this.o.ai.config.engine] : null, cycleSeconds]);
     if (this.st.running && this.runner && this.runningKey === key) {
       this.save({ wanted: true, mode, engine, model, cycleSeconds });
