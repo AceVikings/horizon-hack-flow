@@ -1,14 +1,22 @@
 <p align="center"><img src="packages/ui/brand/flow-lockup.svg" alt="Flow" width="280"></p>
 
-# Flow: a seatbelt for AI traders
+# Flow: an agentic trading environment for HashKey Chain
 
-[flowverse.cloud](https://flowverse.cloud). The code packages still use the name `ate` (for example `ate-daemon` and `ate chat`).
+[flowverse.cloud](https://flowverse.cloud). The code packages still use the name `ate` (Agentic Trading Environment),
+for example `ate-daemon` and `ate chat`.
 
-**A seatbelt for AI traders.** Let an AI agent trade on HSKSwap by itself,
-and know before you start how much it can lose.
+**Give an AI agent everything it needs to trade HSKSwap, let it run while you sleep, and know the worst case first.**
 
-You give the agent a budget. A contract on HashKey Chain holds the money and checks every trade.
-If the agent makes a mistake, gets a bad prompt or loses its key, the contract stops the trade.
+Flow is the environment around a trading agent:
+
+- **Tools.** 16 MCP tools: live pool and oracle data, quotes and price impact, charts with indicators and analysis,
+  backtests, positions and P&L, strategy settings, propose and execute, and a signed journal.
+- **Connections.** Use the AI you already pay for (Claude, ChatGPT or Gemini subscriptions through CLIProxyAPI),
+  OpenCode, or any MCP client such as Claude Code or Codex. No API keys are necessary.
+- **Always on.** The agent trades by itself on your Mac, or in the cloud from one Docker image
+  (agent, daemon, web app, passkey sign-in, managed signer). Nobody signs by hand.
+- **A seatbelt.** A vault contract on HashKey Chain holds the money and checks every trade. The agent can trade inside
+  your limits but can never withdraw. A bad prompt or a stolen key cannot cost more than the limit you set.
 
 Built by team Vikings for the HSK Chain Horizon Hackathon (AI Agent Trading). Apache-2.0.
 

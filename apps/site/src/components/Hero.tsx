@@ -50,8 +50,9 @@ export function Hero() {
           </span>
         </h1>
         <p className="mt-[30px] max-w-xl text-[19px] leading-[1.55] text-charcoal/72 max-sm:text-[17px]">
-          Flow lets an AI agent trade on HSKSwap by itself. Your money sits in a vault contract that checks every trade,
-          so a bad prompt or a stolen key can't cost more than the limits you set.
+          Flow is an agentic trading environment: the tools, data and connections an AI agent needs to trade HSKSwap,
+          running on your Mac or in the cloud while you sleep. A vault contract checks every trade, so a bad prompt or a
+          stolen key can't cost more than the limits you set.
         </p>
         <div className="mt-[38px] flex flex-wrap items-center justify-center gap-x-[18px] gap-y-3.5 max-sm:w-full max-sm:flex-col max-sm:items-stretch">
           <DownloadButton icon={<AppleIcon />} label="macOS" href={downloads.mac} />
