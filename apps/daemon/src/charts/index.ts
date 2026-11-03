@@ -30,5 +30,6 @@ export function createChartService(o: { cfg: AteConfig; db: Database.Database; j
     cex: new CexReader({ baseUrl: o.cfg.oracle.cex.baseUrl }),
     snapshot: () => o.service.refresh(30).catch(() => null),
     strategy: () => o.service.strategy,
+    vaults: () => o.service.vaults,
   });
 }

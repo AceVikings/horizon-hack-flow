@@ -205,7 +205,8 @@ export class AteService {
   /** The daemon-supervised trader (app-routes): running from Start, not only once its first cycle has finished. */
   traderRunning: (() => boolean) | null = null;
   /** Daily P&L (§11.4 rule 6): realised + exit-marked unrealised minus the UTC-day-start snapshot. */
-  private pnlDay: { day: string; startE8: string } | null = null;
+  /** `vaults`: the active vaults the day-start was taken against; `lastE8`: the latest daily P&L (carried across a switch). */
+  private pnlDay: { day: string; startE8: string; vaults?: string; lastE8?: string } | null = null;
   private dailyPnlE8 = 0n;
   private breaker: BreakerStateLike = { state: "armed", since: null, day: "", cycles: 0 };
   /** `ate rogue --stage` hold (§22.3): candidate executes on this market wait until `until`; guard exits never wait. */
@@ -273,6 +274,16 @@ export class AteService {
 
   private ensureRows() {
     const db = this.o.db;
+    // Seed snapshots were per market (one vault each) before a market could switch vaults: give the old snapshot to
+    // the vault the market's trades went through (or, with none yet, the vault active now), once.
+    for (const m of this.markets) {
+      const legacy = db.prepare("SELECT value FROM settings WHERE key = ?").get(`seed:${m}`) as { value: string } | undefined;
+      if (!legacy) continue;
+      if (db.prepare("SELECT 1 FROM settings WHERE key LIKE ? LIMIT 1").get(`seed:${m}:%`)) continue;
+      const first = db.prepare("SELECT p.vault v FROM fills f JOIN executions e ON e.id = f.execution_id JOIN proposals p ON p.id = e.proposal_id WHERE f.market = ? ORDER BY f.at, f.rowid LIMIT 1").get(m) as { v: string } | undefined;
+      const owner = first?.v ?? this.vaults[m];
+      if (owner) db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)").run(`seed:${m}:${owner.toLowerCase()}`, legacy.value);
+    }
     db.prepare("INSERT OR IGNORE INTO agents (id, label, address, chain_id, created_at) VALUES (?, 'agent', ?, ?, ?)").run(this.cfg.agentKeyId, this.o.signer.address ?? ZERO_ADDR, this.cfg.chain.id, this.now());
     for (const m of this.markets) {
       const v = this.vaults[m];
@@ -293,6 +304,12 @@ export class AteService {
   private loadProposals() {
     const rows = this.o.db.prepare("SELECT * FROM proposals WHERE status IN ('approved','awaiting_human','proposed')").all() as Record<string, unknown>[];
     for (const r of rows) {
+      // An open proposal made for a vault that is no longer the market's active one can never execute: drop it.
+      const active = this.vaults[r.market as MarketId];
+      if (!active || active.toLowerCase() !== String(r.vault).toLowerCase()) {
+        this.o.db.prepare("UPDATE proposals SET status = 'invalidated' WHERE id = ?").run(r.id);
+        continue;
+      }
       const e = this.journal.get(r.id as string);
       this.proposals.set(r.id as string, {
         id: r.id as string,
@@ -471,9 +488,14 @@ export class AteService {
 
   // ------------------------------------------------------------------ books / portfolio
 
+  /** The active vault's fills only: a market can have earlier vaults (Wallet → Use this vault), each its own book. */
   private fills(m: MarketId): FillRow[] {
+    const v = this.vaults[m];
+    if (!v) return [];
     return (
-      this.o.db.prepare("SELECT f.*, c.leg AS leg FROM fills f LEFT JOIN executions e ON e.id = f.execution_id LEFT JOIN proposals p ON p.id = e.proposal_id LEFT JOIN candidates c ON c.id = p.candidate_id WHERE f.market = ? ORDER BY f.at, f.rowid").all(m) as Record<string, unknown>[]
+      this.o.db
+        .prepare("SELECT f.*, c.leg AS leg FROM fills f JOIN executions e ON e.id = f.execution_id JOIN proposals p ON p.id = e.proposal_id LEFT JOIN candidates c ON c.id = p.candidate_id WHERE f.market = ? AND lower(p.vault) = lower(?) ORDER BY f.at, f.rowid")
+        .all(m, v) as Record<string, unknown>[]
     ).map((r) => ({
       id: r.id as string,
       market: m,
@@ -488,14 +510,16 @@ export class AteService {
 
   /** Seed basis = enforcement oracle price the first time the daemon sees the vault (§11.4 seed basis). */
   private seedFor(m: MarketId): { qty: bigint; priceE8: bigint } {
-    const key = `seed:${m}`;
+    const active = this.vaults[m];
+    if (!active) return { qty: 0n, priceE8: 0n };
+    const key = `seed:${m}:${active.toLowerCase()}`;
     const row = this.o.db.prepare("SELECT value FROM settings WHERE key = ?").get(key) as { value: string } | undefined;
     if (row) {
       const j = JSON.parse(row.value) as { qty: string; priceE8: string };
       return { qty: BigInt(j.qty), priceE8: BigInt(j.priceE8) };
     }
     const r = this.cycle?.markets[m];
-    if (!r?.vault || r.raw.oracleAnswer === 0n) return { qty: 0n, priceE8: 0n };
+    if (!r?.vault || r.raw.oracleAnswer === 0n || r.vault.address.toLowerCase() !== active.toLowerCase()) return { qty: 0n, priceE8: 0n };
     const executed = this.fills(m).length;
     const qty = executed ? 0n : BigInt(r.vault.balancePrice);
     const v = { qty: qty.toString(), priceE8: r.raw.oracleAnswer.toString() };
@@ -741,16 +765,30 @@ export class AteService {
   stepDaily(cycle: boolean) {
     const t = this.now();
     const day = utcDay(t);
-    if (!this.pnlDay) this.pnlDay = this.setting<{ day: string; startE8: string }>("pnl_day_start");
+    if (!this.pnlDay) this.pnlDay = this.setting<{ day: string; startE8: string; vaults?: string; lastE8?: string }>("pnl_day_start");
     const b0 = this.setting<BreakerStateLike>("breaker");
     if (b0 && !this.breaker.day) this.breaker = b0;
     if (!this.cycle) return;
     const total = this.pnlTotalE8();
+    const fp = this.markets.map((m) => (this.vaults[m] ?? "-").toLowerCase()).join(",");
     if (!this.pnlDay || this.pnlDay.day !== day) {
-      this.pnlDay = { day, startE8: total.toString() };
+      this.pnlDay = { day, startE8: total.toString(), vaults: fp, lastE8: "0" };
+      this.saveSetting("pnl_day_start", this.pnlDay);
+    } else if (this.pnlDay.vaults === undefined) {
+      this.pnlDay = { ...this.pnlDay, vaults: fp };
+      this.saveSetting("pnl_day_start", this.pnlDay);
+    } else if (this.pnlDay.vaults !== fp) {
+      // Another vault became active: the books changed under the total, so keep today's P&L where it stood and
+      // count from here (a switch neither erases a loss from the breaker nor shows a jump).
+      const carried = BigInt(this.pnlDay.lastE8 ?? "0");
+      this.pnlDay = { day, startE8: (total - carried).toString(), vaults: fp, lastE8: carried.toString() };
       this.saveSetting("pnl_day_start", this.pnlDay);
     }
     this.dailyPnlE8 = total - BigInt(this.pnlDay.startE8);
+    if (this.pnlDay.lastE8 !== this.dailyPnlE8.toString()) {
+      this.pnlDay = { ...this.pnlDay, lastE8: this.dailyPnlE8.toString() };
+      this.saveSetting("pnl_day_start", this.pnlDay);
+    }
     const step = this.o.strategy.stepBreaker;
     if (!step) return;
     const flat = this.markets.every((m) => BigInt(this.cycle?.markets[m]?.vault?.exposureUsdE8 ?? "0") < 50_000_000n);

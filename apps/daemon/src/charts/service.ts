@@ -69,6 +69,8 @@ export interface ChartDeps {
   /** Latest market + vault read (cached by the daemon). */
   snapshot: () => Promise<CycleRead | null>;
   strategy: () => StrategyParams;
+  /** The active vault per market (fills and trade markers follow it). */
+  vaults?: () => Partial<Record<MarketId, string>>;
   now?: () => number;
   swaps?: SwapIndex;
 }
@@ -638,7 +640,12 @@ export class ChartService {
 
   private fills(m: MarketId): { t: number; side: "buy" | "sell"; base: number; quote: number; generator: string }[] {
     const d = MARKETS[m].baseDecimals;
-    return (this.d.db.prepare("SELECT side, base_qty, quote_qty, generator, at FROM fills WHERE market = ? ORDER BY at, rowid").all(m) as Record<string, unknown>[]).map((r) => ({
+    // The active vault's fills (a market can have earlier vaults); every fill when the caller does not say.
+    const v = this.d.vaults?.()[m];
+    const rows = v
+      ? this.d.db.prepare("SELECT f.side, f.base_qty, f.quote_qty, f.generator, f.at FROM fills f JOIN executions e ON e.id = f.execution_id JOIN proposals p ON p.id = e.proposal_id WHERE f.market = ? AND lower(p.vault) = lower(?) ORDER BY f.at, f.rowid").all(m, v)
+      : this.d.db.prepare("SELECT side, base_qty, quote_qty, generator, at FROM fills WHERE market = ? ORDER BY at, rowid").all(m);
+    return (rows as Record<string, unknown>[]).map((r) => ({
       t: r.at as number,
       side: r.side as "buy" | "sell",
       base: Number(r.base_qty as string) / 10 ** d,
@@ -659,6 +666,8 @@ export class ChartService {
     for (const e of es) {
       if (e.at > to) continue;
       if (e.market && e.market !== m && e.kind !== "pause") continue;
+      const av = this.d.vaults?.()[m];
+      if (av && e.intent?.vault && e.intent.vault.toLowerCase() !== av.toLowerCase()) continue;
       const t = sec ? e.at - (e.at % sec) : e.at;
       const price = e.context?.pool?.price ? e8(e.context.pool.price) : undefined;
       if (e.kind === "proposal") {
