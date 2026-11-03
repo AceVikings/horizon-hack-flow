@@ -165,6 +165,8 @@ export interface OwnerBridge {
   createVaults(o?: { markets?: string[]; limits?: Record<string, string | number>; use?: boolean }): Promise<Res<OwnerTxs & { vaults: { market: string; address: string }[]; seconds?: number | null; seedError?: string | null }>>;
   /** Every vault the Flow wallet knows, active and earlier (desktop). */
   state?(): Promise<Res<OwnerState>>;
+  /** One vault read from chain (desktop). */
+  vault?(address: string): Promise<Res<OwnerVault>>;
   /** Live progress of the latest vault creation. */
   job?(): Promise<Res<OwnerJob | null>>;
   /** Switch a market's active vault; the daemon restarts on it. */

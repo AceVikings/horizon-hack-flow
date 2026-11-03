@@ -194,6 +194,15 @@ export class DesktopOwner {
         return err((e as Error).message);
       }
     },
+    /** One vault read from chain (limits, paused, agent): the read-back after Change limits. */
+    vault: async (address: string): Promise<Res<unknown>> => {
+      try {
+        const r = await this.call<Record<string, unknown>>("GET", `/owner/vault?address=${encodeURIComponent(String(address))}`);
+        return r.status === 200 ? { ok: true, data: r.body } : err(String((r.body as { error?: string }).error ?? `owner service HTTP ${r.status}`));
+      } catch (e) {
+        return err((e as Error).message);
+      }
+    },
     /** Live progress of the latest vault creation (polled while it runs). */
     job: async (): Promise<Res<unknown>> => {
       try {
@@ -212,8 +221,10 @@ export class DesktopOwner {
       const ag = await this.daemon.call<{ address: string | null }>("GET", "/setup/agent");
       if (!ag.ok || !ag.data.address) return err("create or unlock the agent key first");
       const markets = [...new Set((o?.markets ?? ["hsk", "btc"]).map((m) => (/btc/i.test(String(m)) ? "btc" : "hsk")))];
-      const st = await this.call<{ chainId: number }>("GET", "/owner/state");
-      const r = await this.op({ op: "deploy", markets, agent: ag.data.address, seed: st.body.chainId === 133, ...(o?.limits ? { limits: o.limits } : {}) });
+      // the chain from the daemon's local status: GET /owner/state reads every vault on chain (seconds on a slow RPC)
+      const ds = await this.daemon.call<{ chainId: number }>("GET", "/setup/status");
+      const chainId = ds.ok ? ds.data.chainId : (await this.call<{ chainId: number }>("GET", "/owner/state")).body.chainId;
+      const r = await this.op({ op: "deploy", markets, agent: ag.data.address, seed: chainId === 133, ...(o?.limits ? { limits: o.limits } : {}) });
       if (!r.ok) return r;
       const vaults = r.data.result?.vaults ?? [];
       const seconds = (r.data.result as { seconds?: number } | undefined)?.seconds ?? null;

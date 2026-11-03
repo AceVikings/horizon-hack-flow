@@ -286,11 +286,11 @@ function ChangeLimits({ row, onClose, onSaved }: { row: Row; onClose(): void; on
     }
     // read back from the chain before saying it is done
     setBusy("Saving on chain…");
-    for (let i = 0; i < 20 && owner.state; i++) {
-      const s = await owner.state();
-      const v = s.ok ? s.data.vaults.find((x) => lc(x.address) === lc(row.address)) : null;
+    for (let i = 0; i < 20 && owner.vault; i++) {
+      const s = await owner.vault(row.address);
+      const v = s.ok ? s.data : null;
       if (v?.limits && sameLim(limFromOwner(v.limits), l)) break;
-      await new Promise((res) => setTimeout(res, 1000));
+      await new Promise((res) => setTimeout(res, 700));
     }
     setBusy(null);
     toast({ kind: "ok", text: `${NAME[mkOf(row.market)]} vault limits saved`, sub: `on chain in ${((Date.now() - t0) / 1000).toFixed(1)} s` });

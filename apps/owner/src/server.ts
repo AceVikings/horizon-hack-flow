@@ -41,6 +41,7 @@ export function createOwnerServer(svc: OwnerService, token: string, log?: (m: st
       if (!h.startsWith("Bearer ") || !same(h.slice(7), token)) return json(401, { error: "unauthorized" });
       if (req.method === "GET" && url.pathname === "/owner/state") return json(200, await svc.state());
       if (req.method === "GET" && url.pathname === "/owner/job") return json(200, { job: svc.job });
+      if (req.method === "GET" && url.pathname === "/owner/vault") return json(200, await svc.vaultState(url.searchParams.get("address") ?? ""));
       if (req.method === "POST" && url.pathname === "/owner/op") {
         const r = await svc.request(await body(req));
         return json("needsApproval" in r ? 428 : 200, r);

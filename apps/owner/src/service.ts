@@ -106,6 +106,13 @@ export class OwnerService {
 
   job: Job | null = null;
 
+  /** One vault's owner, agent, guardian, paused and limits (a cheap read-back after a change). */
+  async vaultState(a: string) {
+    const v = addr(a, "address");
+    const s = await this.o.chain.vault(v, this.knownVaults().find((k) => k.address.toLowerCase() === v.toLowerCase())?.market ?? null);
+    return { ...s, limits: limitsJson(s.limits), ownedByUs: s.owner.toLowerCase() === this.o.chain.address.toLowerCase() };
+  }
+
   private createdAt(a: Address): number | null {
     return this.readState().deployed.find((d) => d.vaults.some((v) => v.vault.toLowerCase() === a.toLowerCase()))?.at ?? null;
   }
