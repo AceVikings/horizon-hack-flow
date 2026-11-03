@@ -1898,6 +1898,11 @@ export class AteService {
   }
 
   // ---- /status
+  /** "lane-c" (@ate/strategy) or "lane-b-stub" (the pass-through seam: tests, or @ate/strategy failed to load). */
+  get strategySource(): StrategyImpl["source"] {
+    return this.o.strategy.source;
+  }
+
   status(): StatusResponse {
     const g = this.cycle?.agentBalanceWei ?? null;
     return {

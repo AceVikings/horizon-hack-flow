@@ -144,6 +144,8 @@ class TraderSupervisor {
       this.save({ wanted: true, mode, engine, model, cycleSeconds });
       return;
     }
+    // §21.4: the autonomous trader must never run on the lane-b stub (guard rules 1–3 only, no entry candidates).
+    if (this.o.service.strategySource === "lane-b-stub") throw Object.assign(new Error("The strategy engine (@ate/strategy) did not load, so the trader cannot start. Restart Flow; if it persists, reinstall."), { status: 409, code: "ATE_CONFIG_INVALID" });
     if (engine === "llm" && !viaCli && !this.o.ai.available()) throw Object.assign(new Error(`${PROVIDERS[this.o.ai.config.provider].label} is not set up: add its API key under Accounts (or run on the rules engine)`), { status: 409, code: "ATE_CONFIG_INVALID" });
     if (this.st.running) await this.stopNow(false);
     const name = "@ate/trader";

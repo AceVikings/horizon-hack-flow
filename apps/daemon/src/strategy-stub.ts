@@ -246,8 +246,9 @@ export async function loadStrategy(openProposals: () => OpenProposal[], opts: { 
           ...(typeof mod.scoreVeto === "function" ? { scoreVeto: mod.scoreVeto as StrategyImpl["scoreVeto"] } : {}),
         };
       }
-    } catch {
-      /* fall back to the stub */
+    } catch (e) {
+      // never silent: a packaged build that cannot load @ate/strategy would otherwise trade on the stub unnoticed
+      process.stderr.write(`strategy seam: @ate/strategy did not load (${(e as Error).message?.split("\n")[0] ?? String(e)}); using the lane-b stub — the trader will not start on it\n`);
     }
   }
   const reservations = new StubReservations();
