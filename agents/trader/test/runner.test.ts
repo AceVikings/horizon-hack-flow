@@ -71,6 +71,24 @@ describe("cycle rules (§11.1)", () => {
     await r.idle();
   });
 
+  it("a gap trigger during a run is queued and runs once that run ends", async () => {
+    let t = 1_000_000;
+    let release!: () => void;
+    const reasons: string[] = [];
+    const ex: CycleExecutor = { run: (ctx) => (reasons.push(ctx.reason), new Promise((r) => (release = () => r({ ok: true })))) };
+    const r = new TraderRunner({ executor: ex, now: () => t });
+    expect(r.tick()).toBe("started");
+    t += 40_000;
+    expect(r.trigger("scan")).toBe("skipped");
+    expect(r.trigger("scan")).toBe("skipped"); // still one queued cycle, not two
+    release();
+    await sleep(0);
+    expect(reasons).toEqual(["tick", "scan"]);
+    release();
+    await r.idle();
+    expect(r.stats().cycles).toBe(2);
+  });
+
   it("candidateTtlSec = max(120, 2 × p95) and records latency", async () => {
     expect(candidateTtlFromP95(null)).toBe(120);
     expect(candidateTtlFromP95(45_000)).toBe(120);

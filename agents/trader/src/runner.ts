@@ -58,6 +58,7 @@ export class TraderRunner {
   private readonly timeoutMs: number;
   private readonly minGap: number;
   private readonly now: () => number;
+  private queued: Exclude<CycleReason, "tick"> | null = null;
 
   constructor(private readonly o: RunnerOptions) {
     this.timeoutMs = o.timeoutMs ?? 90_000;
@@ -83,6 +84,13 @@ export class TraderRunner {
   /** Out-of-schedule cycle: same lock, ≥ minTriggerGapMs since the last start. */
   trigger(reason: Exclude<CycleReason, "tick">): "started" | "skipped" | "rate_limited" {
     if (this.now() - this.lastStart < this.minGap) return "rate_limited";
+    if (this.running) {
+      // A gap or strategy change during a run is not dropped: one cycle runs as soon as this one ends (the running
+      // cycle read the market before the change).
+      this.queued = reason;
+      this.o.log?.(`cycle ${this.cycle} still running: ${reason} cycle queued`);
+      return "skipped";
+    }
     return this.tick(reason);
   }
 
@@ -131,6 +139,9 @@ export class TraderRunner {
       this.o.onRecord?.(rec);
       this.o.log?.(`cycle ${cycle} ${rec.status} in ${(latencyMs / 1000).toFixed(1)} s${rec.summary ? `: ${rec.summary.slice(0, 600)}` : ""}`);
       this.running = null;
+      const q = this.queued;
+      this.queued = null;
+      if (q) this.start(q);
     })();
   }
 
