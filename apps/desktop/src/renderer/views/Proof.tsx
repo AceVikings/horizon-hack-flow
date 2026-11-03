@@ -33,8 +33,14 @@ function prettyError(d: string | undefined, attack: string): string | null {
   return `${m[1]}(${args.map((a) => (/^0x[0-9a-fA-F]{40}$/.test(a) ? short(a, 6, 4) : usd && /^\d+$/.test(a) ? (Number(a) / 1e8).toFixed(2) : /^\d{13,}$/.test(a) ? `${a.slice(0, 6)}…` : a)).join(", ")})`;
 }
 /** Plain reason for a skipped attack (the raw check() note shows under "Show details"). */
+/** rogue.ts: "headroom $a ≤ $b needed to lift exposure $c above $d". Capped by one trade (≤ $100), not by the budget. */
+const exposureSkip = (note: string): string | null => {
+  const m = /headroom \$([\d.]+) ≤ \$([\d.]+) needed to lift exposure \$([\d.]+) above \$([\d.]+)/.exec(note);
+  if (!m || Number(m[1]) < 95) return null;
+  return `Skipped: one trade (at most $${Math.round(Number(m[1]))}) can't lift what the vault holds ($${Number(m[3]).toFixed(2)}) past the $${Math.round(Number(m[4]))} holding limit. Hold about $${Math.ceil(Number(m[2]) - Number(m[1]) + 1)} more of the token in Vault-HSK first.`;
+};
 const skipWhy = (note?: string) =>
-  !note ? "Skipped." : /EPOCH|headroom|epoch/.test(note) ? "Skipped: today's trading budget is used up. Try after the daily reset." : /paused/i.test(note) ? "Skipped: the vault was paused at the time." : /stopped before/.test(note) ? "Skipped: you stopped the test." : /guardian pause|not paused/.test(note) ? "Skipped: the vault was not paused in time." : "Skipped: the vault's state didn't allow this test right now.";
+  !note ? "Skipped." : exposureSkip(note) ??  /EPOCH|headroom|epoch/.test(note) ? "Skipped: today's trading budget is used up. Try after the daily reset." : /paused/i.test(note) ? "Skipped: the vault was paused at the time." : /stopped before/.test(note) ? "Skipped: you stopped the test." : /guardian pause|not paused/.test(note) ? "Skipped: the vault was not paused in time." : "Skipped: the vault's state didn't allow this test right now.";
 const when = (at: number) => new Date(at * 1000).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 const dur = (a: number, b: number) => `${Math.floor((b - a) / 60)}m ${String((b - a) % 60).padStart(2, "0")}s`;
 
