@@ -28,7 +28,7 @@ export function TestnetGap({ market }: { market: MarketId }) {
     const last = r.data.txs.at(-1);
     toast({
       kind: "ok",
-      text: offsetBps === 0 ? `${label} pool is back on the oracle price` : `${label} pool is now ${(Math.abs(r.data.afterBps) / 100).toFixed(2)}% under the oracle`,
+      text: offsetBps === 0 ? `${label} pool is back on the oracle price` : `${label} pool is now ${(Math.abs(offsetBps) / 100).toFixed(2)}% under the oracle`,
       sub: "Testnet only",
       ...(last ? { href: explorer.tx(last), hrefLabel: last } : {}),
     });
