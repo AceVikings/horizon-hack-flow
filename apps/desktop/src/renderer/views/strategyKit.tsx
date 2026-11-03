@@ -76,8 +76,7 @@ export function PnlChart({ curve, decisions, compare, height = 260 }: { curve: {
     title: "",
     caption: "",
     x: { type: "time" },
-    // dates on the axis for multi-day runs
-    ...(curve.length > 1 && curve[curve.length - 1]!.t - curve[0]!.t > 2 * 86_400 ? { interval: "1d" as const } : {}),
+    // no fixed interval: the axis puts the date at each new day and the time inside a day (5-min bars, multi-day runs)
     series: [
       { id: "pnl", label: "Profit and loss", type: "area", unit: "usd", pane: 0, role: "primary", points: dedupe(curve) },
       ...(compare && compare.curve.length ? [{ id: "cmp", label: compare.label, type: "line" as const, unit: "usd" as const, pane: 0 as const, role: "muted" as const, points: dedupe(compare.curve) }] : []),

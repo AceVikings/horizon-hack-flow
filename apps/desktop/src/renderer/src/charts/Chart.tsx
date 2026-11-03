@@ -131,8 +131,9 @@ export function ChartView({ spec, height = 280, look = "line", noMarkers, onMark
           const d = new Date(Number(t) * 1000);
           if (type === TickMarkType.Year) return String(d.getFullYear());
           if (type === TickMarkType.Month) return d.toLocaleDateString(undefined, { month: "short" });
-          if (type === TickMarkType.DayOfMonth || daily) return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-          return localTime(Number(t), false);
+          if (type === TickMarkType.DayOfMonth) return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+          // inside a day: the time (daily bars have no intraday ticks; if one appears, its date would only repeat)
+          return daily ? "" : localTime(Number(t), false);
         },
       },
       localization: { timeFormatter: (t: Time) => (cat ? `${spec.categories?.[Number(t) - 1] ?? ""} trade` : localTime(Number(t), true)) },
