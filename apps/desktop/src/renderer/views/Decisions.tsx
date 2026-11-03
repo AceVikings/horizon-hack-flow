@@ -319,7 +319,7 @@ function Record({ id }: { id: string }) {
   const tradeLike = !!(e.intent || prop?.intent);
   const intent = e.intent ?? prop?.intent;
 
-  // 13 vault checks, derived from the record context and the vault limits at decision time
+  // 13 vault checks, derived from the record context and the vault's current limits (no made-up limit when they are not read yet)
   const notional = intent ? (intent.side === "buy" ? Number(intent.amountIn) / 1e6 : (Number(intent.amountIn) / 10 ** (mk?.baseDecimals ?? 18)) * (Number(ctx.oracle.price) / 1e8)) : 0;
   const checks: string[] = [
     "Not paused",
@@ -328,13 +328,13 @@ function Record({ id }: { id: string }) {
     "Deadline",
     "Pair allowed",
     `Oracle fresh · ${Math.round(ctx.oracle.ageSec / 60)}m`,
-    `Deviation ${oracleDev > 0 ? "+" : oracleDev < 0 ? "−" : ""}${Math.abs(oracleDev)} ≤ ${lim?.maxOracleDeviationBps ?? 250}`,
+    `Deviation ${oracleDev > 0 ? "+" : oracleDev < 0 ? "−" : ""}${Math.abs(oracleDev)}${lim ? ` ≤ ${lim.maxOracleDeviationBps}` : ""} bps`,
     `Trade ${money(notional)} ≤ $${ctx.policy.maxTradeUsd}`,
     `Budget ${money(notional)} of ${money(Number(ctx.policy.epochRemainingUsd))} left`,
-    `Cooldown ${lim?.cooldown ?? 60} s`,
+    lim ? `Cooldown ${lim.cooldown} s` : "Cooldown",
     `Floor ${ctx.quote ? tokenAmt(ctx.quote.minOutFloor, intent?.side === "buy" ? (mk?.baseDecimals ?? 18) : 6) : "—"}`,
     "Balance",
-    `Exposure ≤ ${lim ? money(Number(lim.maxExposureUsdE8) / 1e8, 0) : "$150"}`,
+    lim ? `Exposure ≤ ${money(Number(lim.maxExposureUsdE8) / 1e8, 0)}` : "Exposure",
   ];
   const failed = e.verdict.ok ? -1 : (CODE_CHECK[e.verdict.code] ?? -2);
   // Without a signal record, the gap is the pool vs the on-chain oracle price (positive = pool cheaper).
@@ -425,7 +425,7 @@ function Record({ id }: { id: string }) {
             <div>
               <div className="lbl" style={{ color: "var(--sage)" }}>HSKSwap pool</div>
               <div className="pv num">{price8(ctx.pool.price)}</div>
-              <Badge tone={Math.abs(oracleDev) <= (lim?.maxOracleDeviationBps ?? 250) ? "ok" : "bad"}>{oracleDev > 0 ? "+" : oracleDev < 0 ? "−" : ""}{Math.abs(oracleDev)} bps vs oracle · max {lim?.maxOracleDeviationBps ?? 250}</Badge>
+              <Badge tone={!lim ? "info" : Math.abs(oracleDev) <= lim.maxOracleDeviationBps ? "ok" : "bad"}>{oracleDev > 0 ? "+" : oracleDev < 0 ? "−" : ""}{Math.abs(oracleDev)} bps vs oracle{lim ? ` · max ${lim.maxOracleDeviationBps}` : ""}</Badge>
             </div>
             <div>
               <div className="lbl" style={{ color: "var(--sage)" }}>Pool TWAP</div>
