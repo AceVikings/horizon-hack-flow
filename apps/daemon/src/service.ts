@@ -202,6 +202,8 @@ export class AteService {
   /** Lane E hook: notified with StrategyApprovalPending when ate_strategy_set returns ATE_APPROVAL_REQUIRED. */
   onStrategyPending: ((d: unknown) => void) | null = null;
   counters = { cycles: 0, trades: 0, routedUsdE8: 0n, lastCycleAt: null as number | null };
+  /** The daemon-supervised trader (app-routes): running from Start, not only once its first cycle has finished. */
+  traderRunning: (() => boolean) | null = null;
   /** Daily P&L (§11.4 rule 6): realised + exit-marked unrealised minus the UTC-day-start snapshot. */
   private pnlDay: { day: string; startE8: string } | null = null;
   private dailyPnlE8 = 0n;
@@ -1911,7 +1913,7 @@ export class AteService {
       chainId: this.cfg.chain.id,
       blockNumber: (this.cycle?.blockNumber ?? 0n).toString(),
       locked: this.locked,
-      trader: { running: this.counters.lastCycleAt !== null && this.now() - this.counters.lastCycleAt < 600, mode: this.strategy.mode, engine: this.strategy.engine, lastCycleAt: this.counters.lastCycleAt },
+      trader: { running: (this.traderRunning?.() ?? false) || (this.counters.lastCycleAt !== null && this.now() - this.counters.lastCycleAt < 600), mode: this.strategy.mode, engine: this.strategy.engine, lastCycleAt: this.counters.lastCycleAt },
       vaults: this.markets.filter((m) => this.vaults[m]).map((m) => ({ market: m, address: this.vaults[m]!, paused: this.cycle?.markets[m]?.vault?.paused ?? false })),
       gas: { agentHsk: g === null ? "0" : (Number(g) / 1e18).toFixed(4), low: this.gasLow, attestationsDeferred: this.o.attester?.deferredCount() ?? 0 },
     };

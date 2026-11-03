@@ -96,6 +96,11 @@ class TraderSupervisor {
     this.file = join(o.home, "trader.json");
   }
 
+  /** Without service.status() (which reads this): true from start until stop. */
+  get running(): boolean {
+    return this.st.running;
+  }
+
   state(): TraderState & { external: boolean; lastCycleAt: number | null } {
     const s = this.o.service.status();
     const lastCycleAt = s.trader.lastCycleAt;
@@ -520,6 +525,7 @@ class Proof {
 
 export function registerAppRoutes(o: AppRoutesOptions): { trader: TraderSupervisor } {
   const trader = new TraderSupervisor(o);
+  o.service.traderRunning = () => trader.running;
   const proof = new Proof(o);
   const r = o.routes;
   const guard = async (json: Json, f: () => unknown) => {

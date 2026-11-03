@@ -112,6 +112,8 @@ describe("proof + trader routes", () => {
     expect(trader.starts).toBe(1);
     expect(logs.filter((m) => m.startsWith("trader: started")).length).toBe(1);
     expect(trader.state().running).toBe(true);
+    // /status (Home, the agent chip) says running from Start, before any cycle has finished
+    expect(svc.status().trader.running).toBe(true);
     await trader.stop();
     expect(trader.state().running).toBe(false);
   });
