@@ -64,7 +64,10 @@ export function applyFill(b: Book, f: FillRow, d: number, feePips = 3000): Book 
   // sell: average cost
   const sold = f.baseQty > next.qty ? next.qty : f.baseQty;
   const basis = next.qty > 0n ? mulDiv(next.costE8, sold, next.qty) : 0n;
-  next.realisedE8 += quoteE8 - basis;
+  // Selling more than the book holds (tokens deposited after the seed snapshot, with no recorded cost): only the
+  // known part is P&L; the rest enters and leaves at the sale price, so a deposit sold is not counted as profit.
+  const knownQuoteE8 = sold === f.baseQty ? quoteE8 : f.baseQty > 0n ? mulDiv(quoteE8, sold, f.baseQty) : 0n;
+  next.realisedE8 += knownQuoteE8 - basis;
   next.costE8 -= basis;
   next.qty -= sold;
   // FIFO lots first

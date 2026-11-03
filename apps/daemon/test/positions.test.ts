@@ -16,6 +16,13 @@ describe("positions (avg cost + FIFO lots)", () => {
     expect(avgEntryE8(b, 18)).toBe(15_000_000n);
     expect(unrealised(b, 20_000_000n, 18).usdE8).toBe(500_000_000n);
   });
+  it("selling tokens deposited after the seed (no recorded cost) is not counted as profit", () => {
+    let b = applyFill(emptyBook(), { id: "f1", market: M, generator: "spread-revert", side: "buy", baseQty: 100n * 10n ** 18n, quoteQty: 10_000_000n, at: 1 }, 18); // $10 @ 0.10
+    // the vault also got 575 WHSK by a deposit; the sale of all 675 @ 0.087 counts only the 100 the book knows
+    b = applyFill(b, { id: "f2", market: M, generator: "guard", side: "sell", baseQty: 675n * 10n ** 18n, quoteQty: 58_725_000n, at: 2 }, 18);
+    expect(b.realisedE8).toBe(-130_000_000n); // 100 × 0.087 − 10 = −1.30
+    expect(b.qty).toBe(0n);
+  });
   it("seed inventory enters at its basis", () => {
     const b = seedBook(10n ** 8n, 7_792_502_000_000n, 8);
     expect(avgEntryE8(b, 8)).toBe(7_792_502_000_000n);
