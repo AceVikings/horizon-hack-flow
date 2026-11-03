@@ -165,6 +165,15 @@ function VaultsPart({ chainId, confirmed, onConfirmed }: { chainId: number; conf
     if (!owner) return;
     setBusy("Creating your vaults on chain… this takes about a minute.");
     setError(null);
+    // The new vaults are made for the agent key, so create it first (its section opens only after the vaults).
+    const ag = await s.get<{ exists: boolean }>("/setup/agent");
+    if (ag.ok && !ag.data.exists) {
+      const k = await s.keygen();
+      if (!k.ok) {
+        setBusy(null);
+        return setError(k.error);
+      }
+    }
     const r = await owner.createVaults();
     if (!r.ok) {
       setBusy(null);
