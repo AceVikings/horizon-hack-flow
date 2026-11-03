@@ -12,6 +12,11 @@ import { AteService } from "../src/service.js";
 import { loadStrategy } from "../src/strategy-stub.js";
 import { TxQueue } from "../src/txqueue.js";
 
+/** No network in tests: HashKey Global (optional context) fails at once instead of waiting out its timeout. */
+const offlineFetch = (async () => {
+  throw new Error("offline (test)");
+}) as unknown as typeof fetch;
+
 let http: DaemonHttp;
 let svc: AteService;
 const tokens = new TokenRegistry();
@@ -27,7 +32,7 @@ beforeAll(async () => {
   const signer = new AgentSigner(FIXTURE_CONFIG.agentKeyId);
   const txq = new TxQueue({ chain: { pendingNonce: async () => 0, suggestFees: async () => ({ maxFeePerGas: 1n, maxPriorityFeePerGas: 1n }), sendRaw: async () => "0x" as const, receipt: async () => null }, account: () => signer.get(), chainId: 177 });
   const strategy = await loadStrategy(() => svc.openProposals(), { forceStub: true });
-  svc = new AteService({ cfg: FIXTURE_CONFIG, db, journal, chain, signer, txq, strategy, candidateTtlSec: 180, version: "test", emit: (e) => http?.broadcast(e) });
+  svc = new AteService({ cfg: FIXTURE_CONFIG, db, journal, chain, signer, txq, strategy, candidateTtlSec: 180, version: "test", emit: (e) => http?.broadcast(e), fetchImpl: offlineFetch });
   http = new DaemonHttp({ service: svc, tokens, routes: new Routes(), version: "test" });
   base = `http://127.0.0.1:${await http.listen()}`;
 });

@@ -229,7 +229,9 @@ export class AteService {
       maxOracleAgeSec: o.cfg.oracle.apro.maxAgeSec,
       supra: { storage: o.cfg.supra.storage as Address, pairs: { ...SUPRA_PAIRS, ...(o.cfg.supra.pairs ?? {}) }, maxAgeSec: o.cfg.supra.maxAgeSec, maxDisagreeBps: o.cfg.supra.maxDisagreeBps },
       apro: () => this.apro,
-      cex: new CexReader({ baseUrl: o.cfg.oracle.cex.baseUrl, ...(o.fetchImpl ? { fetchImpl: o.fetchImpl } : {}) }),
+      // HashKey Global is optional context (the reference is the on-chain oracle): a slow exchange API must not hold
+      // a market read — and with it every propose — for long.
+      cex: new CexReader({ baseUrl: o.cfg.oracle.cex.baseUrl, timeoutMs: 2500, ...(o.fetchImpl ? { fetchImpl: o.fetchImpl } : {}) }),
       now: this.now,
     });
     const s = this.loadStrategy();

@@ -13,6 +13,11 @@ import { AteService } from "../src/service.js";
 import { loadStrategy } from "../src/strategy-stub.js";
 import { TxQueue } from "../src/txqueue.js";
 
+/** No network in tests: HashKey Global (optional context) fails at once instead of waiting out its timeout. */
+const offlineFetch = (async () => {
+  throw new Error("offline (test)");
+}) as unknown as typeof fetch;
+
 let http: DaemonHttp;
 let svc: AteService;
 const tokens = new TokenRegistry();
@@ -40,7 +45,7 @@ beforeAll(async () => {
     events.push(e);
     http?.broadcast(e);
   };
-  svc = new AteService({ cfg: FIXTURE_CONFIG, db, journal, chain, signer, txq, strategy, candidateTtlSec: 180, version: "test", emit });
+  svc = new AteService({ cfg: FIXTURE_CONFIG, db, journal, chain, signer, txq, strategy, candidateTtlSec: 180, version: "test", emit, fetchImpl: offlineFetch });
   const routes = new Routes();
   http = new DaemonHttp({ service: svc, tokens, routes, version: "test" });
   registerChatRoutes({ routes, tokens, service: svc, home: "/tmp", emit, runTurn: async (o) => ({ reply: `echo: ${o.text}`, engine: "rules", tool: "ate_positions" }) });
