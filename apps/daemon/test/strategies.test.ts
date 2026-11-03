@@ -50,7 +50,7 @@ describe("strategy lab", () => {
     const a = l.save(SPEC);
     expect(a.version).toBe(1);
     expect(a.hash).toMatch(/^0x[0-9a-f]{64}$/);
-    expect(a.sentences[0]).toBe("Buys $10 of BTC when the pool price is more than 0.5% under HashKey Global.");
+    expect(a.sentences[0]).toBe("Buys $10 of BTC when the pool price is more than 0.5% under the HashKey Global exchange price.");
     expect(l.save(SPEC, a.id).version).toBe(1); // same spec → same version
     const b = l.save({ ...SPEC, sizing: { mode: "usd", value: 5 } }, a.id);
     expect(b.version).toBe(2);

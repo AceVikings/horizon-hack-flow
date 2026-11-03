@@ -9,7 +9,7 @@ export const STRATEGY_SPEC_SCHEMA = "flow.strategy/v1" as const;
 
 /** Signals a condition can test. Values are in % unless noted. */
 export const SIGNAL_IDS = [
-  "gap_cex", // pool vs HashKey Global, (pool − cex) / cex in %
+  "gap_cex", // pool vs HashKey Global (optional exchange context), (pool − cex) / cex in %
   "gap_oracle", // pool vs the vault oracle, in %
   "change", // pool price change over `windowMin` minutes, in %
   "ema", // price distance from its EMA(period bars), in %
@@ -200,7 +200,7 @@ export function describeCondition(c: Condition): string {
       return c.op === "above" ? `pool trading is above ${trim(v)}% of its usual level` : c.op === "below" ? `pool trading is below ${trim(v)}% of its usual level` : `pool trading is between ${trim(v)}% and ${trim(c.value2!)}% of usual`;
     case "gap_cex":
     case "gap_oracle": {
-      const ref = c.signal === "gap_cex" ? "HashKey Global" : "the oracle price";
+      const ref = c.signal === "gap_cex" ? "the HashKey Global exchange price" : "the on-chain oracle price";
       if (c.op === "between") return `the pool price is between ${signed(v)} and ${signed(c.value2!)} from ${ref}`;
       if (c.op === "below") return v <= 0 ? `the pool price is more than ${pct(v)} under ${ref}` : `the pool price is less than ${pct(v)} over ${ref}`;
       return v >= 0 ? `the pool price is more than ${pct(v)} over ${ref}` : `the pool price is less than ${pct(v)} under ${ref}`;

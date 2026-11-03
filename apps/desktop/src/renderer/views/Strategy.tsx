@@ -22,8 +22,8 @@ const TEMPLATE: StrategySpec = {
 };
 
 const SIGNAL_LABEL: Record<SignalId, string> = {
-  gap_cex: "Pool vs HashKey Global (%)",
-  gap_oracle: "Pool vs oracle (%)",
+  gap_cex: "Pool vs HashKey Global, exchange context (%)",
+  gap_oracle: "Pool vs on-chain oracle (%)",
   change: "Price change (%)",
   ema: "Price vs EMA (%)",
   sma: "Price vs average (%)",
@@ -237,7 +237,8 @@ function Num({ label, value, onChange, step = 0.1, unit, optional }: { label: st
 }
 
 function CondRow({ c, onChange, onRemove, exit }: { c: Condition; onChange(c: Condition): void; onRemove(): void; exit?: boolean }) {
-  const sigs = SIGNAL_IDS.filter((s) => exit || s !== "pnl");
+  // The on-chain oracle is the default reference; HashKey Global is optional context, listed last.
+  const sigs = [...SIGNAL_IDS.filter((s) => s !== "gap_cex"), "gap_cex" as const].filter((s) => exit || s !== "pnl");
   return (
     <div className="row g8" style={{ marginTop: 8, flexWrap: "wrap" }}>
       <select className="inp" aria-label="Signal" style={{ width: 250 }} value={c.signal} onChange={(e) => onChange({ ...c, signal: e.target.value as SignalId, ...(needsPeriod(e.target.value as SignalId) && !c.period ? { period: 20 } : {}), ...(e.target.value === "change" && !c.windowMin ? { windowMin: 60 } : {}) })}>

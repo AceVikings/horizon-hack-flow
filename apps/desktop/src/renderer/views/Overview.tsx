@@ -443,7 +443,8 @@ function OverviewInspector({ paused, lastPauseAt }: { paused: boolean; lastPause
         })}
         {(() => {
           const a = mkOk.map(cexAge).filter((x): x is number => x !== null);
-          return <Check state={a.length ? (Math.max(...a) < 120 ? "ok" : "warn") : "bad"} aside={a.length ? `${age(Math.max(...a))} ago` : "no quote"} style={{ padding: "6px 0" }}>HashKey Global</Check>;
+          // Optional context only: the agent trades against the on-chain oracle, so a missing exchange quote is never "bad".
+          return <Check state={a.length && Math.max(...a) < 120 ? "ok" : "warn"} aside={a.length ? `${age(Math.max(...a))} ago` : "not read"} style={{ padding: "6px 0" }}>HashKey Global (context)</Check>;
         })()}
         <Check state={st.trader.running ? "ok" : "warn"} aside={st.trader.engine === "llm" ? "LLM" : "rules"} style={{ padding: "6px 0" }}>AI model</Check>
         <Check state={st.gas.low ? "bad" : "ok"} aside={`${st.gas.agentHsk} HSK`} style={{ padding: "6px 0" }}>Agent gas</Check>

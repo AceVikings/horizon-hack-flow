@@ -33,7 +33,7 @@ describe("strategy spec", () => {
   });
   it("reads back as plain sentences", () => {
     expect(describeStrategy(spec())).toEqual([
-      "Buys $25 of BTC when the pool price is more than 1% under HashKey Global.",
+      "Buys $25 of BTC when the pool price is more than 1% under the HashKey Global exchange price.",
       "Sells when it is up 0.8% or it is down 2%.",
       "At most 4 buys a day, at least 30 minutes apart.",
       "Your vault limits and safety rules always apply on top.",
