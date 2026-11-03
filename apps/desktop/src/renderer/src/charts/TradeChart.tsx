@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ANALYSIS_DISCLAIMER, CHART_INDICATORS, MARKETS, type ChartDrawing, type ChartIndicator, type ChartInput, type ChartInterval, type ChartSpec, type DataTable, type DrawingKind, type MarketId } from "@ate/core";
 import { useApp } from "../app";
 import { Markdown } from "../Markdown";
-import { ChartView, type Readout } from "./Chart";
+import { ChartView, TvCredit, type Readout } from "./Chart";
 import { DataTableCard, INDICATOR_LABEL, sourceLine } from "./ChartCard";
 import { keepDrawings, useDrawings } from "./drawings";
 import { isEmptySpec, loadWithTimeout } from "./load";
@@ -224,7 +224,14 @@ export function TradeChart({ market, height = 300 }: { market: MarketId; height?
               }}
             />
           )}
-          {spec && <p className="chsrc">{sourceLine(spec.sources)}{spec.notes[0] ? ` · ${spec.notes[0]}` : ""}</p>}
+          {spec && (
+            <p className="chsrc">
+              <span>
+                {sourceLine(spec.sources)}
+                {spec.notes[0] ? ` · ${spec.notes[0]}` : ""} · <TvCredit />
+              </span>
+            </p>
+          )}
           {agentSpec && <AnalysisPanel spec={agentSpec} market={market} onHover={setHl} onClose={() => setAgentSpec(null)} />}
           <AskChart market={market} context={`${label}, ${interval} bars${indicators.length ? `, indicators ${indicators.join(", ")}` : ""}`} onChart={applyAgent} />
         </>
@@ -370,7 +377,11 @@ function DepthView({ market }: { market: MarketId }) {
     <>
       <p className="chcap">{spec.caption}</p>
       <ChartView spec={spec} height={280} />
-      <p className="chsrc">{sourceLine(spec.sources)}</p>
+      <p className="chsrc">
+        <span>
+          {sourceLine(spec.sources)} · <TvCredit />
+        </span>
+      </p>
     </>
   );
 }

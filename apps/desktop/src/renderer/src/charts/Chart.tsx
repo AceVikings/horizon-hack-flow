@@ -21,12 +21,46 @@ import {
   type Time,
   type UTCTimestamp,
 } from "lightweight-charts";
-import type { ChartDrawing, ChartSeries, ChartSpec, DrawingKind } from "@ate/core";
+import { INTERVAL_SEC, type ChartDrawing, type ChartIndicator, type ChartSeries, type ChartSpec, type DrawingKind } from "@ate/core";
 import { DrawingsPrimitive, timeForLogical } from "./drawings";
 
 const C = { fg: "#171e19", mute: "rgba(23,30,25,.55)", line: "rgba(23,30,25,.08)", sage: "#5d7470", accent: "#a87f00", up: "#13744a", down: "#b3202d" };
 const ROLE: Record<NonNullable<ChartSeries["role"]>, string> = { primary: C.fg, secondary: C.sage, muted: "rgba(23,30,25,.35)", accent: C.accent, up: C.up, down: C.down };
 const MARK = { buy: { color: C.up, shape: "arrowUp", position: "belowBar" }, sell: { color: C.down, shape: "arrowDown", position: "aboveBar" }, no_trade: { color: "rgba(23,30,25,.4)", shape: "circle", position: "aboveBar" }, strategy: { color: C.sage, shape: "square", position: "aboveBar" }, pause: { color: C.down, shape: "square", position: "aboveBar" }, info: { color: C.sage, shape: "circle", position: "aboveBar" } } as const;
+
+/** Bars an indicator needs before it has a value (warm-up), for the "not enough data" legend note. */
+const WARMUP: Record<ChartIndicator, number> = { ema20: 20, ema50: 50, sma20: 20, sma50: 50, vwap: 1, bb20: 20, rsi14: 15, macd: 35, atr14: 14, volume: 1 };
+const npts = (s: ChartSeries) => (s.candles?.length ?? 0) + (s.points?.length ?? 0);
+/** An indicator series with too few points to draw a line (e.g. EMA 50 over 36 bars): kept out of the chart. */
+export const tooThin = (s: ChartSeries) => !!s.indicator && npts(s) < 2;
+
+/** Lower (indicator) pane height: about 30% of the chart, never below 90 px. */
+export const lowerPaneHeight = (height: number) => Math.max(96, Math.round(height * 0.3));
+
+/**
+ * A plain note when the newest swap is old (a quiet pool): the line is flat because nothing traded, not because the
+ * chart is broken. Null when the data is fresh or the chart is not built from pool swaps.
+ */
+export function staleNote(spec: Pick<ChartSpec, "sources" | "interval" | "kind" | "x">, now = Date.now() / 1000): string | null {
+  if (spec.x.type !== "time") return null;
+  const src = spec.sources.find((s) => /swap/i.test(s.name) && s.lastT);
+  if (!src?.lastT) return null;
+  const sec = spec.interval ? INTERVAL_SEC[spec.interval] : 3600;
+  const age = now - src.lastT;
+  if (age < Math.max(3 * sec, 3 * 3600)) return null;
+  const h = age / 3600;
+  const span = h < 48 ? `${Math.floor(h)} h` : `${Math.floor(h / 24)} days`;
+  return `No swaps in the last ${span}${spec.kind === "price" ? ", price unchanged" : ""}.`;
+}
+
+/** The licence credit for lightweight-charts (the in-chart logo is off). */
+export function TvCredit() {
+  return (
+    <a className="tvcredit" href="https://www.tradingview.com/" target="_blank" rel="noreferrer">
+      Charts by TradingView
+    </a>
+  );
+}
 
 /** Charts whose USD values are amounts of money (cents), not asset prices. */
 const MONEY_KINDS = new Set(["pnl", "exposure", "budget", "volume"]);
@@ -111,13 +145,15 @@ export function ChartView({ spec, height = 280, look = "line", noMarkers, onMark
   useEffect(() => {
     if (!el.current) return;
     const cat = spec.x.type === "category";
-    const lower = spec.series.some((s) => s.pane === 1);
+    const drawn = spec.series.filter((s) => !tooThin(s));
+    const lower = drawn.some((s) => s.pane === 1);
     const daily = spec.interval === "1d";
     const chart: IChartApi = createChart(el.current, {
       autoSize: true,
-      layout: { background: { type: ColorType.Solid, color: "transparent" }, textColor: C.mute, fontFamily: "Inter, system-ui, sans-serif", fontSize: 11, panes: { separatorColor: C.line } },
+      // attribution: a text credit sits in each chart's footer (TvCredit), not a logo inside the plot
+      layout: { background: { type: ColorType.Solid, color: "transparent" }, textColor: C.mute, fontFamily: "Inter, system-ui, sans-serif", fontSize: 11, attributionLogo: false, panes: { separatorColor: C.line } },
       grid: { vertLines: { visible: false }, horzLines: { color: C.line } },
-      rightPriceScale: { borderVisible: false, scaleMargins: { top: 0.12, bottom: 0.08 } },
+      rightPriceScale: { borderVisible: false, entireTextOnly: true, scaleMargins: { top: 0.12, bottom: 0.08 } },
       timeScale: {
         borderVisible: false,
         timeVisible: !daily && !cat,
@@ -141,7 +177,7 @@ export function ChartView({ spec, height = 280, look = "line", noMarkers, onMark
       handleScale: { axisPressedMouseMove: { time: true, price: false } },
     });
     const made: { s: ISeriesApi<SeriesType>; def: ChartSeries }[] = [];
-    for (const def of spec.series) {
+    for (const def of drawn) {
       const color = ROLE[def.role ?? "primary"];
       const sample = def.candles?.at(-1)?.c ?? def.points?.at(-1)?.v ?? 0;
       const p = precisionFor(sample, def.unit, spec.kind);
@@ -172,7 +208,11 @@ export function ChartView({ spec, height = 280, look = "line", noMarkers, onMark
         s.setData((def.points ?? []).map((x) => ({ time: xOf(x.t), value: x.v })));
       }
       const paneLines = spec.lines.filter((l) => (l.pane ?? 0) === pane).map((l) => l.v);
-      if (paneLines.length && !made.some((m) => m.def.pane === pane))
+      if (def.indicator === "rsi14") {
+        // RSI is 0–100 by definition: a fixed scale with the usual 30 / 70 guides, so a flat 65 reads as "65 of 100"
+        s.applyOptions({ autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }) });
+        for (const v of [30, 70]) s.createPriceLine({ price: v, color: "rgba(23,30,25,.28)", lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: false, title: String(v) });
+      } else if (paneLines.length && !made.some((m) => m.def.pane === pane))
         s.applyOptions({
           autoscaleInfoProvider: (base: () => { priceRange: { minValue: number; maxValue: number } | null } | null) => {
             const r = base();
@@ -194,11 +234,19 @@ export function ChartView({ spec, height = 280, look = "line", noMarkers, onMark
       const target = made.find((m) => m.def.pane === (l.pane ?? 0))?.s;
       target?.createPriceLine({ price: l.v, color: l.role === "down" ? C.down : l.role === "up" ? C.up : l.role === "accent" ? C.accent : "rgba(23,30,25,.4)", lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: l.label });
     }
-    if (main && !noMarkers && spec.markers.length) {
-      const ms: SeriesMarker<Time>[] = spec.markers.map((m) => ({ time: ts(m.t), color: MARK[m.kind].color, shape: MARK[m.kind].shape, position: MARK[m.kind].position, text: m.kind === "buy" || m.kind === "sell" ? (m.kind === "buy" ? "B" : "S") : "", id: m.id }));
+    // Skipped cycles ("no trade") are not drawn: they were unlabeled grey dots stacked on the last bar. Every other
+    // marker says what it is (B / S, Strategy, Paused).
+    const shown = noMarkers ? [] : spec.markers.filter((m) => m.kind !== "no_trade");
+    if (main && shown.length) {
+      const text = (m: (typeof shown)[number]) => (m.kind === "buy" ? "B" : m.kind === "sell" ? "S" : m.kind === "strategy" ? "Strategy" : m.kind === "pause" ? "Paused" : m.label.slice(0, 16));
+      const ms: SeriesMarker<Time>[] = shown.map((m) => ({ time: ts(m.t), color: MARK[m.kind].color, shape: MARK[m.kind].shape, position: MARK[m.kind].position, text: text(m), id: m.id }));
       createSeriesMarkers(main, ms);
     }
-    if (lower) chart.panes()[1]?.setHeight(Math.round(height * 0.3));
+    if (lower) {
+      chart.panes()[1]?.setHeight(lowerPaneHeight(height));
+      // margins keep the lower pane's top label off the price pane's bottom label
+      made.find((m) => m.def.pane === 1)?.s.priceScale().applyOptions({ scaleMargins: { top: 0.2, bottom: 0.14 } });
+    }
     chart.timeScale().fitContent();
     const me = {};
     chart.subscribeCrosshairMove((p) => {
@@ -259,19 +307,32 @@ export function ChartView({ spec, height = 280, look = "line", noMarkers, onMark
     chartRef.current?.priceScale("right").applyOptions({ mode: logScale ? PriceScaleMode.Logarithmic : PriceScaleMode.Normal });
   }, [logScale, spec, look]);
   const keys = spec.series.filter((s) => !(s.indicator && s.type === "histogram"));
+  const bars = spec.series.find((s) => s.type === "candles")?.candles?.length ?? 0;
+  const stale = staleNote(spec);
+  const lowerShown = spec.series.some((s) => s.pane === 1 && !tooThin(s));
+  // a lower pane gets its own room: the price pane keeps most of `height`
+  const total = lowerShown ? height + lowerPaneHeight(height) : height;
   return (
     <>
       {keys.length > 1 && (
         <div className="clegend">
-          {keys.map((s) => (
-            <span key={s.id}>
-              <i style={{ background: ROLE[s.role ?? "primary"] }} />
-              {s.label}
-            </span>
-          ))}
+          {keys.map((s) =>
+            tooThin(s) ? (
+              <span key={s.id} className="thin" title={s.indicator ? `${s.label} needs at least ${WARMUP[s.indicator]} bars; this chart has ${bars}.` : undefined}>
+                <i />
+                {s.label} (not enough data)
+              </span>
+            ) : (
+              <span key={s.id}>
+                <i style={{ background: ROLE[s.role ?? "primary"] }} />
+                {s.label}
+              </span>
+            ),
+          )}
         </div>
       )}
-      <div ref={el} className={`cv${drawTool ? " drawing" : ""}`} style={{ height }} />
+      {stale && <p className="cstale">{stale}</p>}
+      <div ref={el} className={`cv${drawTool ? " drawing" : ""}`} style={{ height: total }} />
     </>
   );
 }

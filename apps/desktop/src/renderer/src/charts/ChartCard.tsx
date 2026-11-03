@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { CHART_INDICATORS, MARKETS, type ChartIndicator, type ChartInput, type ChartInterval, type ChartSpec, type DataTable } from "@ate/core";
 import { ago, dateTime } from "../format";
-import { ChartView } from "./Chart";
+import { ChartView, TvCredit } from "./Chart";
 
 export const INDICATOR_LABEL: Record<ChartIndicator, string> = {
   ema20: "Average, 20 bars (EMA)",
@@ -105,7 +105,10 @@ export function ChartCard({
       )}
       <ChartView spec={spec} height={height} look={look} />
       <footer className="chsrc">
-        <span>{sourceLine(spec.sources)}</span>
+        <span>
+          {sourceLine(spec.sources) && `${sourceLine(spec.sources)} · `}
+          <TvCredit />
+        </span>
         {spec.notes.length > 0 && <span className="chnote">{spec.notes[0]}</span>}
       </footer>
     </section>

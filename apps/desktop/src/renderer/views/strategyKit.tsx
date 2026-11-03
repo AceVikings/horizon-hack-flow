@@ -4,7 +4,7 @@
 import { useState, type ReactNode } from "react";
 import type { ChartMarker, ChartSpec, SavedStrategy, StrategySpec } from "@ate/core";
 import type { AteBridge, Res, StratPath } from "@shared/bridge";
-import { ChartView } from "../src/charts";
+import { ChartView, TvCredit } from "../src/charts";
 import { Btn, Stat } from "../src/ui";
 import { CodeApprove, approveRiskier } from "./approveCode";
 
@@ -111,7 +111,10 @@ export function PnlChart({ curve, decisions, compare, height = 260 }: { curve: {
         )}
       </div>
       <ChartView spec={spec} height={height} onCrosshair={(r) => setHover(r ? r.t : null)} />
-      {compare && compare.curve.length > 0 && <div className="xs fg2 mt4">The grey line is {compare.label.toLowerCase()}.</div>}
+      <div className="chsrc">
+        <span>{compare && compare.curve.length > 0 ? `The grey line is ${compare.label.toLowerCase()}.` : ""}</span>
+        <TvCredit />
+      </div>
     </div>
   );
 }

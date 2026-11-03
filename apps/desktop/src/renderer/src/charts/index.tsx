@@ -9,7 +9,7 @@ import { ChartCard, DataTableCard } from "./ChartCard";
 import { addPin } from "./pins";
 import { TradeChart, AnalysisPanel } from "./TradeChart";
 
-export { ChartView, CrosshairLink } from "./Chart";
+export { ChartView, CrosshairLink, TvCredit } from "./Chart";
 export { ChartCard, DataTableCard, INDICATOR_LABEL } from "./ChartCard";
 export { addPin, usePins, readPins, type Pin } from "./pins";
 export { useChart } from "./useChart";
