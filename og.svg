@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630" role="img" aria-label="Flow. Let your agent trade. Cap what it can lose.">
+  <title>Flow: let your agent trade, cap what it can lose</title>
+  <defs>
+    <pattern id="g" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="#b7c6c2" stroke-opacity=".09" stroke-width="1"/></pattern>
+  </defs>
+  <rect width="1200" height="630" fill="#171e19"/>
+  <rect width="1200" height="630" fill="url(#g)"/>
+  <rect y="618" width="1200" height="12" fill="#ffe17c"/>
+  <!-- Flow mark (dark variant geometry, from packages/ui/brand) -->
+  <g transform="translate(80 72) scale(1.25)">
+    <rect width="64" height="64" rx="14" fill="#272727" stroke="#b7c6c2" stroke-opacity=".25"/>
+    <path d="M20 12H52V20H32V28H40V36H32V52H20Z" fill="#fff"/>
+    <path d="M44 28H52V36H44Z" fill="#ffe17c"/>
+  </g>
+  <text x="182" y="128" fill="#fff" font-family="Anton, Impact, 'Arial Narrow Bold', sans-serif" font-size="58" letter-spacing="1">FLOW<tspan fill="#ffe17c">.</tspan></text>
+  <text x="1120" y="122" text-anchor="end" fill="#b7c6c2" font-family="Figtree, 'Helvetica Neue', Arial, sans-serif" font-size="22" font-weight="700" letter-spacing="3">FLOWVERSE.CLOUD</text>
+  <g font-family="Anton, Impact, 'Arial Narrow Bold', sans-serif" font-size="112" fill="#fff">
+    <text x="80" y="318">LET YOUR AGENT TRADE.</text>
+    <polygon points="610,350 960,338 948,436 598,448" fill="#ffe17c"/>
+    <text x="80" y="434">CAP WHAT IT CAN <tspan fill="#171e19">LOSE.</tspan></text>
+  </g>
+  <text x="80" y="530" fill="#b7c6c2" font-family="Figtree, 'Helvetica Neue', Arial, sans-serif" font-size="28" font-weight="500">AI agent trades on HSKSwap by itself. A vault on HashKey Chain caps the loss:</text>
+  <text x="80" y="572" fill="#fff" font-family="Figtree, 'Helvetica Neue', Arial, sans-serif" font-size="28" font-weight="700">$100 a trade · $250 a day · $150 held · ≤ $51.50 a day across two vaults</text>
+</svg>
