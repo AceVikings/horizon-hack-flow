@@ -1,30 +1,49 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { parseInline, parseMarkdown } from "../src/renderer/src/md-parse";
+import { Markdown } from "../src/renderer/src/Markdown";
+
+const render = (text: string) => renderToStaticMarkup(createElement(Markdown, { text }));
 
 describe("agent reply markdown", () => {
-  it("parses bold, italics, inline code and https links only", () => {
-    expect(parseInline("**Up** 2% on *low* volume, see `ate_chart` [docs](https://x.io/a)")).toEqual([
-      { t: "b", c: [{ t: "text", v: "Up" }] },
-      { t: "text", v: " 2% on " },
-      { t: "i", c: [{ t: "text", v: "low" }] },
-      { t: "text", v: " volume, see " },
-      { t: "code", v: "ate_chart" },
-      { t: "text", v: " " },
-      { t: "a", href: "https://x.io/a", c: [{ t: "text", v: "docs" }] },
-    ]);
-    // javascript: and http: links lose the link and keep the text
-    expect(parseInline("[x](javascript:alert(1))")).toEqual([{ t: "text", v: "x" }, { t: "text", v: ")" }]);
-    expect(parseInline("[x](http://a.b)")).toEqual([{ t: "text", v: "x" }]);
-    // snake_case and lone markers stay text; raw HTML stays text
-    expect(parseInline("hsk_dex_pool 2 * 3 <b>hi</b>")).toEqual([{ t: "text", v: "hsk_dex_pool 2 * 3 <b>hi</b>" }]);
+  it("renders heading levels, nested lists, quotes and inline formatting", () => {
+    const html = render("# Summary\n\n## Positions\n\n- **BTC**\n  - *Holding* `0.01`\n\n3. Review\n4. Confirm\n\n> Keep ~~old~~ new limits.\n\n---");
+    expect(html).toContain("<h1>Summary</h1>");
+    expect(html).toContain("<h2>Positions</h2>");
+    expect(html).toMatch(/<ul>\s*<li><strong>BTC<\/strong>\s*<ul>\s*<li><em>Holding<\/em> <code>0.01<\/code>/);
+    expect(html).toContain('<ol start="3">');
+    expect(html).toContain("<blockquote>");
+    expect(html).toContain("<del>old</del>");
+    expect(html).toContain("<hr/>");
   });
 
-  it("splits paragraphs, bullet and numbered lists, headings and code fences", () => {
-    const b = parseMarkdown("## Chart\nThe chart is above.\n\n- **EMA 50**: 0.41\n- RSI 14: 58\n\n1. Support 0.39\n2. Resistance 0.44\n\n```\nraw\n```");
-    expect(b.map((x) => x.t)).toEqual(["h", "p", "ul", "ol", "pre"]);
-    expect(b[2]).toMatchObject({ t: "ul", items: [[{ t: "b" }, { t: "text", v: ": 0.41" }], [{ t: "text", v: "RSI 14: 58" }]] });
-    expect(b[3]).toMatchObject({ t: "ol", start: 1 });
-    expect((b[3] as { items: unknown[] }).items).toHaveLength(2);
-    expect(b[4]).toEqual({ t: "pre", v: "raw" });
+  it("renders GFM tables, task lists and autolinks", () => {
+    const html = render("| Asset | Value |\n| :--- | ---: |\n| BTC | **$100** |\n\n- [x] Reviewed\n- [ ] Pending\n\nhttps://example.com/report");
+    expect(html).toContain('class="md-table" role="region" aria-label="Response table" tabindex="0"');
+    expect(html).toContain("<thead>");
+    expect(html).toContain("<strong>$100</strong>");
+    expect(html).toContain('class="task-list-item"');
+    expect(html).toMatch(/<input[^>]*disabled=""[^>]*checked=""/);
+    expect(html).toContain('href="https://example.com/report" target="_blank" rel="noopener noreferrer"');
+  });
+
+  it("preserves fenced code, escaped syntax, snake case and partial replies", () => {
+    const html = render('Escaped \\*literal\\* hsk_dex_pool\n\n```json\n{"html": "<b>hi</b>", "value": "**raw**"}\n```');
+    expect(html).toContain("Escaped *literal* hsk_dex_pool");
+    expect(html).toContain('<pre><code class="language-json">');
+    expect(html).toContain('&lt;b&gt;hi&lt;/b&gt;');
+    expect(html).toContain("**raw**");
+    expect(render("Working **on it")).toContain("Working **on it");
+    expect(render("```ts\nconst pending = 1;")).toContain('<pre><code class="language-ts">const pending = 1;');
+  });
+
+  it("keeps raw HTML inert and strips unsafe links and remote images", () => {
+    const html = render('<script>alert(1)</script>\n\n<b onclick="bad()">hi</b>\n\n[safe](https://example.com/path?q=1) [http](http://example.com) [file](file:///etc/passwd) [script](javascript:alert%281%29) [data](data:text/html,bad) [relative](/settings)\n\n![Chart](https://example.com/tracker.png)');
+    expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+    expect(html).not.toMatch(/<script|<b\s|<img/);
+    expect(html.match(/<a /g)).toHaveLength(1);
+    expect(html).toContain('href="https://example.com/path?q=1"');
+    expect(html).toContain("Chart");
+    expect(html).not.toContain("tracker.png");
   });
 });
