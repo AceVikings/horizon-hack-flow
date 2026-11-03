@@ -563,7 +563,14 @@ export class StrategyLab {
       }
     }
     const r = await this.backtest({ ...(a.strategyId ? { strategyId: a.strategyId } : { spec }), days: a.days ?? 30 });
+    const step = Math.max(1, Math.ceil(r.curve.length / 80));
+    const curve = r.curve.filter((_, i) => i % step === 0 || i === r.curve.length - 1).map((p) => ({ t: p.t, v: Math.round(p.v * 100) / 100 }));
+    const name = (a.strategyId ? this.list().find((x) => x.id === a.strategyId)?.spec.name : (spec as { name?: string } | undefined)?.name) ?? null;
     return {
+      // name, days and a ≤ 80-point P&L curve let Ask draw the result card (chart, numbers, vs holding)
+      name,
+      days: r.days,
+      curve,
       summary: r.summary.line,
       sentences: r.sentences,
       pnlUsd: r.pnlUsd,
@@ -595,7 +602,7 @@ export class StrategyLab {
     const sentences = describeStrategy(p.spec, { budgetUsd: this.budgetUsd(p.spec) });
     this.pending.set(id, { id, spec: p.spec, sentences, rationale: a.rationale.slice(0, 300), via, expiresAt: t + 600 });
     this.o.emit({ type: "strategy.save_pending", at: t, data: { pendingId: id, name: p.spec.name } });
-    return { status: "needs_confirmation", pendingId: id, name: p.spec.name, sentences, hint: "The user confirms it under Agent → Your strategies. Saving never changes what runs." };
+    return { status: "needs_confirmation", pendingId: id, name: p.spec.name, sentences, hint: "A Save card is shown to the user in this conversation (also under Agent → Your strategies); tell them to press Save strategy. Saving never changes what runs." };
   }
 
   pendingSaves() {

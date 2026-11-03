@@ -14,6 +14,7 @@ import { ToolResultBlock } from "../src/charts";
 import { Markdown } from "../src/Markdown";
 import { CodeApprove, approveRiskier } from "./approveCode";
 import { ChatModelPicker, McpToolsSheet } from "./AskTools";
+import { BacktestCard, SaveCard, isAskBacktest } from "./AskStrategy";
 import type { ViewProps } from "./registry";
 
 const PROMPTS = ["How am I doing?", "Chart the BTC pool on HSKSwap, 1h candles for 3 days with EMA 50 and RSI 14. Draw support and resistance and tell me what you find.", "Stop trading", "Go to cash"];
@@ -38,6 +39,8 @@ const LINE: Record<string, string> = {
   ate_pause: "Paused both vaults",
   ate_chart: "Made a chart",
   ate_data: "Pulled the data",
+  ate_backtest: "Backtested it on past prices",
+  ate_strategy_save: "Wrote the strategy",
 };
 const FIELD: Record<string, string> = { stopLossBps: "Sell-if-down", takeProfitBps: "Take profit", tradeSizeUsd: "Trade size", entrySpreadBps: "Entry gap", minNetEdgeBps: "Min edge", targetAssets: "Holds", cycleSeconds: "Checks every", maxPositionUsd: "Max position", enabled: "Trading" };
 const val = (f: string, v: unknown) => (Array.isArray(v) ? (v.length ? v.map((x) => String(x).replace(/^W/, "")).join(", ") : "cash only") : f.endsWith("Bps") ? `${Number(v) / 100}%` : f.endsWith("Usd") ? `$${Number(v)}` : String(v));
@@ -95,6 +98,15 @@ export default function Ask(_: ViewProps) {
     }
   }
   const waiting = sending || (msgs.length > 0 && msgs[msgs.length - 1]!.role === "user");
+  // each backtest card draws the one before it in this conversation as a grey line (iterating on a strategy)
+  const prevBt: Record<string, { label: string; curve: { t: number; v: number }[] }> = {};
+  let lastBt: { label: string; curve: { t: number; v: number }[] } | null = null;
+  for (const m of msgs) {
+    const r = m.tool?.result as ToolRes;
+    if (m.tool?.name !== "ate_backtest" || !r?.ok || !isAskBacktest(r.data)) continue;
+    if (lastBt) prevBt[m.id] = lastBt;
+    lastBt = { label: `Previous version (${r.data.returnPct >= 0 ? "+" : ""}${r.data.returnPct.toFixed(2)}%)`, curve: r.data.curve };
+  }
 
   const send = async (q: string) => {
     const t = q.trim();
@@ -197,7 +209,7 @@ export default function Ask(_: ViewProps) {
                     )}
                   </div>
                 ) : (
-                  <ToolLine key={p.id} m={p} open={!!open[p.id]} onToggle={() => setOpen((o) => ({ ...o, [p.id]: !o[p.id] }))} now={now} decided={decided} onConfirm={confirm} onCancel={cancel} code={codeEntry} />
+                  <ToolLine key={p.id} m={p} prevBt={prevBt[p.id] ?? null} open={!!open[p.id]} onToggle={() => setOpen((o) => ({ ...o, [p.id]: !o[p.id] }))} now={now} decided={decided} onConfirm={confirm} onCancel={cancel} code={codeEntry} />
                 ),
               )}
             </div>
@@ -243,7 +255,7 @@ export default function Ask(_: ViewProps) {
   );
 }
 
-function ToolLine({ m, open, onToggle, now, decided, onConfirm, onCancel, code }: { m: ChatMessage; open: boolean; onToggle(): void; now: number; decided: Record<string, "ok" | "no" | "busy">; onConfirm(p: PendingChange): void; onCancel(p: PendingChange): void; code(p: PendingChange): React.ReactNode }) {
+function ToolLine({ m, prevBt, open, onToggle, now, decided, onConfirm, onCancel, code }: { m: ChatMessage; prevBt: { label: string; curve: { t: number; v: number }[] } | null; open: boolean; onToggle(): void; now: number; decided: Record<string, "ok" | "no" | "busy">; onConfirm(p: PendingChange): void; onCancel(p: PendingChange): void; code(p: PendingChange): React.ReactNode }) {
   const name = m.tool?.name ?? m.text;
   const res = m.tool?.result as ToolRes;
   const pending = res?.ok === false && res.error?.code === "ATE_APPROVAL_REQUIRED" ? res.error.details : undefined;
@@ -280,6 +292,9 @@ function ToolLine({ m, open, onToggle, now, decided, onConfirm, onCancel, code }
       </section>
     );
   }
+  // strategy work (lane STRAT): the backtest as a result card, a proposed save as a Save card
+  if (name === "ate_backtest" && res?.ok && isAskBacktest(res.data)) return <BacktestCard d={res.data} prev={prevBt} />;
+  if (name === "ate_strategy_save" && res?.ok && (res.data as { status?: string } | undefined)?.status === "needs_confirmation") return <SaveCard d={res.data as { pendingId: string; name: string; sentences: string[] }} />;
   // charts and tables (D4) are drawn inline under the reply, with Pin → Charts
   if ((name === "ate_chart" || name === "ate_data") && res?.ok) {
     return (

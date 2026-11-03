@@ -78,8 +78,12 @@ describe("strategy lab", () => {
     expect(l.list().map((x) => x.id)).toEqual([saved.id]);
     const listed = (await l.backtestTool({})) as { strategies: unknown[] };
     expect(listed.strategies).toHaveLength(1);
-    const bt = (await l.backtestTool({ specJson: JSON.stringify(SPEC), days: 7 })) as { summary: string };
+    const bt = (await l.backtestTool({ specJson: JSON.stringify(SPEC), days: 7 })) as { summary: string; days: number; curve: { t: number; v: number }[] };
     expect(bt.summary).toMatch(/^Over 7 days/);
+    // Ask draws a result card from it: a short P&L curve, not the full ≤ 600-point one
+    expect(bt.days).toBe(7);
+    expect(bt.curve.length).toBeGreaterThan(0);
+    expect(bt.curve.length).toBeLessThanOrEqual(81);
   });
   it("using a riskier strategy asks first; a safer one applies and carries the spec hash", () => {
     const { l, calls, strategy } = lab();
