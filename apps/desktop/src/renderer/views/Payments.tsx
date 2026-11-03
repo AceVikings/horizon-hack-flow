@@ -1,4 +1,5 @@
-// 80 Payments (Flow v1): HSP payments are not in v1. Visible, greyed out, no actions (FLOW.md screen 80).
+// 80 Payments (Flow v1): HSP payments are not live — HSP needs merchant access that only the hackathon organizers can
+// grant. Visible, greyed out, no actions, no numbers (FLOW.md screen 80).
 import type { ViewProps } from "./registry";
 
 export default function Payments(_: ViewProps) {
@@ -10,7 +11,7 @@ export default function Payments(_: ViewProps) {
           <div className="sub">Agent-to-agent payments over HSP</div>
         </div>
         <div className="acts">
-          <span className="sm fg2">Coming soon</span>
+          <span className="sm fg2">Not connected</span>
         </div>
       </div>
       <div style={{ flex: 1, display: "grid", placeItems: "center" }}>
@@ -22,12 +23,12 @@ export default function Payments(_: ViewProps) {
             Your trader will be able to buy premium signals from other agents and settle through the HashKey Settlement Protocol, with a signed mandate for every payment. It never sits on the trade path.
           </p>
           <div style={{ marginTop: 24 }}>
-            <button type="button" className="btn lg dis" disabled aria-disabled="true" title="HSP payments are not available in v1">
-              Connect HSP · coming soon
+            <button type="button" className="btn lg dis" disabled aria-disabled="true" title="HSP needs merchant access from the organizers">
+              Connect HSP · needs organizer access
             </button>
           </div>
           <div className="xs fg2" style={{ marginTop: 14 }}>
-            Built and tested on recorded responses · live once HSP access opens
+            Not live in this build: HSP needs merchant access that only the organizers can grant. The payment code is tested on recorded responses; no payment has been made.
           </div>
         </section>
       </div>

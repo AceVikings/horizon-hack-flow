@@ -131,7 +131,7 @@ function Rail({ nav, go, mode, setMode }: { nav: string; go(p: string): void; mo
                 role="menuitem"
                 className={`mi${nav === m.id ? " on" : ""}`}
                 aria-disabled={soon || undefined}
-                title={soon ? "HSP payments are coming soon" : undefined}
+                title={soon ? "HSP payments need merchant access from the organizers; not connected" : undefined}
                 onClick={() => {
                   if (soon) return;
                   setOpen(false);
@@ -140,7 +140,7 @@ function Rail({ nav, go, mode, setMode }: { nav: string; go(p: string): void; mo
               >
                 <Icon k={m.icon} />
                 <span className="grow">{m.name}</span>
-                {soon && <b className="soon2">soon</b>}
+                {soon && <b className="soon2">not live</b>}
               </button>
             );
           })}
