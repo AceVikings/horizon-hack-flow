@@ -338,6 +338,10 @@ export class AteService {
   agentAddress(): Address | null {
     return this.o.signer.address ?? null;
   }
+  /** Each vault's owner from the latest chain read (empty before the first read). */
+  vaultOwners(): Address[] {
+    return Object.values(this.cycle?.markets ?? {}).flatMap((m) => (m?.vault?.owner ? [m.vault.owner] : []));
+  }
 
   get locked(): boolean {
     return !this.o.signer.unlocked;

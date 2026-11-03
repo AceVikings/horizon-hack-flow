@@ -12,6 +12,7 @@ import { centsE8, vaultRisk } from "../src/risk";
 import { clean, marketOf } from "../src/journal";
 import { PriceChart } from "../src/charts";
 import { useResume } from "./Overview";
+import { TestnetGap } from "./TestnetGap";
 
 const ORDER: MarketId[] = [MARKET_WBTC, MARKET_WHSK];
 const FEE_BPS = 30;
@@ -58,6 +59,7 @@ function SimpleTrade({ params }: ViewProps) {
             <p className="sm fg2" style={{ marginTop: 6 }}>Oracle {price8(mv.oracle.price)}{mv.pool.twap ? ` · pool TWAP ${price8(mv.pool.twap)}` : ""}, updated {age(mv.oracle.ageSec + Math.max(0, now - mv.at))} ago</p>
           </section>
           <PriceChart market={market} />
+          <TestnetGap market={market} />
           <ManualOrder key={market + (params[1] ?? "")} mv={mv} disabled={mv.vault.paused} initialOpen={params[1] === "order"} />
         </div>
       )}

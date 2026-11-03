@@ -29,6 +29,7 @@ import { createSdkTraderExecutor } from "./engine-agents.js";
 import type { Routes, TokenRegistry } from "./http.js";
 import { EXPECTED, FULL_RUN, decodeRevert, runRogue, type AttackId, type AttackResult } from "./rogue.js";
 import type { AteService } from "./service.js";
+import { TestnetPool } from "./testnet-pool.js";
 
 type Trader = typeof import("@ate/trader");
 type Json = (status: number, v: unknown) => void;
@@ -809,6 +810,27 @@ export function registerAppRoutes(o: AppRoutesOptions): { trader: TraderSupervis
   r.register({ method: "GET", path: "/proof", scopes: ["ui", "view"], handler: ({ json }) => guard(json, () => proof.get()) });
   r.register({ method: "POST", path: "/proof/run", scopes: ["ui"], handler: ({ body, json }) => guard(json, () => proof.start((body ?? {}) as { market?: string; waitPauseSec?: number })) });
   r.register({ method: "POST", path: "/proof/stop", scopes: ["ui"], handler: ({ json }) => guard(json, () => ({ run: proof.stop() })) });
+
+  // ---- Testnet only: stage / restore a test pool's price gap (no arbitrageurs on the test pools), market-maker key
+  const pool = new TestnetPool({
+    chainId: () => o.service.cfg.chain.id,
+    rpcUrl: () => o.service.cfg.chain.rpcUrls[0]!,
+    markets: () => o.service.cfg.venues.hskdex.markets.map((m) => ({ id: m.id, pool: m.pool as Address, oracle: m.oracle as Address, vault: (o.service.cfg.vaults.find((v) => v.market === m.id)?.address as Address | undefined) ?? null })),
+    forbidden: () => [o.service.agentAddress(), ...o.service.vaultOwners()],
+    log: (m) => o.log?.(m),
+  });
+  r.register({ method: "GET", path: "/testnet/pool", scopes: ["ui", "view"], handler: ({ json }) => guard(json, () => pool.status()) });
+  r.register({
+    method: "POST",
+    path: "/testnet/pool",
+    scopes: ["ui"],
+    handler: ({ body, json }) =>
+      guard(json, () => {
+        const b = (body ?? {}) as { market?: unknown; offsetBps?: unknown };
+        if (typeof b.market !== "string") throw Object.assign(new Error("market: btc or hsk"), { status: 400, code: "ATE_BAD_REQUEST" });
+        return pool.move(b.market, Number(b.offsetBps ?? 0));
+      }),
+  });
 
   return { trader };
 }
