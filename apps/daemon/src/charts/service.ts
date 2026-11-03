@@ -436,6 +436,12 @@ export class ChartService {
       const x = j >= 0 ? ref[j]!.v : null;
       return x ? [{ t: c.t, v: Math.round(((c.c - x) / x) * 10_000) }] : [];
     });
+    // the live read (pool spot vs oracle now) ends the line, so a quiet pool still shows today's gap
+    const nowT = this.now();
+    if (live && live.oracle.price !== "0" && live.pool.price !== "0" && !pts.some((x) => x.t >= nowT - sec)) {
+      const o = e8(live.oracle.price);
+      pts.push({ t: Math.max(nowT - sec + 1, (pts.at(-1)?.t ?? 0) + 1), v: Math.round(((e8(live.pool.price) - o) / o) * 10_000) });
+    }
     const s = this.d.strategy().markets[m];
     const lines: ChartSpec["lines"] = [
       { v: 0, label: "No gap", role: "muted" },
@@ -444,7 +450,8 @@ export class ChartService {
       { v: FEE_BPS * 2, label: "Round-trip pool fee", role: "down" },
     ];
     const notes = [...p.notes];
-    if (!pts.length) notes.push("No on-chain oracle prices in this window yet: they come from the agent's recorded decisions and the live read, so the gap fills in as it runs.");
+    if (!pts.length) notes.push("No on-chain oracle price or pool price to compare yet: the gap fills in from the agent's recorded decisions and the live read.");
+    else if (pts.length === 1) notes.push("Only the live gap so far: the pool had no trades in this window and the agent has recorded no decisions yet.");
     else if (supra.length < 3) notes.push("Few oracle points in this window: between them the last known oracle price is used.");
     return {
       ...base,
