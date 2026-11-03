@@ -76,10 +76,11 @@ export function checkProposal(p: ProposalDraft, pf: PortfolioState, phase: "prop
     return fail("ATE_STRATEGY_BLOCKED", "invalidated", `proposal ${p.proposalId} was invalidated by a guard exit or the breaker`, "Re-read candidates and propose again", false);
   }
 
-  // Rule 1: candidate binding (autonomous, non-discretionary, non-guard).
+  // Rule 1: candidate binding (autonomous, non-discretionary, non-guard). A person's own manual order (origin
+  // "human", UI/session scope) is never bound to a candidate; every other rule and the vault still apply.
   let cand: LiveCandidate | undefined;
   if (p.candidateId) cand = pf.candidates[p.candidateId];
-  const bound = p.mode === "autonomous" && p.origin !== "discretionary" && p.origin !== "guard";
+  const bound = p.mode === "autonomous" && p.origin !== "discretionary" && p.origin !== "guard" && p.origin !== "human";
   if (bound) {
     if (!p.candidateId) {
       return fail("ATE_CANDIDATE_REQUIRED", "candidate_binding", "autonomous proposals must bind a candidateId (or use origin=discretionary with a thesis)", "Call ate_candidates_get and bind a candidate", false);

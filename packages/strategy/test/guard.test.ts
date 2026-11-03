@@ -19,6 +19,10 @@ describe("rule 1: candidate binding", () => {
     expect(v.ok).toBe(true);
     if (v.ok) expect(v.reserve).toMatchObject({ market: MARKET_WBTC, turnoverUsd: "25", discretionary: 0, candidateId: WBTC_BUY });
   });
+  it("a person's manual order (origin human) needs no candidate in autonomous mode", () => {
+    const v = g.check(buy25({ candidateId: undefined, origin: "human" } as never), freshPf(), "propose");
+    expect(fails(v)?.code).not.toBe("ATE_CANDIDATE_REQUIRED");
+  });
   it("missing candidateId → ATE_CANDIDATE_REQUIRED", () => {
     expect(fails(g.check(buy25({ candidateId: undefined }), freshPf(), "propose"))).toEqual({ code: "ATE_CANDIDATE_REQUIRED", rule: "candidate_binding" });
   });
