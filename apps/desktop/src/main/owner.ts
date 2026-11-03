@@ -164,6 +164,16 @@ export class DesktopOwner {
     return r.ok ? r.data.vaults.map((v) => v.address) : [];
   }
 
+  /** Point the daemon's config at `vaults` (other markets keep their vault), restarting it when that changed. */
+  private async switchTo(vaults: { market: string; address: string }[]): Promise<Res<{ restarted: boolean }>> {
+    const cur = await this.daemon.call<{ vaults: { market: string; address: string }[] }>("GET", "/setup/status");
+    const keep = cur.ok ? cur.data.vaults.filter((v) => !vaults.some((n) => n.market === v.market)) : [];
+    const sv = await this.daemon.call<{ restart?: boolean }>("POST", "/setup/vaults", { source: "deploy", vaults: [...keep, ...vaults].map((v) => ({ market: v.market, address: v.address })) });
+    if (!sv.ok) return sv;
+    if (sv.data.restart) await this.restartDaemon();
+    return { ok: true, data: { restarted: !!sv.data.restart } };
+  }
+
   /** window.ate.owner (shared/setup-bridge.ts OwnerBridge). */
   readonly api = {
     status: async (): Promise<Res<unknown>> => {
@@ -174,17 +184,59 @@ export class DesktopOwner {
         return { ok: true, data: { ready: false, address: this.address, chainId: 0, error: (e as Error).message } };
       }
     },
-    createVaults: async (o?: { markets?: string[] }): Promise<Res<unknown>> => {
+    /** Every vault this Flow wallet knows (active and earlier), with holdings, limits, paused; plus any unfinished creation. */
+    state: async (): Promise<Res<unknown>> => {
+      try {
+        const [r, cfg] = await Promise.all([this.call<Record<string, unknown>>("GET", "/owner/state"), this.daemon.call<{ vaults: { market: string; address: string }[]; explorer: string }>("GET", "/setup/status")]);
+        if (r.status !== 200) return err(String((r.body as { error?: string }).error ?? "owner service unavailable"));
+        return { ok: true, data: { ...r.body, active: cfg.ok ? cfg.data.vaults : [], explorer: cfg.ok ? cfg.data.explorer : null } };
+      } catch (e) {
+        return err((e as Error).message);
+      }
+    },
+    /** Live progress of the latest vault creation (polled while it runs). */
+    job: async (): Promise<Res<unknown>> => {
+      try {
+        const r = await this.call<{ job: unknown }>("GET", "/owner/job");
+        return { ok: true, data: r.body.job ?? null };
+      } catch (e) {
+        return err((e as Error).message);
+      }
+    },
+    /**
+     * Deploy vaults for `markets` with `limits` (default: the §19 defaults; looser ones ask Touch ID first). Setup
+     * (`use` true, the default) points the daemon at them at once; Wallet's "Create a new vault" passes `use: false`
+     * and switches later with useVault.
+     */
+    createVaults: async (o?: { markets?: string[]; limits?: Record<string, string | number>; use?: boolean }): Promise<Res<unknown>> => {
       const ag = await this.daemon.call<{ address: string | null }>("GET", "/setup/agent");
       if (!ag.ok || !ag.data.address) return err("create or unlock the agent key first");
       const markets = [...new Set((o?.markets ?? ["hsk", "btc"]).map((m) => (/btc/i.test(String(m)) ? "btc" : "hsk")))];
       const st = await this.call<{ chainId: number }>("GET", "/owner/state");
-      const r = await this.op({ op: "deploy", markets, agent: ag.data.address, seed: st.body.chainId === 133 });
+      const r = await this.op({ op: "deploy", markets, agent: ag.data.address, seed: st.body.chainId === 133, ...(o?.limits ? { limits: o.limits } : {}) });
       if (!r.ok) return r;
       const vaults = r.data.result?.vaults ?? [];
-      const sv = await this.daemon.call<{ restart?: boolean }>("POST", "/setup/vaults", { source: "deploy", vaults: vaults.map((v) => ({ market: v.market, address: v.address })) });
-      if (sv.ok && sv.data.restart) await this.restartDaemon();
-      return { ok: true, data: { txs: r.data.txs.map((t) => t.hash), vaults } };
+      const seconds = (r.data.result as { seconds?: number } | undefined)?.seconds ?? null;
+      const seedError = (r.data.result as { seedError?: string } | undefined)?.seedError ?? null;
+      if (o?.use !== false) {
+        const u = await this.switchTo(vaults);
+        if (!u.ok) return u;
+      }
+      return { ok: true, data: { txs: r.data.txs.map((t) => t.hash), vaults, seconds, seedError } };
+    },
+    /** Make `address` the active vault for `market` (config.json), then restart the daemon (the trader resumes). */
+    useVault: async (o: { market: string; address: string }): Promise<Res<unknown>> => {
+      try {
+        const [st, ag] = await Promise.all([this.call<{ vaults: { address: string; market: string | null; agent?: string; ownedByUs?: boolean }[] }>("GET", "/owner/state"), this.daemon.call<{ address: string | null }>("GET", "/setup/agent")]);
+        const v = st.body.vaults?.find((x) => x.address.toLowerCase() === String(o?.address).toLowerCase());
+        if (!v) return err("Flow does not know this vault");
+        if (!v.ownedByUs) return err("this vault is owned by another wallet");
+        if (v.market !== o.market) return err("this vault trades another market");
+        if (ag.ok && ag.data.address && v.agent?.toLowerCase() !== ag.data.address.toLowerCase()) return err("this vault is connected to a different agent key");
+        return await this.switchTo([{ market: o.market, address: v.address }]);
+      } catch (e) {
+        return err((e as Error).message);
+      }
     },
     setAgent: async (agent: string) => this.txs(await this.op({ op: "setAgent", agent: String(agent), vaults: await this.vaults() })),
     setLimits: async (limits: unknown) => this.txs(await this.op({ op: "setLimits", limits, vaults: await this.vaults() })),

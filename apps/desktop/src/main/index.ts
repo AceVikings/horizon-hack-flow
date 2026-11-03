@@ -399,7 +399,7 @@ app.whenReady().then(async () => {
     quitting = true;
     if (process.env.FLOW_KEEP_DAEMON !== "1") void setup.shutdown();
   });
-  for (const sig of ["SIGTERM", "SIGINT"] as const) process.once(sig, () => ((quitting = true), void setup.shutdown().finally(() => app.exit(0))));
+  for (const sig of ["SIGTERM", "SIGINT"] as const) process.once(sig, () => ((quitting = true), owner.stop(), void setup.shutdown().finally(() => app.exit(0))));
   createWindow();
   if (!FIXTURES) {
     void setup.boot();

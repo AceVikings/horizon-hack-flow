@@ -59,6 +59,9 @@ const ate = Object.freeze({
   owner: Object.freeze({
     status: () => ipcRenderer.invoke("ate:owner.status"),
     createVaults: (o?: unknown) => ipcRenderer.invoke("ate:owner.createVaults", o),
+    state: () => ipcRenderer.invoke("ate:owner.state"),
+    job: () => ipcRenderer.invoke("ate:owner.job"),
+    useVault: (o: unknown) => ipcRenderer.invoke("ate:owner.useVault", o),
     setAgent: (agent: string) => ipcRenderer.invoke("ate:owner.setAgent", agent),
     setLimits: (limits: unknown, o?: unknown) => ipcRenderer.invoke("ate:owner.setLimits", limits, o),
     unpause: (market?: string) => ipcRenderer.invoke("ate:owner.unpause", market),

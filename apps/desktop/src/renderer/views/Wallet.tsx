@@ -8,29 +8,14 @@ import { useApp } from "../src/app";
 import { PageHead } from "../src/shell";
 import { Btn, Dialog, QR } from "../src/ui";
 import { short } from "../src/format";
-import { ErrLine, HandoffDialog, NoTouchIdNote, Section, Spinner, StatusText, useOwner, useSetup, useSetupGet, useVaultOwnership } from "./setup/common";
-import { foreignOwnerLine, foreignOwnerOf, type Ownership } from "./setup/ownership";
+import { ErrLine, NoTouchIdNote, Section, Spinner, StatusText, useOwner, useSetup, useSetupGet, useVaultOwnership } from "./setup/common";
+import { foreignOwnerLine } from "./setup/ownership";
+import { VaultsPart, type Fund } from "./WalletVaults";
 import { copyText } from "../src/copy";
 
-interface Token {
-  symbol: string;
-  address: string;
-  decimals: number;
-  amount: string;
-  usd: string;
-}
-interface Fund {
-  chainId: number;
-  vaults: { market: string; address: string; usd: string; tokens: Token[] }[];
-  totalUsd: string;
-  agent: { address: string; hsk: string | null } | null;
-  hskFaucet: string | null;
-}
 type Err = { message: string } | null;
 
-const pair = (m: string) => (m.includes("WBTC") ? "BTC vault" : "HSK vault");
 const hsk = (v: string | null | undefined) => (v == null ? "…" : `${Number(v).toFixed(Number(v) < 0.01 && Number(v) > 0 ? 4 : 3)} HSK`);
-const isAddr = (s: string) => /^0x[0-9a-fA-F]{40}$/.test(s.trim());
 
 /** "1.5" with `dec` decimals → base units string; null when not a positive number. */
 export function toUnits(v: string, dec: number): string | null {
@@ -101,7 +86,7 @@ export default function Wallet(_: ViewProps) {
           </Section>
 
           <AgentPart d={d} reload={reload} toast={toast} ownerGas={ownerGas} />
-          <VaultsPart d={d} loading={f.loading} ownerAddr={o?.address ?? null} own={own} reload={reload} toast={toast} />
+          <VaultsPart fund={d} ownerAddr={o?.address ?? null} own={own} reload={reload} />
           <BackupPart foreign={!!foreignLine} />
         </>
       )}
@@ -163,100 +148,6 @@ function AgentPart({ d, reload, toast, ownerGas }: { d: Fund | null; reload(): v
         </>
       )}
       <ErrLine error={error} />
-    </Section>
-  );
-}
-
-function VaultsPart({ d, loading, ownerAddr, own, reload, toast }: { d: Fund | null; loading: boolean; ownerAddr: string | null; own: Ownership & { flow: string | null }; reload(): void; toast: ToastFn }) {
-  const owner = useOwner()!;
-  const [form, setForm] = useState<{ kind: "deposit" | "withdraw"; vault: string; market: string; token: string; amount: string; to: string } | null>(null);
-  const [dep, setDep] = useState<{ market: string; token: string; amount: string } | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<Err>(null);
-  const v = form && d?.vaults.find((x) => x.address === form.vault);
-  const t = v?.tokens.find((x) => x.address === form?.token);
-  const units = t && form ? toUnits(form.amount, t.decimals) : null;
-  const tooMuch = !!t && !!form && Number(form.amount) > Number(t.amount);
-  const open = (kind: "deposit" | "withdraw", x: Fund["vaults"][number]) => {
-    setError(null);
-    const tk = x.tokens.find((k) => Number(k.amount) > 0) ?? x.tokens[0]!;
-    setForm({ kind, vault: x.address, market: x.market, token: tk.address, amount: kind === "deposit" ? "100" : tk.amount, to: "" });
-  };
-  const withdraw = async () => {
-    if (!form || !units || !owner.withdraw) return;
-    setBusy(true);
-    setError(null);
-    const r = await owner.withdraw({ vault: form.vault, token: form.token, amount: units, to: form.to.trim() });
-    setBusy(false);
-    if (!r.ok) return setError(r.error);
-    toast({ kind: "ok", text: `Withdrew ${form.amount} ${t!.symbol}`, sub: `to ${short(form.to.trim(), 6, 4)}` });
-    setForm(null);
-    reload();
-  };
-  return (
-    <Section title="Vaults" sub={foreignOwnerLine(own.foreign) ?? "Your money. Only your Flow wallet can take it out."} right={d && <span className="h3">${Number(d.totalUsd).toFixed(2)}</span>}>
-      {!d ? (
-        loading && <div style={{ marginTop: 12 }}><Spinner label="Reading balances…" /></div>
-      ) : d.vaults.length === 0 ? (
-        <p className="sm fg2" style={{ marginTop: 10 }}>No vaults yet. Setup creates them.</p>
-      ) : (
-        <div className="col" style={{ gap: 8, marginTop: 14 }}>
-          {d.vaults.map((x) => {
-            const other = foreignOwnerOf(own, own.flow, x.address);
-            return (
-            <div key={x.address} className="hx">
-              <div className="row g12">
-                <span className="b7">{pair(x.market)}</span>
-                <span className="sm fg2">{x.tokens.map((k) => `${k.amount} ${k.symbol}`).join(" · ")}</span>
-                <span className="grow" />
-                <span className="sm b7">${x.usd}</span>
-                <Btn size="sm" onClick={() => open("deposit", x)}>Deposit</Btn>
-                {owner.withdraw && !other && <Btn size="sm" onClick={() => open("withdraw", x)}>Withdraw</Btn>}
-              </div>
-              {other && <div className="xs fg2" style={{ marginTop: 6 }}>Withdraw is off here: this vault is owned by <span className="mono">{other}</span> (another wallet). Only that wallet can withdraw or resume.</div>}
-              {form && form.vault === x.address && (
-                <div style={{ marginTop: 12 }}>
-                  <div className="row g12" style={{ flexWrap: "wrap" }}>
-                    <select className="textin" style={{ width: 120 }} aria-label="Token" value={form.token} onChange={(e) => setForm({ ...form, token: e.target.value })}>
-                      {x.tokens.map((k) => (
-                        <option key={k.address} value={k.address}>{k.symbol}</option>
-                      ))}
-                    </select>
-                    <input className="textin" style={{ width: 140 }} aria-label="Amount" inputMode="decimal" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value.replace(/[^0-9.]/g, "") })} />
-                    {form.kind === "withdraw" && (
-                      <input className="textin mono" style={{ flex: "1 1 260px" }} aria-label="Send to address" placeholder="Your address (0x…)" spellCheck={false} value={form.to} onChange={(e) => setForm({ ...form, to: e.target.value })} />
-                    )}
-                  </div>
-                  <div className="row g12" style={{ marginTop: 10 }}>
-                    {form.kind === "withdraw" ? (
-                      <>
-                        <span className="xs fg2">
-                          {tooMuch ? "That is more than the vault holds." : form.to && !isAddr(form.to) ? "That is not an address." : "Touch ID confirms it. The money leaves the vault at once."}
-                          {ownerAddr && !form.to && (
-                            <> <button className="linkbtn" onClick={() => setForm({ ...form, to: ownerAddr })}>Use my Flow wallet</button></>
-                          )}
-                        </span>
-                        <span className="grow" />
-                        <Btn kind="solid" size="sm" disabled={busy || !units || tooMuch || !isAddr(form.to)} onClick={() => void withdraw()}>{busy ? "Waiting for Touch ID…" : "Withdraw to my address"}</Btn>
-                      </>
-                    ) : (
-                      <>
-                        <span className="xs fg2">Send from any wallet that holds the tokens. Flow shows a QR code.</span>
-                        <span className="grow" />
-                        <Btn kind="solid" size="sm" disabled={!units} onClick={() => setDep({ market: form.market, token: form.token, amount: units! })}>Show QR</Btn>
-                      </>
-                    )}
-                    <button className="linkbtn sm" onClick={() => setForm(null)}>Cancel</button>
-                  </div>
-                </div>
-              )}
-            </div>
-            );
-          })}
-        </div>
-      )}
-      <ErrLine error={error} />
-      <HandoffDialog open={!!dep} onClose={() => setDep(null)} title="Deposit" eyebrow="From any wallet" intro="Scan with any wallet that holds the tokens. It sends them straight into the vault." body={dep ? { kind: "deposit", ...dep } : null} onDone={() => (reload(), setForm(null))} />
     </Section>
   );
 }

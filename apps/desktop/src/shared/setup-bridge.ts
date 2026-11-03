@@ -113,10 +113,62 @@ export const APPROVAL_RE = new RegExp(`^/setup/(config|model/key)$|^/engine/prov
 export interface OwnerTxs {
   txs: string[];
 }
+export interface OwnerJobStep {
+  id: string;
+  market: string;
+  group: "deploy" | "limits" | "agent" | "seed";
+  label: string;
+  state: "waiting" | "sent" | "done" | "skipped" | "failed";
+  hash?: string;
+  sentAt?: number;
+  doneAt?: number;
+  error?: string;
+}
+export interface OwnerJob {
+  id: string;
+  markets: ("hsk" | "btc")[];
+  startedAt: number;
+  finishedAt?: number;
+  state: "running" | "done" | "failed";
+  steps: OwnerJobStep[];
+  error?: string;
+}
+export interface OwnerVault {
+  market: string | null;
+  address: string;
+  owner?: string;
+  agent?: string;
+  guardian?: string;
+  paused?: boolean;
+  /** Owner-service shape: USD caps × 1e8 as strings (maxTradeUsd, maxEpochUsd, maxExposureUsd), the rest numbers. */
+  limits?: Record<string, string>;
+  ownedByUs?: boolean;
+  createdAt?: number | null;
+  holdings?: { tokens: { symbol: string; address: string; decimals: number; raw: string }[]; priceE8: string | null };
+  error?: string;
+}
+export interface OwnerState {
+  chainId: number;
+  owner: string;
+  gasHsk: string | null;
+  vaults: OwnerVault[];
+  defaults: Record<string, string>;
+  unfinished: { market: string; vault: string | null }[];
+  job: OwnerJob | null;
+  active: { market: string; address: string }[];
+  explorer: string | null;
+}
 export interface OwnerBridge {
   /** Desktop and cloud also pass `gasHsk` (the owner wallet's HSK, decimal string) from GET /owner/state. */
   status(): Promise<Res<{ ready: boolean; address: string | null; chainId: number; gasHsk?: string | null }>>;
-  createVaults(o?: { markets?: string[] }): Promise<Res<OwnerTxs & { vaults: { market: string; address: string }[] }>>;
+  /** `limits` in the daemon's /setup/limits shape (USD × 1e8 for the caps); `use: false` creates without switching. */
+  createVaults(o?: { markets?: string[]; limits?: Record<string, string | number>; use?: boolean }): Promise<Res<OwnerTxs & { vaults: { market: string; address: string }[]; seconds?: number | null; seedError?: string | null }>>;
+  /** Every vault the Flow wallet knows, active and earlier (desktop). */
+  state?(): Promise<Res<OwnerState>>;
+  /** Live progress of the latest vault creation. */
+  job?(): Promise<Res<OwnerJob | null>>;
+  /** Switch a market's active vault; the daemon restarts on it. */
+  useVault?(o: { market: string; address: string }): Promise<Res<{ restarted: boolean }>>;
   setAgent(agent: string): Promise<Res<OwnerTxs>>;
   /** `loosening` = risk-raising: the caller has already confirmed it with Touch ID (desktop) or a passkey (cloud). */
   setLimits(limits: unknown, o?: { markets?: string[]; loosening?: boolean }): Promise<Res<OwnerTxs>>;
