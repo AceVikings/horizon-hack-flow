@@ -22,7 +22,7 @@ async function service(db: Database.Database, btcVault: string) {
   const txq = new TxQueue({ chain: { pendingNonce: async () => 0, suggestFees: async () => ({ maxFeePerGas: 1n, maxPriorityFeePerGas: 1n }), sendRaw: async () => "0x" as const, receipt: async () => null }, account: () => signer.get(), chainId: 177 });
   let svc: AteService | null = null;
   const strategy = await loadStrategy(() => svc!.openProposals(), { forceStub: true });
-  svc = new AteService({ cfg, db, journal: new Journal(db), chain: createChainClient({ urls: ["http://127.0.0.1:9"], retries: 0 }), signer, txq, strategy, candidateTtlSec: 180, version: "test" });
+  svc = new AteService({ cfg, db, journal: new Journal(db), chain: createChainClient({ urls: ["http://127.0.0.1:9"], retries: 0 }), signer, txq, strategy, candidateTtlSec: 180, version: "test", emit: () => undefined });
   return svc;
 }
 
@@ -49,7 +49,13 @@ describe("switching a market's vault", () => {
     trade(db, "p2", NEW, "buy", "4000", "2000000"); // $2 buy in the new vault
     expect(b.book(BTC).qty).toBe(4000n);
     expect(b.book(BTC).costE8).toBe(200000000n);
+    // today's turnover is the active vault's own (the old vault's $50 does not use up the new one's allocation)
+    const now = Math.floor(Date.now() / 1000);
+    db.prepare("UPDATE proposals SET consumed_at = ?, reserved_turnover_usd = '50' WHERE id = 'p1'").run(now);
+    db.prepare("UPDATE proposals SET consumed_at = ?, reserved_turnover_usd = '2' WHERE id = 'p2'").run(now);
+    expect(b.portfolio().markets[BTC].turnover.usedUsd).toBe("2");
     const back = await service(db, OLD);
+    expect(back.portfolio().markets[BTC].turnover.usedUsd).toBe("50");
     expect(back.book(BTC).qty).toBe(100000n);
     // both vault rows exist (journal FK), keyed by address
     expect((db.prepare("SELECT COUNT(*) c FROM vaults WHERE market = ?").get(BTC) as { c: number }).c).toBe(2);

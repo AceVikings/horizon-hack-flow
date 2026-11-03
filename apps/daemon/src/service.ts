@@ -535,11 +535,12 @@ export class AteService {
     return b;
   }
 
+  /** Today's turnover in the market's active vault (each vault has its own on-chain daily budget). */
   private turnoverUsedE8(m: MarketId): bigint {
     const since = dayStart(this.now());
     const r = this.o.db
-      .prepare("SELECT reserved_turnover_usd v FROM proposals WHERE market = ? AND status = 'executed' AND consumed_at >= ?")
-      .all(m, since) as { v: string }[];
+      .prepare("SELECT reserved_turnover_usd v FROM proposals WHERE market = ? AND lower(vault) = lower(?) AND status = 'executed' AND consumed_at >= ?")
+      .all(m, this.vaults[m] ?? "", since) as { v: string }[];
     return r.reduce((a, x) => a + usdToE8(x.v), 0n);
   }
 
@@ -576,7 +577,7 @@ export class AteService {
       const cap = BigInt(vault.limits.maxEpochUsdE8) - BigInt(vault.limits.maxExposureUsdE8);
       if (vault.address !== ZERO_ADDR && cap >= 0n) alloc = minBig(alloc, cap);
       if (!this.strategy.portfolio.targetAssets.includes(MARKETS[m].asset)) alloc = 0n;
-      const lastEntry = this.o.db.prepare("SELECT MAX(consumed_at) t FROM proposals WHERE market = ? AND status = 'executed' AND side = 'buy'").get(m) as { t: number | null };
+      const lastEntry = this.o.db.prepare("SELECT MAX(consumed_at) t FROM proposals WHERE market = ? AND lower(vault) = lower(?) AND status = 'executed' AND side = 'buy'").get(m, this.vaults[m] ?? "") as { t: number | null };
       const avg = avgEntryE8(b, d);
       markets[m] = {
         market: m,
