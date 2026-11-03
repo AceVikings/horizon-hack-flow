@@ -7,6 +7,7 @@ import type { SubscriptionStatus } from "@shared/bridge";
 import { useApp } from "../../src/app";
 import { Btn } from "../../src/ui";
 import { ErrLine, Spinner, StatusText, useSetup } from "./common";
+import { copyText } from "../../src/copy";
 
 export const TERMS_LINE = "Subscriptions are used through CLIProxyAPI and are subject to each provider's terms.";
 
@@ -92,7 +93,7 @@ export function SubscriptionSignIn({ onConnected }: { onConnected?(ok: boolean):
     const r = await s.proxyCli({ op: "login", flag });
     if (!r.ok) return setError(r.error);
     if (!r.data.opened) {
-      void navigator.clipboard?.writeText(r.data.command);
+      void copyText(r.data.command);
       setMsg("Command copied. Paste it into a terminal to sign in.");
       return;
     }

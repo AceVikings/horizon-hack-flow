@@ -10,6 +10,7 @@ import { Btn, Dialog, QR } from "../src/ui";
 import { short } from "../src/format";
 import { ErrLine, HandoffDialog, NoTouchIdNote, Section, Spinner, StatusText, useOwner, useSetup, useSetupGet, useVaultOwnership } from "./setup/common";
 import { foreignOwnerLine, foreignOwnerOf, type Ownership } from "./setup/ownership";
+import { copyText } from "../src/copy";
 
 interface Token {
   symbol: string;
@@ -41,7 +42,7 @@ export function toUnits(v: string, dec: number): string | null {
 function Copy({ text, label = "Copy" }: { text: string; label?: string }) {
   const [done, setDone] = useState(false);
   return (
-    <button className="linkbtn sm" onClick={() => void navigator.clipboard?.writeText(text).then(() => (setDone(true), setTimeout(() => setDone(false), 1500)))}>
+    <button className="linkbtn sm" onClick={() => void copyText(text).then(() => (setDone(true), setTimeout(() => setDone(false), 1500)))}>
       {done ? "Copied" : label}
     </button>
   );

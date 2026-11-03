@@ -9,6 +9,7 @@ import {Btn, Dialog, FlowMark, QR} from "../../src/ui";
 import { getWithRetry } from "./retry";
 import { vaultOwnership, type Ownership } from "./ownership";
 import "./setup.css";
+import { copyText } from "../../src/copy";
 
 export const STEPS = ["Connect", "Set limits", "Start"] as const;
 
@@ -338,7 +339,7 @@ export function TxQR({ tx, landed, detail, size = 150, dark }: { tx: HandoffTx; 
               waiting for the chain…
             </span>
           )}
-          <button className="linkbtn xs" onClick={() => void navigator.clipboard?.writeText(tx.uri)}>
+          <button className="linkbtn xs" onClick={() => void copyText(tx.uri)}>
             Copy
           </button>
         </div>

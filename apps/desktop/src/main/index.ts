@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, nativeImage, shell, session } from "electron";
+import { app, BrowserWindow, ipcMain, nativeImage, shell, session, clipboard } from "electron";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { DaemonEvent, MarketId } from "@ate/core";
@@ -176,6 +176,11 @@ async function invoke(method: IpcMethod, arg: any, arg2?: any): Promise<unknown>
     }
     case "proof.stop":
       return daemon.call("POST", "/proof/stop", {});
+    case "testnet.pool":
+      return daemon.call("GET", "/testnet/pool");
+    case "testnet.move":
+      if (arg !== "btc" && arg !== "hsk") return bad("market: btc or hsk");
+      return daemon.call("POST", "/testnet/pool", { market: arg, offsetBps: Math.trunc(Number(arg2) || 0) }, 240_000);
     case "subscription.status":
       return daemon.call("GET", "/engine/subscription");
     case "subscription.op":
@@ -319,7 +324,7 @@ function createWindow(): void {
   });
   if (!FIXTURES) w.webContents.once("did-finish-load", () => void w.webContents.executeJavaScript(`location.hash = "#/unlock"`).catch(() => {}));
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https:\/\/(hsk\.blockscout\.com|testnet-explorer\.hskchain\.net)\//.test(url)) void shell.openExternal(url);
+    if (/^https:\/\/(hsk\.blockscout\.com|testnet-explorer\.hskchain\.net|www\.tradingview\.com)\//.test(url)) void shell.openExternal(url);
     return { action: "deny" };
   });
   win.webContents.on("will-navigate", (e, url) => {
@@ -382,6 +387,7 @@ app.whenReady().then(async () => {
     cb({ responseHeaders: { ...details.responseHeaders, "Content-Security-Policy": [devUrl ? CSP.replace("connect-src 'self'", "connect-src 'self' ws://localhost:* http://localhost:*").replace("script-src 'self'", "script-src 'self' 'unsafe-inline'") : CSP] } });
   });
   session.defaultSession.setPermissionRequestHandler((_wc, _p, cb) => cb(false));
+  ipcMain.handle("ate:clipboard.write", (_e, text) => (typeof text === "string" && text.length <= 10000 ? (clipboard.writeText(text), true) : false));
   for (const m of IPC_METHODS) ipcMain.handle(`ate:${m}`, (_e, a, b) => (FIXTURES && m !== "connection" ? bad("fixtures mode") : invoke(m, a, b)));
   // Lane D2: the app owns the daemon (start/attach/unlock, no CLI); the renderer waits on #/unlock until it is ready.
   const setup = registerSetupIpc({ ipcMain, daemon, appPath: app.getAppPath(), win: () => win, fixtures: FIXTURES });

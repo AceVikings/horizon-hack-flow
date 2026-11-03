@@ -261,6 +261,8 @@ export type McpEnableResult = { servers: McpServerInfo[] } | { needsCode: true; 
 
 export interface AteBridge {
   readonly fixtures: boolean;
+  /** Writes text to the system clipboard (Electron main). Optional: the web bridge uses navigator.clipboard. */
+  copy?(text: string): Promise<boolean>;
   connection(): Promise<ConnectionInfo>;
   markets: { list(): Promise<Res<MarketView[]>>; get(id: MarketId): Promise<Res<MarketView>> };
   quote: { get(req: QuoteInput): Promise<Res<Quote>> };
@@ -304,6 +306,11 @@ export interface AteBridge {
   };
   /** Additive (lane D3): the in-app attack suite (testnet only) and the recorded proof. */
   proof?: { get(): Promise<Res<ProofState>>; run(o?: { market?: MarketId; waitPauseSec?: number }): Promise<Res<ProofRun>>; stop(): Promise<Res<{ run: ProofRun | null }>> };
+  /** Testnet (chain 133) only: stage or restore a test pool's gap vs the oracle (signed by a market-maker key, never the agent or the Flow wallet). */
+  testnet?: {
+    pool(): Promise<Res<{ available: boolean; chainId: number; maker: string | null; makerHsk: string | null; pools: { market: string; pool: string; gapBps: number }[] }>>;
+    move(market: "btc" | "hsk", offsetBps: number): Promise<Res<{ market: string; beforeBps: number; afterBps: number; txs: string[] }>>;
+  };
   /** Additive (lane D1): live candidates for Markets (ate_candidates_get) and an out-of-schedule cycle (POST /cycle). */
   candidates?: { get(market?: MarketId): Promise<Res<CandidatesGetOutput>> };
   /** Additive (lane D4): read-only charts and tables (ate_chart / ate_data). */
@@ -376,6 +383,8 @@ export const IPC_METHODS = [
   "proof.get",
   "proof.run",
   "proof.stop",
+  "testnet.pool",
+  "testnet.move",
   "ai.health",
   "ai.check",
   "ai.setKey",

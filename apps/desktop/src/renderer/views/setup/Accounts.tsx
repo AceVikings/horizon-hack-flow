@@ -7,6 +7,7 @@ import { PageHead } from "../../src/shell";
 import { SubscriptionSignIn, TERMS_LINE } from "./Subscriptions";
 import { OpencodeCard } from "./Opencode";
 import { Details, ErrLine, Spinner, useApproval, useSetup, useSetupGet, StatusText } from "./common";
+import { copyText } from "../../src/copy";
 
 interface Model {
   id: string;
@@ -142,13 +143,13 @@ function ProxyCli({ baseURL }: { baseURL: string }) {
     const r = await s.proxyCli({ op: "login", flag });
     if (!r.ok) return setMsg(r.error.message);
     if (!r.data.opened) {
-      void navigator.clipboard?.writeText(r.data.command);
+      void copyText(r.data.command);
       setMsg("Copied. Paste it into your terminal to sign in.");
     } else setMsg("Terminal opened. Finish the sign-in there, then press Refresh.");
   };
   const copy = (flag: string) => {
     if (!info?.bin) return;
-    void navigator.clipboard?.writeText(`'${info.bin}' ${flag}`);
+    void copyText(`'${info.bin}' ${flag}`);
     setMsg("Command copied.");
   };
   if (!info) return <Spinner label="Looking for CLIProxyAPI…" />;

@@ -9,6 +9,7 @@ const sc = (m: SetupIpc, a?: unknown, b?: unknown, c?: unknown) => ipcRenderer.i
 
 const ate = Object.freeze({
   fixtures: process.argv.includes("--ate-fixtures"),
+  copy: (text: string) => ipcRenderer.invoke("ate:clipboard.write", String(text).slice(0, 10000)),
   connection: () => call("connection"),
   markets: Object.freeze({ list: () => call("markets.list"), get: (id: string) => call("markets.get", id) }),
   quote: Object.freeze({ get: (req: unknown) => call("quote.get", req) }),
@@ -49,6 +50,7 @@ const ate = Object.freeze({
   mcp: Object.freeze({ list: () => call("mcp.list"), add: (d: unknown) => call("mcp.add", d), remove: (id: string) => call("mcp.remove", id), test: (id: string) => call("mcp.test", id), enable: (id: string, agent: string, on: boolean) => call("mcp.enable", { id, agent, on }), confirm: (nonce: string, code: string) => call("mcp.confirm", nonce, code) }),
   subscription: Object.freeze({ status: () => call("subscription.status"), op: (op: string) => call("subscription.op", op), login: (p: string) => call("subscription.login", p), loginStatus: (st: string) => call("subscription.loginStatus", st) }),
   proof: Object.freeze({ get: () => call("proof.get"), run: (o?: unknown) => call("proof.run", o), stop: () => call("proof.stop") }),
+  testnet: Object.freeze({ pool: () => call("testnet.pool"), move: (market: string, offsetBps: number) => call("testnet.move", market, offsetBps) }),
   candidates: Object.freeze({ get: (m?: string) => call("candidates.get", m) }),
   charts: Object.freeze({ chart: (i: unknown) => call("charts.chart", i), data: (i: unknown) => call("charts.data", i) }),
   cycle: Object.freeze({ request: () => call("cycle.request") }),

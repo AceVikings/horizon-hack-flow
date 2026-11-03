@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Btn } from "../../src/ui";
 import { ErrLine, Spinner, StatusText, useSetup } from "./common";
+import { copyText } from "../../src/copy";
 
 interface OcStatus {
   installed: boolean;
@@ -76,7 +77,7 @@ export function OpencodeCard({ onUsed }: { onUsed?(): void }) {
     const r = await s.proxyCli({ op: "opencode-login" });
     if (!r.ok) return setError(r.error);
     if (!r.data.opened) {
-      void navigator.clipboard?.writeText(r.data.command);
+      void copyText(r.data.command);
       return setBusy(null);
     }
     setBusy("Finish signing in to OpenCode in Terminal…");

@@ -6,6 +6,7 @@ import { MARKETS, type MarketId } from "@ate/core";
 import { short } from "../../src/format";
 import { AddrLink, Btn, QR } from "../../src/ui";
 import { Details, ErrLine, RetryLine, Section, Spinner, StatusText, Wizard, go, useOwner, useSetup, useSetupGet } from "./common";
+import { copyText } from "../../src/copy";
 
 /** Attempts for each first read (1 s, 2 s, 4 s backoff between them; 15 s budget each). */
 const TRIES = 4;
@@ -133,7 +134,7 @@ function OwnerGas({ chainId, onGas }: { chainId: number; onGas(hsk: number | nul
         <div className="xs fg2">Flow made this wallet for you. It will own your vaults.</div>
         <div className="row g10">
           <span className="mono xs" style={{ wordBreak: "break-all" }}>{o.address}</span>
-          <button className="linkbtn xs" onClick={() => void navigator.clipboard?.writeText(o.address!)}>Copy</button>
+          <button className="linkbtn xs" onClick={() => void copyText(o.address!)}>Copy</button>
         </div>
         <StatusText tone={low ? "warn" : gas === null ? "mute" : "ok"}>{gas === null ? "Reading balance…" : `${gas.toFixed(3)} HSK`}</StatusText>
         {low && <div className="sm">Needs a little HSK for gas. Send some to this address, then create your vaults.</div>}
