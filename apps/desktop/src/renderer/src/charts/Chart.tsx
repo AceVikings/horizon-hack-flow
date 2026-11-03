@@ -11,6 +11,7 @@ import {
   LineSeries,
   LineStyle,
   PriceScaleMode,
+  TickMarkType,
   createChart,
   createSeriesMarkers,
   type IChartApi,
@@ -27,9 +28,14 @@ const C = { fg: "#171e19", mute: "rgba(23,30,25,.55)", line: "rgba(23,30,25,.08)
 const ROLE: Record<NonNullable<ChartSeries["role"]>, string> = { primary: C.fg, secondary: C.sage, muted: "rgba(23,30,25,.35)", accent: C.accent, up: C.up, down: C.down };
 const MARK = { buy: { color: C.up, shape: "arrowUp", position: "belowBar" }, sell: { color: C.down, shape: "arrowDown", position: "aboveBar" }, no_trade: { color: "rgba(23,30,25,.4)", shape: "circle", position: "aboveBar" }, strategy: { color: C.sage, shape: "square", position: "aboveBar" }, pause: { color: C.down, shape: "square", position: "aboveBar" }, info: { color: C.sage, shape: "circle", position: "aboveBar" } } as const;
 
-/** Precision for a price magnitude (HSK ≈ 0.0875 needs 5 dp, BTC ≈ 77 000 needs 2). */
-export function precisionFor(v: number, unit: ChartSeries["unit"]): number {
+/** Charts whose USD values are amounts of money (cents), not asset prices. */
+const MONEY_KINDS = new Set(["pnl", "exposure", "budget", "volume"]);
+
+/** Precision for a price magnitude (HSK ≈ 0.0875 needs 5 dp, BTC ≈ 77 000 needs 2). Money (P&L, exposure, budget,
+ * volume) is always cents: a P&L ending near −$1 must not put "−0.9999" on the axis. */
+export function precisionFor(v: number, unit: ChartSeries["unit"], kind?: string): number {
   if (unit === "bps" || unit === "index") return unit === "index" ? 1 : 0;
+  if (unit === "usd" && kind && MONEY_KINDS.has(kind)) return 2;
   const a = Math.abs(v);
   if (unit === "usd" && a >= 1) return 2;
   if (a === 0) return 2;
@@ -118,7 +124,16 @@ export function ChartView({ spec, height = 280, look = "line", noMarkers, onMark
         secondsVisible: false,
         fixLeftEdge: true,
         fixRightEdge: true,
-        tickMarkFormatter: (t: Time) => (cat ? (spec.categories?.[Number(t) - 1] ?? "") : daily ? new Date(Number(t) * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : localTime(Number(t), false)),
+        // The time scale says what each tick is: a new year / month / day gets the date, the ticks inside a day the
+        // time. (Formatting every tick as a date repeated "Nov 3" across a day; every tick as a time hid the days.)
+        tickMarkFormatter: (t: Time, type: TickMarkType) => {
+          if (cat) return spec.categories?.[Number(t) - 1] ?? "";
+          const d = new Date(Number(t) * 1000);
+          if (type === TickMarkType.Year) return String(d.getFullYear());
+          if (type === TickMarkType.Month) return d.toLocaleDateString(undefined, { month: "short" });
+          if (type === TickMarkType.DayOfMonth || daily) return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+          return localTime(Number(t), false);
+        },
       },
       localization: { timeFormatter: (t: Time) => (cat ? `${spec.categories?.[Number(t) - 1] ?? ""} trade` : localTime(Number(t), true)) },
       crosshair: { mode: CrosshairMode.Magnet, vertLine: { color: "rgba(23,30,25,.3)", labelBackgroundColor: C.fg }, horzLine: { color: "rgba(23,30,25,.3)", labelBackgroundColor: C.fg } },
@@ -128,8 +143,11 @@ export function ChartView({ spec, height = 280, look = "line", noMarkers, onMark
     for (const def of spec.series) {
       const color = ROLE[def.role ?? "primary"];
       const sample = def.candles?.at(-1)?.c ?? def.points?.at(-1)?.v ?? 0;
-      const p = precisionFor(sample, def.unit);
-      const priceFormat = { type: "price" as const, precision: p, minMove: 10 ** -p };
+      const p = precisionFor(sample, def.unit, spec.kind);
+      const money = def.unit === "usd" && MONEY_KINDS.has(spec.kind);
+      const priceFormat = money
+        ? { type: "custom" as const, minMove: 0.01, formatter: (x: number) => `${x < -0.004 ? "−" : ""}$${Math.abs(x).toFixed(2)}` }
+        : { type: "price" as const, precision: p, minMove: 10 ** -p };
       const pane = def.pane;
       const xOf = (t: number) => ts(cat ? t + 1 : t);
       let s: ISeriesApi<SeriesType>;
