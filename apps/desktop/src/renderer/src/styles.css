@@ -730,3 +730,8 @@ button.lnk.ico { text-decoration: none; font-size: 14px; color: var(--fg2); }
 .md th { background: var(--bg3); font-weight: 650; }
 .chstate .chempty { margin: 0; }
 .pill:disabled { opacity: .45; cursor: default; }
+/* Ask: the title and the composer stay put; only the conversation scrolls. */
+.main > .ask-page { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
+.ask-page > * { flex: none; }
+.ask-page > .ask-scroll { flex: 1 1 0; min-height: 0; overflow-y: auto; scrollbar-width: thin; }
+.ask-scroll > * { flex-shrink: 0; }

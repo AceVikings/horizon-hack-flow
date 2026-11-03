@@ -157,10 +157,10 @@ export default function Ask(_: ViewProps) {
   const engine = ai.last ? (aiMissing(ai.last) ? "simple answers until you connect a subscription" : viaClaudeCode(ai.last) ? `${ai.last.modelLabel} · Claude Code` : ai.last.modelLabel) : null;
 
   return (
-    <div className="page1" style={{ display: "flex", flexDirection: "column", minHeight: "100%" }}>
+    <div className="page1 ask-page">
       <PageHead title="Ask" sub={engine ? `Ask anything about your money or tell the agent what to do. · ${engine}` : "Ask anything about your money or tell the agent what to do."} />
 
-      <div className="msgs" style={{ flex: 1, overflow: "visible" }} aria-live="polite">
+      <div className="msgs ask-scroll" aria-live="polite">
         {blocks.length === 0 && !waiting && (
           <div style={{ padding: "8px 0 4px" }}>
             <div className="sentence" style={{ fontSize: 20 }}>What would you like to know?</div>
