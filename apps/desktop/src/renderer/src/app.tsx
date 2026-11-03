@@ -7,7 +7,9 @@ import { createFixtureBridge } from "./fixtures";
 import { explorer, label, setChain } from "./format";
 
 export function pickBridge(): AteBridge {
-  const forced = typeof location !== "undefined" && location.search.includes("fixtures");
+  // Synthetic data only when asked for: ATE_FIXTURES=1 (the preload sets window.ate.fixtures), or ?fixtures on the
+  // dev server. A production build ignores ?fixtures, so a URL can never swap the live app for sample data.
+  const forced = import.meta.env.DEV && typeof location !== "undefined" && location.search.includes("fixtures");
   if (window.ate && !window.ate.fixtures && !forced) return window.ate;
   return createFixtureBridge();
 }
