@@ -18,9 +18,9 @@ export default function Welcome() {
   const lim = useSetupGet<Limits>("/setup/limits");
   // Defaults (SPEC §19): $250/day budget at 1030 bps per vault; replaced by the live vaults once readable.
   const def = worstCase([{ maxEpochUsdE8: 250_00000000n, maxSlippageBps: 250, maxOracleDeviationBps: 250, maxExitDiscountBps: 500 }, { maxEpochUsdE8: 250_00000000n, maxSlippageBps: 250, maxOracleDeviationBps: 250, maxExitDiscountBps: 500 }]);
+  const live = !!lim.data?.vaults.some((v) => v.limits);
   const max = Number(lim.data?.worstCase.maxLossUsd ?? Number(def.maxLossUsdE8) / 1e8).toFixed(2);
   const exp = lim.data?.vaults[0]?.limits ? (Number(BigInt(lim.data.vaults[0].limits.maxExposureUsdE8)) / 1e8).toFixed(0) : "150";
-  const pct = ((Number(max) / 280) * 100).toFixed(0);
   const resume = st.data && st.data.state.step > 0 && !st.data.state.completedAt ? st.data.state.step : 0;
   const start = async (existing: boolean) => {
     await s.post("/setup/state", { step: 1 });
@@ -59,7 +59,7 @@ export default function Welcome() {
         <div style={{ marginBottom: "auto" }} />
       </div>
       <div className="wr">
-        <div className="stepno" style={{ color: "var(--sage)", marginBottom: 14 }}>With the default limits</div>
+        <div className="stepno" style={{ color: "var(--sage)", marginBottom: 14 }}>{live ? "With your vaults' limits" : "With the default limits"}</div>
         <div className="pc">
           <div className="pn">01</div>
           <div>
@@ -71,7 +71,7 @@ export default function Welcome() {
           <div className="pn">02</div>
           <div>
             <div className="pt">≤ ${max} a day</div>
-            <div className="pd2">Worst-case execution loss across both vaults, on every path, while the Supra price feed is live. About {pct}% of a $280 test wallet.</div>
+            <div className="pd2">Worst-case execution loss across both vaults, on every path, while the Supra price feed is live.{live ? " From your vaults' limits." : " From the default limits Flow sets on new vaults."}</div>
           </div>
         </div>
         <div className="pc">
