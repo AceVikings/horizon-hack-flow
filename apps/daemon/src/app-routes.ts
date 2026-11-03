@@ -828,7 +828,12 @@ export function registerAppRoutes(o: AppRoutesOptions): { trader: TraderSupervis
       guard(json, () => {
         const b = (body ?? {}) as { market?: unknown; offsetBps?: unknown };
         if (typeof b.market !== "string") throw Object.assign(new Error("market: btc or hsk"), { status: 400, code: "ATE_BAD_REQUEST" });
-        return pool.move(b.market, Number(b.offsetBps ?? 0));
+        return pool.move(b.market, Number(b.offsetBps ?? 0)).then((r) => {
+          // Scan again once the RPC has the new pool price: a gap that opened triggers one cycle at once ("gap"),
+          // instead of waiting up to scanSeconds; asking for a cycle right away would read the old price.
+          if (r.txs.length) setTimeout(() => void o.service.scan().catch(() => {}), 4000);
+          return r;
+        });
       }),
   });
 

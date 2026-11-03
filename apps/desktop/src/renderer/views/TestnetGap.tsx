@@ -32,8 +32,6 @@ export function TestnetGap({ market }: { market: MarketId }) {
       sub: "Testnet only",
       ...(last ? { href: explorer.tx(last), hrefLabel: last } : {}),
     });
-    // Ask for a cycle now instead of waiting for the next scan, so the agent looks at the new gap at once.
-    if (offsetBps !== 0) void ate.cycle?.request();
     st.reload();
     refresh();
   };
