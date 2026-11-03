@@ -141,7 +141,15 @@ export class DesktopOwner {
       let r = await this.call<Out>("POST", "/owner/op", body);
       if (r.status === 428 && r.body.nonce && r.body.payload) {
         const s = await signApproval(decodePayload(r.body.payload));
-        if (!s.ok) return err(s.unavailable ? "Touch ID approval is not set up on this Mac; raising risk needs it" : `Touch ID: ${s.message}`, "ATE_APPROVAL_REQUIRED");
+        if (!s.ok)
+          return err(
+            !s.unavailable
+              ? `Touch ID: ${s.message}`
+              : process.platform === "darwin"
+                ? "Touch ID approval (ate-approve) is not set up on this Mac; withdrawing, raising limits, gas top-ups and the key backup need it"
+                : "This needs a Touch ID approval, which exists only on macOS. On this computer, do it from Flow on a Mac or in the cloud (passkey).",
+            "ATE_APPROVAL_REQUIRED",
+          );
         r = await this.call<Out>("POST", "/owner/op", { nonce: r.body.nonce, approval: { signature: s.signature } });
       }
       if (r.status !== 200) return err(r.body.error ?? `owner service HTTP ${r.status}`, r.status === 403 ? "ATE_APPROVAL_REQUIRED" : "ATE_INTERNAL");

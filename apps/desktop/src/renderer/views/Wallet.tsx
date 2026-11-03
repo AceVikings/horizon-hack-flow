@@ -8,7 +8,7 @@ import { useApp } from "../src/app";
 import { PageHead } from "../src/shell";
 import { Btn, Dialog, QR } from "../src/ui";
 import { short } from "../src/format";
-import { ErrLine, HandoffDialog, Section, Spinner, StatusText, useOwner, useSetup, useSetupGet, useVaultOwnership } from "./setup/common";
+import { ErrLine, HandoffDialog, NoTouchIdNote, Section, Spinner, StatusText, useOwner, useSetup, useSetupGet, useVaultOwnership } from "./setup/common";
 import { foreignOwnerLine, foreignOwnerOf, type Ownership } from "./setup/ownership";
 
 interface Token {
@@ -70,6 +70,7 @@ export default function Wallet(_: ViewProps) {
   return (
     <div className="sw-col" data-shot="wallet" style={{ paddingTop: 10 }}>
       <PageHead title="Wallet" sub="Your money, and the two wallets Flow made for you." />
+      <NoTouchIdNote />
       {!owner ? (
         <p className="sm fg2" style={{ marginTop: 10 }}>This build has no Flow wallet. Your vaults are owned outside Flow.</p>
       ) : (

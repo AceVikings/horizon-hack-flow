@@ -490,3 +490,16 @@ export function Slider({ value, onChange, min, max, step = 1, label }: { value: 
     </div>
   );
 }
+
+/** Desktop app on Windows/Linux: there is no Touch ID, so owner actions that raise risk cannot be approved here. */
+export const noTouchIdHere = (): boolean => typeof navigator !== "undefined" && !/Mac/i.test(navigator.userAgent) && !(window.ate as { web?: boolean } | undefined)?.web;
+
+/** Says so plainly where those actions live (Wallet, Settings). Renders nothing on macOS and in the cloud app. */
+export function NoTouchIdNote() {
+  if (!noTouchIdHere()) return null;
+  return (
+    <p className="sm fg2" role="note" style={{ marginTop: 10 }}>
+      Touch ID exists only on macOS. On this computer Flow cannot approve actions that take more risk (withdrawing, raising limits, gas top-ups, showing the key). Do those from Flow on a Mac or in the cloud with a passkey. Pausing and tightening work here.
+    </p>
+  );
+}

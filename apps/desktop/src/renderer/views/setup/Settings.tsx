@@ -6,7 +6,7 @@ import type { DaemonState } from "@shared/setup-bridge";
 import { useApp } from "../../src/app";
 import { PageHead } from "../../src/shell";
 import {Btn, QR} from "../../src/ui";
-import { Details, ErrLine, Section, Spinner, go, netLabel, useApproval, useOwner, useSetup, useSetupGet, StatusText } from "./common";
+import { Details, ErrLine, NoTouchIdNote, Section, Spinner, go, netLabel, useApproval, useOwner, useSetup, useSetupGet, StatusText } from "./common";
 
 interface Cfg {
   chainId: number;
@@ -124,6 +124,7 @@ export default function Settings() {
               <div className="kv sm"><span className="k">Method</span><span className="v">{touch ? `Touch ID · key ${d.approval.keyId ?? ""}` : "One-time code (single use, 60 s)"}</span></div>
               <div className="kv sm"><span className="k">Approval window</span><span className="v">{d.approval.windowSec} s</span></div>
             </Details>
+            <NoTouchIdNote />
           </Section>
 
           <Section
