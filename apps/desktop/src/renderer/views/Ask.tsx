@@ -98,11 +98,12 @@ export default function Ask(_: ViewProps) {
 
   const send = async (q: string) => {
     const t = q.trim();
-    if (!t || sending) return;
+    if (!t || waiting) return;
     setSending(true);
     setText("");
     const r = await ate.chat.send(sid, t);
-    if (!r.ok) toast({ kind: "error", text: r.error.message });
+    // A turn already running is not an error: the composer is simply busy until it ends.
+    if (!r.ok && !/already running/i.test(r.error.message)) toast({ kind: "error", text: r.error.message });
     hist.reload();
     setTimeout(() => setSending(false), 1200);
   };
@@ -219,7 +220,7 @@ export default function Ask(_: ViewProps) {
       </div>
       <div className="qps" style={{ marginTop: 10 }}>
         {PROMPTS.map((q) => (
-          <Pill key={q} onClick={() => void send(q)}>
+          <Pill key={q} disabled={waiting} onClick={() => void send(q)}>
             {q}
           </Pill>
         ))}
@@ -233,8 +234,8 @@ export default function Ask(_: ViewProps) {
         }}
       >
         <input aria-label="Message" placeholder="Ask Flow or tell it what to do…" value={text} onChange={(e) => setText(e.target.value)} maxLength={4000} style={{ flex: 1, border: 0, outline: "none", background: "transparent", font: "inherit", fontSize: 14 }} />
-        <span className="xs fg2">⏎ send</span>
-        <Btn kind="solid" size="sm" type="submit" disabled={!text.trim() || sending}>
+        <span className="xs fg2">{waiting ? "Flow is replying…" : "⏎ send"}</span>
+        <Btn kind="solid" size="sm" type="submit" disabled={!text.trim() || waiting}>
           Send
         </Btn>
       </form>

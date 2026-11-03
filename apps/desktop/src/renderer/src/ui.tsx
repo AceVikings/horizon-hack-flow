@@ -289,9 +289,9 @@ export function Seg<T extends string>({ value, options, onChange, label }: { val
 }
 
 /** Filter pill (toggle). */
-export function Pill({ on, children, onClick, count, title }: { on?: boolean; children: ReactNode; onClick?(): void; count?: number; title?: string }) {
+export function Pill({ on, children, onClick, count, title, disabled }: { on?: boolean; children: ReactNode; onClick?(): void; count?: number; title?: string; disabled?: boolean }) {
   return (
-    <button className={`pill${on ? " on" : ""}`} aria-pressed={!!on} onClick={onClick} title={title}>
+    <button className={`pill${on ? " on" : ""}`} aria-pressed={!!on} onClick={onClick} title={title} disabled={disabled}>
       {children}
       {count !== undefined && <span className="ct num">{count}</span>}
     </button>

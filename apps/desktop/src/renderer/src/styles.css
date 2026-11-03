@@ -729,3 +729,4 @@ button.lnk.ico { text-decoration: none; font-size: 14px; color: var(--fg2); }
 .md th, .md td { border: 1px solid var(--line); padding: 7px 10px; text-align: left; vertical-align: top; min-width: 90px; }
 .md th { background: var(--bg3); font-weight: 650; }
 .chstate .chempty { margin: 0; }
+.pill:disabled { opacity: .45; cursor: default; }
