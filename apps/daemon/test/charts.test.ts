@@ -260,3 +260,19 @@ describe("analysis on a thin pool", () => {
     expect(analysis.findings.some((f) => /Momentum/.test(f.text))).toBe(false);
   });
 });
+
+describe("thin and quiet data", () => {
+  it("says when the newest swap is old", async () => {
+    const { analyse } = await import("../src/charts/analysis.js");
+    const c = Array.from({ length: 34 }, (_, i) => ({ t: i * 3600 + 1_793_000_000, o: 100, h: 101, l: 99, c: 100 + (i < 6 ? i : 6), v: i < 6 ? 1 : 0 }));
+    const { analysis } = analyse(c, { label: "BTC", interval: "1h" });
+    expect(analysis.findings.some((f) => /No swaps in the last 28 hours/.test(f.text))).toBe(true);
+    const busy = c.map((x) => ({ ...x, v: 1 }));
+    expect(analyse(busy, { label: "BTC", interval: "1h" }).analysis.findings.some((f) => /No swaps/.test(f.text))).toBe(false);
+  });
+  it("an indicator with too few bars has no points", () => {
+    const s = indicatorSeries(candles.slice(0, 30), ["ema50", "rsi14"]);
+    expect(s.find((x) => x.id === "ema50")!.points).toHaveLength(0);
+    expect(s.find((x) => x.id === "rsi14")!.points!.length).toBeGreaterThan(0);
+  });
+});

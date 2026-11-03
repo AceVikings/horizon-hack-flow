@@ -1,7 +1,7 @@
 // Plain-language chart analysis (lane D4, pure): trend, range, support/resistance from clustered swing points with
 // touch counts, momentum (RSI) and volatility (ATR), each finding tied to a drawing. Information, not advice.
 
-import { ANALYSIS_DISCLAIMER, type Candle, type ChartAnalysis, type ChartDrawing, type ChartFinding } from "@ate/core";
+import { ANALYSIS_DISCLAIMER, INTERVAL_SEC, type Candle, type ChartAnalysis, type ChartDrawing, type ChartFinding, type ChartInterval } from "@ate/core";
 import { atr, ema, rsi } from "./indicators.js";
 
 export interface Level {
@@ -128,6 +128,10 @@ export function analyse(c: Candle[], o: { label: string; interval: string; gapBp
   // momentum and volatility
   const empty = c.filter((x) => x.v === 0).length / c.length;
   const r = empty > 0.4 ? null : rsi(closes, Math.min(14, c.length - 1)).at(-1);
+  // a quiet pool: the flat end of the line is "no swaps", not a steady price
+  const lastTrade = [...c].reverse().find((x) => (x.v ?? 0) > 0);
+  const quiet = lastTrade ? to - lastTrade.t : 0;
+  if (lastTrade && quiet >= Math.max(3 * (INTERVAL_SEC[o.interval as ChartInterval] ?? 3600), 3 * 3600)) findings.push({ text: `No swaps in the last ${describeSpan(quiet)}: the price has not changed since then.`, tone: "neutral" });
   if (empty > 0.4) findings.push({ text: `This pool trades rarely (${Math.round(empty * 100)}% of bars have no trades), so momentum readings are not meaningful.`, tone: "neutral" });
   if (r != null) {
     const state = r >= 70 ? "stretched up (above 70): rises often pause here" : r <= 30 ? "stretched down (below 30): falls often pause here" : "neutral (between 30 and 70)";

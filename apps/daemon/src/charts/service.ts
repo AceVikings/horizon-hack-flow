@@ -141,6 +141,9 @@ export class ChartService {
       const ind = indicatorSeries(candles, input.indicators);
       spec.series.push(...ind);
       spec.overlays.push(...ind.map((s) => s.id));
+      // an indicator still warming up (EMA 50 over 36 bars) has no line: say so rather than show an empty legend entry
+      const thin = [...new Set(ind.filter((s) => (s.points?.length ?? 0) < 2).map((s) => s.label.replace(/ (upper|mid|lower)$/, "")))];
+      if (thin.length) spec.notes.push(`Not enough bars for ${thin.join(" and ")} yet (${candles.length} in this window).`);
     }
     if (candles && input.compare?.length && (input.kind === "price" || input.kind === "cex")) await this.addCompare(spec, market, interval, bars, input);
     const v = validateDrawings(input.drawings);
