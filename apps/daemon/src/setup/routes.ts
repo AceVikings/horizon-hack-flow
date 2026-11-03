@@ -235,11 +235,14 @@ export function registerSetupRoutes(d: SetupRouteDeps): void {
       return { restart: false, chainId: want };
     }
     if (want !== chainId) {
+      const stashedCfg = join(home, `config.${want}.json`);
+      const stashedSetup = join(home, `setup.${want}.json`);
+      // No vault deployment and no earlier config for that chain: there is nothing real to point at (the owner
+      // service cannot start either), so say so instead of writing placeholder vault addresses.
+      if (!existsSync(stashedCfg) && !loadDeployment(want, env)) throw bad(`Flow has no vault deployment on ${NETWORKS[want].label} yet (deployments/${want}.json). Use testnet.`);
       // Each network keeps its own config (vaults, agent key id) and setup progress; switch them in place.
       renameSync(d.configPath, join(home, `config.${chainId}.json`));
       writeFileSync(join(home, `setup.${chainId}.json`), JSON.stringify(s, null, 2), { mode: 0o600 });
-      const stashedCfg = join(home, `config.${want}.json`);
-      const stashedSetup = join(home, `setup.${want}.json`);
       const next = existsSync(stashedCfg) ? (JSON.parse(readFileSync(stashedCfg, "utf8")) as AteConfig) : buildConfig({ chainId: want, deployment: loadDeployment(want, env)?.d ?? null, agentKeyId: newAgentKeyId(want) });
       if (rpcUrls) next.chain.rpcUrls = rpcUrls as string[];
       writeConfigFile(d.configPath, next);

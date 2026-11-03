@@ -53,7 +53,15 @@ export function buildConfig(o: { chainId: ChainId; deployment: Deployment | null
   c.daemon = { ...c.daemon, approvalFallback: "armed" };
   const d = o.deployment;
   c.chain = { id: o.chainId, rpcUrls: o.rpcUrls?.length ? o.rpcUrls : d?.rpcUrls?.length ? d.rpcUrls : [...net.rpcUrls], explorer: d?.explorer ?? net.explorer };
-  if (!d) return parseConfig(c);
+  if (!d) {
+    // No deployment file: never keep the fixture's example vault / guardian / EAS addresses — zero addresses read as
+    // "not set up" everywhere instead of pointing at contracts that do not exist.
+    const ZERO = "0x0000000000000000000000000000000000000000" as const;
+    c.guardian = ZERO;
+    c.vaults = c.vaults.map((v) => ({ ...v, address: ZERO }));
+    c.eas = { address: ZERO, schemaUid: `0x${"0".repeat(64)}` };
+    return parseConfig(c);
+  }
   const ids = MARKET_IDS.filter((m) => d.markets[m]);
   c.guardian = d.guardian as AteConfig["guardian"];
   c.vaults = ids.map((m) => ({ market: m, address: d.markets[m]!.vault as `0x${string}` }));

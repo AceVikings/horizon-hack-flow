@@ -75,12 +75,14 @@ function Network({ chainId, onBusy }: { chainId: number; onBusy(b: boolean): voi
         {([133, 177] as const).map((id) => {
           const n = nets.data?.find((x) => x.chainId === id);
           const on = chainId === id;
+          // no Flow vault deployment on that chain: nothing real to connect to, so it cannot be picked
+          const none = !!n && !n.deployment && !on;
           return (
-            <button key={id} role="radio" aria-checked={on} className={`optrow${on ? " on" : ""}`} onClick={() => void pick(id)}>
+            <button key={id} role="radio" aria-checked={on} aria-disabled={none || undefined} className={`optrow${on ? " on" : ""}`} style={none ? { opacity: 0.55, cursor: "not-allowed" } : undefined} onClick={() => !none && void pick(id)}>
               <span className={`radio${on ? " on" : ""}`} aria-hidden="true" />
               <span className="grow">
                 <b>{id === 133 ? "Testnet" : "Mainnet"}</b>
-                <span className="xs fg2" style={{ display: "block" }}>{id === 133 ? "Free test tokens. Start here." : "Real money."}</span>
+                <span className="xs fg2" style={{ display: "block" }}>{none ? "Flow's vault contracts are not deployed here yet." : id === 133 ? "Free test tokens. Start here." : "Real money."}</span>
               </span>
               {n ? <StatusText tone={n.ok ? "ok" : "bad"}>{n.ok ? `${n.ms} ms` : "offline"}</StatusText> : <span className="xs fg2">{nets.failed ? "—" : "…"}</span>}
             </button>
