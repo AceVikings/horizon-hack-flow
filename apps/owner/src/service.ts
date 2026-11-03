@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { configPayload, encodePayload, renderReason, type ConfigApproval } from "@ate/approve";
 import { formatEther, isAddress, type Address, type Hex } from "viem";
 import { challengeFor, type ApprovalInput, type Approver } from "./approvals.js";
-import type { Deployment, OwnerChain, VaultState } from "./chain.js";
+import type { Deployment, JobStep, OwnerChain, Partial_, VaultState } from "./chain.js";
 import { MARKET_OF } from "./chain.js";
 import { DEFAULT_LIMITS, OP_NAMES, OwnerError, diffLimits, limitsJson, parseLimits, type OwnerOp } from "./ops.js";
 
@@ -24,7 +24,19 @@ export type OpResult =
   | { done: true; op: OwnerOp["op"]; approvedBy: "touch-id" | "passkey" | null; txs: { label: string; hash: Hex }[]; result?: unknown }
   | { needsApproval: true; nonce: string; expiresAt: number; payload: string; challenge: string; prompt: string; changes: Plan["changes"] };
 
-type ChainLike = Pick<OwnerChain, "address" | "vault" | "call" | "send" | "deploy" | "seed" | "balance"> & { dep: Deployment };
+type ChainLike = Pick<OwnerChain, "address" | "vault" | "call" | "send" | "deploy" | "seed" | "balance"> & Partial<Pick<OwnerChain, "holdings">> & { dep: Deployment };
+
+/** The latest vault creation, for live progress (GET /owner/job). */
+export interface Job {
+  id: string;
+  markets: ("hsk" | "btc")[];
+  startedAt: number;
+  finishedAt?: number;
+  state: "running" | "done" | "failed";
+  steps: JobStep[];
+  error?: string;
+  result?: { vaults: { market: string; address: Address }[]; seedError?: string };
+}
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 const addr = (x: unknown, what: string): Address => {
@@ -53,7 +65,7 @@ export class OwnerService {
   private statePath() {
     return join(this.o.home, "owner-state.json");
   }
-  readState(): { deployed: { at: number; vaults: { market: string; vault: Address; adapter: Address }[]; txs: { label: string; hash: Hex }[] }[]; partial?: { market: string; vault?: Address; adapter?: Address }[] } {
+  readState(): { deployed: { at: number; vaults: { market: string; vault: Address; adapter: Address }[]; txs: { label: string; hash: Hex }[]; seconds?: number }[]; partial?: Partial_[] } {
     try {
       return existsSync(this.statePath()) ? JSON.parse(readFileSync(this.statePath(), "utf8")) : { deployed: [] };
     } catch {
@@ -70,8 +82,8 @@ export class OwnerService {
     const vaults = await Promise.all(
       this.knownVaults().map(async (v) => {
         try {
-          const s = await c.vault(v.address, v.market);
-          return { ...s, limits: limitsJson(s.limits), ownedByUs: s.owner.toLowerCase() === c.address.toLowerCase() };
+          const [s, h] = await Promise.all([c.vault(v.address, v.market), c.holdings ? c.holdings(v.address, v.market).catch(() => null) : null]);
+          return { ...s, limits: limitsJson(s.limits), ownedByUs: s.owner.toLowerCase() === c.address.toLowerCase(), createdAt: this.createdAt(v.address), ...(h ? { holdings: h } : {}) };
         } catch (e) {
           return { market: v.market, address: v.address, error: (e as Error).message.split("\n")[0] };
         }
@@ -84,9 +96,18 @@ export class OwnerService {
       gasHsk: bal === null ? null : formatEther(bal),
       vaults,
       latestDeploy: this.readState().deployed.at(-1) ?? null,
+      // A creation that stopped part way (a dropped or failed tx): the next "deploy" for these markets continues it.
+      unfinished: (this.readState().partial ?? []).map((p) => ({ market: p.market, vault: p.vault ?? null })),
+      job: this.job,
       approvals: this.o.approver.methods,
       defaults: limitsJson(DEFAULT_LIMITS),
     };
+  }
+
+  job: Job | null = null;
+
+  private createdAt(a: Address): number | null {
+    return this.readState().deployed.find((d) => d.vaults.some((v) => v.vault.toLowerCase() === a.toLowerCase()))?.at ?? null;
   }
 
   /** Our vaults among `x` ("all" / missing → every known vault we own). */
@@ -250,36 +271,52 @@ export class OwnerService {
       switch (op.op) {
         case "deploy": {
           // An interrupted deploy is resumed: contracts already created are reused, settings already applied skipped.
-          const prior = this.readState().partial ?? [];
-          const d = await c.deploy({
-            markets: op.markets,
-            agent: op.agent,
-            ...(op.guardian ? { guardian: op.guardian } : {}),
-            limits: op.limits ?? DEFAULT_LIMITS,
-            ...(this.o.env ? { env: this.o.env } : {}),
-            prior,
-            onStep: (p) => {
-              const st = this.readState();
-              st.partial = [...(st.partial ?? []).filter((x) => x.market !== p.market), p];
-              this.writeState(st);
-            },
-          });
-          txs.push(...d.txs);
-          const st = this.readState();
-          st.deployed.push({ at: this.now(), vaults: d.vaults, txs: d.txs });
-          delete st.partial;
-          this.writeState(st);
-          // The vaults exist now: a failed test-token top-up must not lose them (the caller would never register them).
-          let seedError: string | undefined;
-          if (op.seed) {
-            try {
-              txs.push(...(await c.seed(d.vaults)));
-            } catch (e) {
-              seedError = (e as Error).message;
-              this.o.log?.(`owner: seed failed (${seedError}); the vaults are created, fill them with test tokens again`);
+          const ids = op.markets.map((k) => MARKET_OF[k] as string);
+          const prior = (this.readState().partial ?? []).filter((p) => ids.includes(p.market));
+          const job: Job = { id: randomBytes(6).toString("hex"), markets: op.markets, startedAt: Date.now(), state: "running", steps: [] };
+          this.job = job;
+          try {
+            const d = await c.deploy({
+              markets: op.markets,
+              agent: op.agent,
+              ...(op.guardian ? { guardian: op.guardian } : {}),
+              limits: op.limits ?? DEFAULT_LIMITS,
+              ...(this.o.env ? { env: this.o.env } : {}),
+              ...(op.seed ? { seed: true } : {}),
+              prior,
+              onStep: (p) => {
+                const st = this.readState();
+                st.partial = [...(st.partial ?? []).filter((x) => x.market !== p.market), p];
+                this.writeState(st);
+              },
+              onProgress: (steps) => (job.steps = steps),
+            });
+            txs.push(...d.txs);
+            const seconds = Math.round((Date.now() - job.startedAt) / 100) / 10;
+            const st = this.readState();
+            st.deployed.push({ at: this.now(), vaults: d.vaults, txs: d.txs, seconds });
+            st.partial = (st.partial ?? []).filter((p) => !ids.includes(p.market));
+            if (!st.partial.length) delete st.partial;
+            this.writeState(st);
+            // A chain without the batched test-token top-up (or an older one) gets it after: the vaults exist now, and a
+            // failed top-up must not lose them (the caller would never register them).
+            let seedError = (d as { seedError?: string }).seedError;
+            if (op.seed && !("steps" in d)) {
+              try {
+                txs.push(...(await c.seed((d as { vaults: { market: string; vault: Address }[] }).vaults)));
+              } catch (e) {
+                seedError = (e as Error).message;
+              }
             }
+            if (seedError) this.o.log?.(`owner: test tokens not added (${seedError}); the vaults are created, fill them again`);
+            this.o.log?.(`owner: created ${d.vaults.map((v) => v.vault).join(", ")} in ${seconds} s (${d.txs.length} txs)`);
+            const vaults = d.vaults.map((v) => ({ market: v.market, address: v.vault, adapter: v.adapter }));
+            result = { vaults, seconds, ...(seedError ? { seedError } : {}) };
+            Object.assign(job, { state: "done", finishedAt: Date.now(), result: { vaults, ...(seedError ? { seedError } : {}) } });
+          } catch (e) {
+            Object.assign(job, { state: "failed", finishedAt: Date.now(), error: (e as Error).message.split("\n")[0] });
+            throw e;
           }
-          result = { vaults: d.vaults.map((v) => ({ market: v.market, address: v.vault, adapter: v.adapter })), ...(seedError ? { seedError } : {}) };
           break;
         }
         case "setLimits":

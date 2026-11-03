@@ -91,6 +91,30 @@ describe("owner service", () => {
     expect("needsApproval" in r).toBe(true);
   });
 
+  it("a vault creation reports live steps, resumes an interrupted one, and keeps other markets' unfinished work", async () => {
+    const { svc, f, home } = setup();
+    const M = "hsk-dex:WHSK/USDT:3000";
+    const priors: unknown[] = [];
+    // first attempt: the adapter lands, then a tx is dropped
+    f.chain.deploy = (async (o: { prior: unknown; onStep(p: unknown): void; onProgress(s: unknown[]): void }) => {
+      priors.push(o.prior);
+      o.onStep({ market: M, adapter: V1, vault: AGENT, pending: ["0xaa"] });
+      o.onProgress([{ id: "a", market: M, group: "deploy", label: "HSK price adapter", state: "done" }]);
+      throw new Error("HSK vault: not mined");
+    }) as never;
+    writeFileSync(join(home, "owner-state.json"), JSON.stringify({ deployed: [], partial: [{ market: "hsk-dex:WBTC/USDT:3000", vault: V1 }] }));
+    await expect(svc.request({ op: "deploy", agent: AGENT, markets: ["hsk"] })).rejects.toThrow(/not mined/);
+    expect(svc.job).toMatchObject({ state: "failed", error: expect.stringMatching(/not mined/), steps: [{ state: "done" }] });
+    expect((await svc.state()).unfinished.map((u) => u.market).sort()).toEqual(["hsk-dex:WBTC/USDT:3000", M]);
+    // second attempt gets the first one's contracts (only for its own market) and finishes
+    f.chain.deploy = (async (o: { prior: unknown }) => (priors.push(o.prior), { vaults: [{ market: M, vault: AGENT, adapter: V1 }], txs: [], steps: [] })) as never;
+    expect(await svc.request({ op: "deploy", agent: AGENT, markets: ["hsk"] })).toMatchObject({ done: true, result: { vaults: [{ address: AGENT }] } });
+    expect(priors[1]).toEqual([{ market: M, adapter: V1, vault: AGENT, pending: ["0xaa"] }]);
+    expect(svc.job).toMatchObject({ state: "done" });
+    expect((await svc.state()).unfinished).toEqual([{ market: "hsk-dex:WBTC/USDT:3000", vault: V1 }]);
+    expect(svc.knownVaults().map((v) => v.address)).toContain(AGENT);
+  });
+
   it("first passkey registers freely, the second needs an approval", async () => {
     const { svc } = setup();
     const k = (n: string) => ({ id: n.repeat(20), publicKey: "A".repeat(80) });
