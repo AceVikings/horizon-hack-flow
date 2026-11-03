@@ -395,6 +395,7 @@ function ManualOrder({ mv, disabled, initialOpen = false }: { mv: MarketView; di
   const propose = async () => {
     if (!quote) return;
     setPhase("proposing");
+    setErr(null); // a refusal from an earlier Propose (e.g. the entry interval) must not stay on screen after a retry
     const r = await ate.trade.propose({ market, side, amountIn: quote.amountIn, rationale: "Manual order from the desktop app (Markets → Advanced)" });
     setPhase("idle");
     if (r.ok) setProposal(r.data);
