@@ -98,7 +98,10 @@ export default function Ask(_: ViewProps) {
       else blocks.push({ kind: "agent", parts: [m] });
     }
   }
-  const waiting = sending || (msgs.length > 0 && msgs[msgs.length - 1]!.role === "user");
+  // A turn is running until the agent's text arrives: tool lines stream in first, and the reply follows them.
+  // (A tool line older than 3 min with no reply after it is a turn that ended without text: not waiting.)
+  const lastMsg = msgs[msgs.length - 1];
+  const waiting = sending || (!!lastMsg && (lastMsg.role === "user" || (lastMsg.role === "tool" && now - lastMsg.at < 180)));
   // each backtest card draws the one before it in this conversation as a grey line (iterating on a strategy)
   const prevBt: Record<string, { label: string; curve: { t: number; v: number }[] }> = {};
   let lastBt: { label: string; curve: { t: number; v: number }[] } | null = null;
