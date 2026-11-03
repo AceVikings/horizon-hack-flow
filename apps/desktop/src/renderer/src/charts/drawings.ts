@@ -56,22 +56,65 @@ class Renderer implements IPrimitivePaneRenderer {
     const ts = chart.timeScale();
     const X = (t: number | undefined) => (t === undefined ? null : xForTime(t, times, (l) => ts.logicalToCoordinate(l as Logical)));
     const Y = (v: number) => series.priceToCoordinate(v);
+    // the series line in pixels, so a label is put where it does not cover the price
+    const line: { x: number; y: number }[] = [];
+    (series.data() as { time: Time; value?: number; close?: number }[]).forEach((d, i) => {
+      const v = d.value ?? d.close;
+      const x = ts.logicalToCoordinate(i as Logical);
+      const y = v === undefined ? null : series.priceToCoordinate(v);
+      if (x !== null && y !== null) line.push({ x, y });
+    });
     target.useMediaCoordinateSpace(({ context: ctx, mediaSize }) => {
       const W = mediaSize.width;
+      const H = mediaSize.height;
       ctx.font = "500 11px Inter, system-ui, sans-serif";
       const placed: { x: number; y: number; w: number }[] = [];
-      const label = (text: string, x: number, yIn: number, color: string, align: "left" | "right" = "left") => {
+      /** Pixels of the price line under a label box (x0, y−15 … x0+w, y), sampled between bars. */
+      const covers = (x0: number, y: number, w: number) => {
+        let n = 0;
+        for (let i = 0; i < line.length; i++) {
+          const a = line[i]!;
+          const b = line[i + 1] ?? a;
+          for (let k = 0; k <= 4; k++) {
+            const px = a.x + ((b.x - a.x) * k) / 4;
+            const py = a.y + ((b.y - a.y) * k) / 4;
+            if (px >= x0 - 2 && px <= x0 + w + 2 && py >= y - 17 && py <= y + 2) n++;
+          }
+        }
+        for (const ry of rules) if (ry > y - 16 && ry < y + 1) n += 20;
+        return n;
+      };
+      // horizontal levels: a label must not sit on another level's line either
+      const rules: number[] = [];
+      for (const d of this.p.drawings) {
+        const y = d.kind === "hline" ? Y(d.a.v) : null;
+        if (y !== null) rules.push(y);
+      }
+      const clash = (x0: number, y: number, w: number) => placed.some((p) => x0 < p.x + p.w && p.x < x0 + w && Math.abs(p.y - y) < 15);
+      /**
+       * Draws `text` at the first spot (x, baseline y, align) that stays inside the plot, keeps off other labels and
+       * does not cover the price line; else at the inside spot covering the least line. Dropped if every spot clashes.
+       */
+      const label = (text: string, spots: [number, number, ("left" | "right")?][], color: string) => {
         const w = ctx.measureText(text).width + 8;
-        const x0 = align === "left" ? x : x - w;
-        // labels never overlap: nudge down past any label already drawn in the same spot; drop after 4 tries
-        let y = yIn;
-        for (let k = 0; k < 4 && placed.some((p) => x0 < p.x + p.w && p.x < x0 + w && Math.abs(p.y - y) < 15); k++) y += 15;
-        if (placed.some((p) => x0 < p.x + p.w && p.x < x0 + w && Math.abs(p.y - y) < 15)) return;
-        placed.push({ x: x0, y, w });
+        let best: { x0: number; y: number; cost: number } | null = null;
+        for (const [x, yIn, align = "left"] of spots) {
+          const x0 = Math.min(Math.max(align === "left" ? x : x - w, 0), Math.max(0, W - w));
+          // x stays inside the plot; y is where the caller put it (zones pass spots already inside the visible box)
+          let y = yIn;
+          // nudge down past a label already drawn in the same spot
+          for (let k = 0; k < 4 && clash(x0, y, w); k++) y += 15;
+          if (clash(x0, y, w)) continue;
+          const cost = covers(x0, y, w);
+          if (!best || cost < best.cost) best = { x0, y, cost };
+          if (cost === 0) break;
+        }
+        if (!best) return;
+        placed.push({ x: best.x0, y: best.y, w });
         ctx.fillStyle = "rgba(255,255,255,.88)";
-        ctx.fillRect(x0, y - 15, w, 15);
+        ctx.fillRect(best.x0, best.y - 15, w, 15);
         ctx.fillStyle = color;
-        ctx.fillText(text, x0 + 4, y - 4);
+        ctx.fillText(text, best.x0 + 4, best.y - 4);
       };
       for (const d of this.p.drawings) {
         const c = colorOf(d);
@@ -85,7 +128,7 @@ class Renderer implements IPrimitivePaneRenderer {
           ctx.moveTo(0, ya);
           ctx.lineTo(W, ya);
           ctx.stroke();
-          label(d.label ?? `$${fmt(d.a.v)}`, 6, ya - 2, c);
+          label(d.label ?? `$${fmt(d.a.v)}`, [[6, ya - 2], [W - 6, ya - 2, "right"], [6, ya + 16], [W - 6, ya + 16, "right"]], c);
         } else if (d.kind === "trend" && d.b) {
           const xa = X(d.a.t);
           const xb = X(d.b.t);
@@ -101,7 +144,7 @@ class Renderer implements IPrimitivePaneRenderer {
             ctx.fillStyle = c;
             ctx.fill();
           }
-          if (d.label) label(d.label, xb + 6, yb, c);
+          if (d.label) label(d.label, [[xb + 6, yb], [xb - 6, yb - 6, "right"], [xb + 6, yb + 16]], c);
         } else if (d.kind === "zone" && d.b) {
           const yb = Y(d.b.v);
           if (ya === null || yb === null) continue;
@@ -112,7 +155,14 @@ class Renderer implements IPrimitivePaneRenderer {
           ctx.setLineDash([3, 3]);
           ctx.lineWidth = 1;
           ctx.strokeRect(Math.min(xa, xb), Math.min(ya, yb), Math.abs(xb - xa), Math.abs(yb - ya));
-          if (d.label) label(d.label, Math.min(xa, xb) + 6, Math.min(ya, yb) + 16, c);
+          if (d.label) {
+            // inside the box (a corner clear of the price line), clamped to the visible plot
+            const l = Math.max(Math.min(xa, xb), 0) + 6;
+            const r = Math.min(Math.max(xa, xb), W) - 6;
+            const top = Math.max(Math.min(ya, yb), 0) + 17;
+            const bot = Math.min(Math.max(ya, yb), H) - 3;
+            label(d.label, [[l, top], [r, top, "right"], [l, bot], [r, bot, "right"]], c);
+          }
         } else if (d.kind === "fib" && d.b) {
           const xa = X(d.a.t) ?? 0;
           ctx.lineWidth = 1;
@@ -124,7 +174,7 @@ class Renderer implements IPrimitivePaneRenderer {
             ctx.moveTo(xa, y);
             ctx.lineTo(W, y);
             ctx.stroke();
-            label(`${(f.r * 100).toFixed(1)}%  $${fmt(f.v)}`, W - 6, y - 1, c, "right");
+            label(`${(f.r * 100).toFixed(1)}%  $${fmt(f.v)}`, [[W - 6, y - 1, "right"]], c);
           }
         } else if (d.kind === "text") {
           const x = X(d.a.t);
@@ -133,7 +183,7 @@ class Renderer implements IPrimitivePaneRenderer {
           ctx.arc(x, ya, 3, 0, Math.PI * 2);
           ctx.fillStyle = c;
           ctx.fill();
-          label(d.label ?? "Note", x + 6, ya - 4, c);
+          label(d.label ?? "Note", [[x + 6, ya - 4], [x - 6, ya - 4, "right"], [x + 6, ya + 14]], c);
         }
       }
       // first point of a two-click drawing in progress
