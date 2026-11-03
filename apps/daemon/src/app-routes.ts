@@ -195,12 +195,14 @@ class TraderSupervisor {
           ? t.createClaudeExecutor({ claudeBin: findClaudeBin() ?? "claude", promptFile: t.TRADER_PROMPT_PATH, mcp: chatMcpSpec(this.o.home, this.token), dryRun, context, model, effort: this.o.ai.config.traderEffort === "high" ? "high" : this.o.ai.config.traderEffort, log })
           : createSdkTraderExecutor({ ai: this.o.ai, service: svc, promptFile: t.TRADER_PROMPT_PATH, toolNames, dryRun, context, log });
     const cyclesFile = join(this.o.home, "trader-cycles.jsonl");
+    // strategy.portfolio.runTimeoutSec (config schema 10–600, default 90): how long one AI cycle may run
+    const runTimeoutSec = Math.max(10, Math.min(600, Number(svc.strategy.portfolio.runTimeoutSec) || 90));
     const runner = new t.TraderRunner({
       executor,
-      timeoutMs: 90_000,
+      timeoutMs: runTimeoutSec * 1000,
       log,
       onTimeout: async (cycle) => {
-        await t.writeTimeoutRecords(await getTools(), cycle, 90, markets).catch(() => []);
+        await t.writeTimeoutRecords(await getTools(), cycle, runTimeoutSec, markets).catch(() => []);
       },
       onRecord: (r) => {
         this.st.cycles++;
