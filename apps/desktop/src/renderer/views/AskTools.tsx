@@ -160,6 +160,11 @@ export function McpToolsSheet() {
               </label>
             </div>
             {s.error && <div className="xs bad" style={{ marginTop: 4 }}>{s.error}</div>}
+            {s.source === "flow" && (
+              <div className="xs fg2" style={{ marginTop: 4 }}>
+                The same tools work in Claude Code, Codex or any MCP client: <span className="mono">ate mcp serve</span> (stdio). They run with the agent's key, so the vault checks every trade the same way.
+              </div>
+            )}
             <div className="row g10" style={{ marginTop: 6 }}>
               {s.source !== "flow" && (
                 <button type="button" className="disclose xs" onClick={() => ate.mcp && void ate.mcp.test(s.id).then((r) => done(r))}>
