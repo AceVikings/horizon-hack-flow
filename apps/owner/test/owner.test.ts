@@ -82,6 +82,11 @@ describe("owner service", () => {
     const { svc, f } = setup();
     expect(await svc.request({ op: "deploy", agent: AGENT, seed: true })).toMatchObject({ done: true, result: { vaults: [{ address: V1 }] } });
     expect(f.calls).toEqual(["deploy", "seed"]);
+    // a dropped seed tx keeps the deploy result (the vaults are on chain) and says so
+    f.chain.seed = async () => {
+      throw new Error("tUSDT into HSK vault: not mined");
+    };
+    expect(await svc.request({ op: "deploy", agent: AGENT, seed: true })).toMatchObject({ done: true, result: { vaults: [{ address: V1 }], seedError: expect.stringMatching(/not mined/) } });
     const r = await svc.request({ op: "deploy", agent: AGENT, limits: { ...stringy(DEFAULT_LIMITS), maxExposureUsd: "99900000000" } });
     expect("needsApproval" in r).toBe(true);
   });

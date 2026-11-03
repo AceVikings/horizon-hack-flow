@@ -269,8 +269,17 @@ export class OwnerService {
           st.deployed.push({ at: this.now(), vaults: d.vaults, txs: d.txs });
           delete st.partial;
           this.writeState(st);
-          if (op.seed) txs.push(...(await c.seed(d.vaults)));
-          result = { vaults: d.vaults.map((v) => ({ market: v.market, address: v.vault, adapter: v.adapter })) };
+          // The vaults exist now: a failed test-token top-up must not lose them (the caller would never register them).
+          let seedError: string | undefined;
+          if (op.seed) {
+            try {
+              txs.push(...(await c.seed(d.vaults)));
+            } catch (e) {
+              seedError = (e as Error).message;
+              this.o.log?.(`owner: seed failed (${seedError}); the vaults are created, fill them with test tokens again`);
+            }
+          }
+          result = { vaults: d.vaults.map((v) => ({ market: v.market, address: v.vault, adapter: v.adapter })), ...(seedError ? { seedError } : {}) };
           break;
         }
         case "setLimits":
