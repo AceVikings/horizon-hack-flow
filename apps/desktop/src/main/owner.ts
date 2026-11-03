@@ -239,7 +239,8 @@ export class DesktopOwner {
       }
     },
     setAgent: async (agent: string) => this.txs(await this.op({ op: "setAgent", agent: String(agent), vaults: await this.vaults() })),
-    setLimits: async (limits: unknown) => this.txs(await this.op({ op: "setLimits", limits, vaults: await this.vaults() })),
+    /** `o.vaults`: only these vaults (Wallet → Change limits); default every vault in use. Raising asks Touch ID. */
+    setLimits: async (limits: unknown, o?: { vaults?: string[] }) => this.txs(await this.op({ op: "setLimits", limits, vaults: o?.vaults?.length ? o.vaults.map(String) : await this.vaults() })),
     unpause: async () => this.txs(await this.op({ op: "unpause", vaults: await this.vaults() })),
     /** Vault → `to` (default: the owner wallet). Amount in the token's smallest unit. Touch ID. */
     withdraw: async (o: { vault: string; token: string; amount: string; to?: string }) => this.txs(await this.op({ op: "withdraw", vault: String(o?.vault), token: String(o?.token), amount: String(o?.amount), ...(o?.to ? { to: String(o.to) } : {}) })),

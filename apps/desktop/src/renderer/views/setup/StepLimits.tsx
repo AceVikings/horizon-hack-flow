@@ -4,19 +4,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { worstCase } from "@ate/core";
 import { Dialog, Btn } from "../../src/ui";
-import { ErrLine, Details, NumField, Section, Slider, Spinner, Wizard, go, isLoosening, useOwner, useSetup, useSetupGet } from "./common";
+import { ErrLine, Section, Spinner, Wizard, go, isLoosening, useOwner, useSetup, useSetupGet } from "./common";
+import { LimitsEditor, limError, type Lim } from "./LimitsEditor";
 
-interface Lim {
-  maxTradeUsdE8: string;
-  maxEpochUsdE8: string;
-  maxExposureUsdE8: string;
-  epochDuration: number;
-  maxSlippageBps: number;
-  maxOracleDeviationBps: number;
-  maxExitDiscountBps: number;
-  maxOracleAge: number;
-  cooldown: number;
-}
 interface Limits {
   vaults: { market: string; address: string; limits: Lim | null }[];
   same: boolean;
@@ -30,7 +20,6 @@ interface Fund {
 }
 
 const d8 = (e8: string) => Number(BigInt(e8)) / 1e8;
-const e8 = (usd: number) => String(BigInt(Math.round(usd * 100)) * 1_000_000n);
 
 export default function StepLimits() {
   const s = useSetup();
@@ -52,7 +41,6 @@ export default function StepLimits() {
   const deposit = Number(fund.data?.totalUsd ?? 0) || st.data?.state.plannedDepositUsd || 280;
   const differs = !!l && !!chain && JSON.stringify(l) !== JSON.stringify(chain);
   const notSame = lim.data && !lim.data.same && n > 1;
-  const set = (k: keyof Lim, v: number | string) => setL((x) => (x ? { ...x, [k]: v } : x));
   const next = async () => {
     await s.post("/setup/state", { step: 3, limitsAckAt: Math.floor(Date.now() / 1000), plannedDepositUsd: Math.round(deposit) });
     go("setup/3");
@@ -83,7 +71,6 @@ export default function StepLimits() {
     setBusy(null);
     lim.reload();
   };
-  const pcBar = (bps: number) => (wc ? (bps / wc.vaults[0]!.totalBps) * 100 : 0);
   return (
     <Wizard
       step={2}
@@ -102,71 +89,14 @@ export default function StepLimits() {
         <div style={{ marginTop: 24 }}>{lim.res?.ok === false ? <ErrLine error={lim.res.error} /> : <Spinner label="Reading your vault limits…" />}</div>
       ) : (
         <>
-          <section className="card dk" style={{ marginTop: 24, padding: "26px 28px" }} aria-label="Most it can lose">
-            <div className="sm" style={{ color: "var(--sage)" }}>Most the agent can lose in a day</div>
-            <div className="bignum" style={{ color: "var(--y)", marginTop: 10 }} aria-live="polite">${maxDay.toFixed(2)}</div>
-            <div className="sm" style={{ color: "var(--sage)", marginTop: 8 }}>
-              Across {n === 2 ? "both vaults" : "your vault"}, on every path. That is {((maxDay / deposit) * 100).toFixed(1)}% of ${deposit.toFixed(0)}.
+          <Section title="Limits per vault" sub={`Pick a preset or set each one. Smaller numbers mean smaller worst days. That is ${((maxDay / deposit) * 100).toFixed(1)}% of $${deposit.toFixed(0)}.`}>
+            <div style={{ marginTop: 14 }}>
+              <LimitsEditor value={l} onChange={setL} base={chain ?? l} vaults={n} />
             </div>
-          </section>
-          <Section title="Limits per vault" sub="Drag or type. Smaller numbers mean smaller worst days.">
-            {(
-              [
-                ["Most per trade", "maxTradeUsdE8", 5, 1000, 5],
-                ["Most per day", "maxEpochUsdE8", 10, 5000, 10],
-                ["Most held at once", "maxExposureUsdE8", 10, 5000, 10],
-              ] as const
-            ).map(([label, k, min, max, step]) => {
-              const v = d8(l[k]);
-              const changed = chain && l[k] !== chain[k];
-              return (
-                <div key={k} className={`limrow${changed ? " chg" : ""}`}>
-                  <span className="sm b5">{label}</span>
-                  <Slider label={label} value={v} min={min} max={max} step={step} onChange={(x) => set(k, e8(x))} />
-                  <NumField label={label} value={v} prefix="$" min={min} max={max} step={step} onChange={(x) => set(k, e8(x))} focus={!!changed} />
-                </div>
-              );
-            })}
-            <Details>
-              {(
-                [
-                  ["Max slippage", "maxSlippageBps", 0, 1000, "bps"],
-                  ["Max oracle deviation", "maxOracleDeviationBps", 0, 1000, "bps"],
-                  ["Max exit discount", "maxExitDiscountBps", 0, 2000, "bps"],
-                  ["Cooldown between trades", "cooldown", 0, 3600, "s"],
-                ] as const
-              ).map(([label, k, min, max, unit]) => (
-                <div key={k} className={`limrow${chain && l[k] !== chain[k] ? " chg" : ""}`}>
-                  <span className="sm b5">{label}</span>
-                  <Slider label={label} value={l[k]} min={min} max={max} onChange={(x) => set(k, x)} />
-                  <NumField label={label} value={l[k]} unit={unit} min={min} max={max} onChange={(x) => set(k, x)} />
-                </div>
-              ))}
-              {wc && (
-                <div style={{ marginTop: 14 }}>
-                  <div className="wcbar" aria-hidden="true">
-                    <div style={{ flex: pcBar(wc.vaults[0]!.oracleBps), background: "#ffe17c", borderRadius: "6px 0 0 6px" }} />
-                    <div style={{ flex: pcBar(wc.vaults[0]!.exitBps), background: "#f0cf5c" }} />
-                    <div style={{ flex: pcBar(wc.vaults[0]!.slippageBps), background: "#d8bb55" }} />
-                    <div style={{ flex: pcBar(wc.vaults[0]!.feeBps), background: "#171e19", borderRadius: "0 6px 6px 0" }} />
-                  </div>
-                  <div className="row sb xs fg2" style={{ marginTop: 6 }}>
-                    <span>oracle {wc.vaults[0]!.oracleBps}</span>
-                    <span>exit {wc.vaults[0]!.exitBps}</span>
-                    <span>slippage {wc.vaults[0]!.slippageBps}</span>
-                    <span>fee {wc.vaults[0]!.feeBps}</span>
-                  </div>
-                  <div className="kv sm" style={{ marginTop: 8 }}><span className="k">Per vault</span><span className="v">${d8(l.maxEpochUsdE8).toFixed(0)} × {wc.vaults[0]!.totalBps} bps = ${(Number(wc.vaults[0]!.maxLossUsdE8) / 1e8).toFixed(2)}</span></div>
-                  <div className="kv sm"><span className="k">Normal trades only</span><span className="v">${(Number(wc.normalLossUsdE8) / 1e8).toFixed(2)} a day</span></div>
-                  <div className="kv sm"><span className="k">Any 24 hours</span><span className="v">${(Number(wc.rolling24hUsdE8) / 1e8).toFixed(2)}</span></div>
-                  <div className="xs fg2" style={{ marginTop: 8 }}>Holds while the Supra price feed is live. Price moves on what the vault holds are the stop-loss's job.</div>
-                </div>
-              )}
-            </Details>
             {differs ? (
               <div className="row g12" style={{ marginTop: 16 }}>
                 {owner ? (
-                  <Btn2 onClick={() => void apply()} disabled={!!busy}>{loosen ? "Save · raises risk" : "Save limits"}</Btn2>
+                  <Btn2 onClick={() => void apply()} disabled={!!busy || !!limError(l)}>{loosen ? "Save · raises risk" : "Save limits"}</Btn2>
                 ) : (
                   <span className="sm fg2">These vaults are owned outside Flow: their owner must change the limits.</span>
                 )}

@@ -3,12 +3,12 @@
 // and "Create a new vault" with limits and live on-chain progress. Creating runs in the owner service; limits above
 // the defaults ask Touch ID there. Switching rewrites config.json and restarts the daemon (the trader resumes).
 import { useEffect, useMemo, useRef, useState } from "react";
-import { worstCase } from "@ate/core";
 import type { OwnerJob, OwnerJobStep, OwnerState, OwnerVault } from "../../shared/setup-bridge";
 import { useApp } from "../src/app";
 import { AddrLink, Btn, Dialog, TxLink } from "../src/ui";
 import { money, short } from "../src/format";
-import { Details, ErrLine, HandoffDialog, NumField, Section, Spinner, StatusText, useOwner } from "./setup/common";
+import { ErrLine, HandoffDialog, Section, Spinner, StatusText, useOwner } from "./setup/common";
+import { LimitsEditor, limError, limFromOwner, riskier, sameLim, worstDayUsd, type Lim } from "./setup/LimitsEditor";
 import { foreignOwnerOf, type Ownership } from "./setup/ownership";
 
 interface Token {
@@ -46,7 +46,6 @@ const mkOf = (market: string): Mk => (market.includes("WBTC") ? "btc" : "hsk");
 const NAME: Record<Mk, string> = { btc: "BTC", hsk: "HSK" };
 const lc = (s: string) => s.toLowerCase();
 const d8 = (e8: string | undefined) => (e8 ? Number(BigInt(e8)) / 1e8 : 0);
-const e8 = (usd: number) => String(BigInt(Math.round(usd * 100)) * 1_000_000n);
 const isAddr = (s: string) => /^0x[0-9a-fA-F]{40}$/.test(s.trim());
 const fmtAmt = (raw: string, dec: number) => {
   const n = Number(raw) / 10 ** dec;
@@ -62,15 +61,7 @@ function toUnits(v: string, dec: number): string | null {
   return (BigInt(w || "0") * 10n ** BigInt(dec) + BigInt((f + "0".repeat(dec)).slice(0, dec) || "0")).toString();
 }
 
-/** Worst day for one vault with these limits (SPEC §4.6, same formula as setup). */
-function worstDay(l: Record<string, string>, n = 1): number {
-  const one = { maxEpochUsdE8: l.maxEpochUsd ?? "0", maxSlippageBps: Number(l.maxSlippageBps), maxOracleDeviationBps: Number(l.maxOracleDeviationBps), maxExitDiscountBps: Number(l.maxExitDiscountBps) };
-  return Number(worstCase(Array.from({ length: n }, () => one) as never).maxLossUsdE8) / 1e8;
-}
-/** Owner-service RISK_UP: caps and tolerances raise risk going up; a shorter epoch or cooldown raises it going down. */
-const DOWN_RAISES = new Set(["epochDuration", "cooldown"]);
-const raises = (base: Record<string, string>, l: Record<string, string>) => Object.keys(base).filter((k) => (DOWN_RAISES.has(k) ? BigInt(l[k] ?? "0") < BigInt(base[k]!) : BigInt(l[k] ?? "0") > BigInt(base[k]!)));
-const limitLine = (l: Record<string, string>) => `${money(d8(l.maxTradeUsd), 0)} a trade · ${money(d8(l.maxEpochUsd), 0)} a day · ${money(d8(l.maxExposureUsd), 0)} held · worst day ${money(worstDay(l))}`;
+const limitLine = (l: Record<string, string>) => `${money(d8(l.maxTradeUsd), 0)} a trade · ${money(d8(l.maxEpochUsd), 0)} a day · ${money(d8(l.maxExposureUsd), 0)} held · worst day ${money(worstDayUsd(limFromOwner(l)))}`;
 
 function rowsOf(st: OwnerState | null, fund: Fund | null): Row[] {
   const active = new Set([...(st?.active ?? []), ...(fund?.vaults ?? [])].map((v) => lc(v.address)));
@@ -118,6 +109,7 @@ export function VaultsPart({ fund, ownerAddr, own, reload: reloadFund }: { fund:
   const [creating, setCreating] = useState(false);
   const [useIt, setUseIt] = useState<Row | null>(null);
   const [switching, setSwitching] = useState(false);
+  const [editing, setEditing] = useState<string | null>(null);
   useEffect(() => {
     if (!owner.state) return;
     let live = true;
@@ -175,18 +167,20 @@ export function VaultsPart({ fund, ownerAddr, own, reload: reloadFund }: { fund:
       ) : (
         <div className="col" style={{ gap: 8, marginTop: 14 }}>
           {rows.map((x) => {
-            const other = !x.ours ? (foreignOwnerOf(own, own.flow, x.address) ?? "another wallet") : null;
+            // until the owner service answers, ownership is unknown: say nothing rather than "another wallet"
+            const other = st && !x.ours ? (foreignOwnerOf(own, own.flow, x.address) ?? "another wallet") : null;
             const empty = x.tokens.every((k) => Number(k.amount) === 0);
             return (
               <div key={x.address} className="hx" data-vault={x.address}>
                 <div className="row g12" style={{ flexWrap: "wrap" }}>
                   <span className="b7">{NAME[mkOf(x.market)]} vault</span>
-                  {x.active ? <StatusText tone="ok">In use</StatusText> : <StatusText>Earlier vault</StatusText>}
+                  {x.active ? <StatusText tone="ok">In use</StatusText> : <StatusText>Not in use</StatusText>}
                   {x.paused && <StatusText tone="warn">Paused</StatusText>}
                   <span className="grow" />
                   <span className="sm b7">{money(x.usd)}</span>
                   <Btn size="sm" onClick={() => open("deposit", x)}>Deposit</Btn>
                   {owner.withdraw && x.ours && <Btn size="sm" disabled={empty} onClick={() => open("withdraw", x)}>Withdraw</Btn>}
+                  {x.ours && x.limits && editing !== x.address && <Btn size="sm" onClick={() => setEditing(x.address)}>Change limits</Btn>}
                   {!x.active && x.ours && owner.useVault && <Btn size="sm" kind="solid" onClick={() => setUseIt(x)}>Use this vault</Btn>}
                 </div>
                 <div className="sm fg2" style={{ marginTop: 6 }}>{x.tokens.map((k) => `${k.amount} ${k.symbol}`).join(" · ") || "…"}</div>
@@ -195,6 +189,7 @@ export function VaultsPart({ fund, ownerAddr, own, reload: reloadFund }: { fund:
                   {x.limits && <span>{limitLine(x.limits)}</span>}
                   {x.createdAt && <span>Created {date(x.createdAt)}</span>}
                 </div>
+                {editing === x.address && x.limits && <ChangeLimits row={x} onClose={() => setEditing(null)} onSaved={() => reload()} />}
                 {other && <div className="xs fg2" style={{ marginTop: 6 }}>Withdraw is off here: this vault is owned by <span className="mono">{other}</span>. Only that wallet can withdraw or resume.</div>}
                 {form && form.vault === x.address && (
                   <div style={{ marginTop: 12 }}>
@@ -271,6 +266,50 @@ export function VaultsPart({ fund, ownerAddr, own, reload: reloadFund }: { fund:
   );
 }
 
+/** Change one vault's limits: lower ones apply at once, higher ones after Touch ID (in the owner service). */
+function ChangeLimits({ row, onClose, onSaved }: { row: Row; onClose(): void; onSaved(): void }) {
+  const owner = useOwner()!;
+  const { toast } = useApp();
+  const chain = useMemo(() => limFromOwner(row.limits!), [row.limits]);
+  const [l, setL] = useState<Lim>(chain);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<Err>(null);
+  const up = riskier(chain, l);
+  const save = async () => {
+    setError(null);
+    const t0 = Date.now();
+    setBusy(up.length ? "Waiting for Touch ID…" : "Saving on chain…");
+    const r = await owner.setLimits(l, { vaults: [row.address], loosening: up.length > 0 });
+    if (!r.ok) {
+      setBusy(null);
+      return setError(r.error);
+    }
+    // read back from the chain before saying it is done
+    setBusy("Saving on chain…");
+    for (let i = 0; i < 20 && owner.state; i++) {
+      const s = await owner.state();
+      const v = s.ok ? s.data.vaults.find((x) => lc(x.address) === lc(row.address)) : null;
+      if (v?.limits && sameLim(limFromOwner(v.limits), l)) break;
+      await new Promise((res) => setTimeout(res, 1000));
+    }
+    setBusy(null);
+    toast({ kind: "ok", text: `${NAME[mkOf(row.market)]} vault limits saved`, sub: `on chain in ${((Date.now() - t0) / 1000).toFixed(1)} s` });
+    onSaved();
+    onClose();
+  };
+  return (
+    <div style={{ marginTop: 14 }} aria-label="Change limits">
+      <LimitsEditor value={l} onChange={setL} base={chain} />
+      <div className="row g12" style={{ marginTop: 12 }}>
+        <Btn kind="solid" size="sm" disabled={!!busy || sameLim(l, chain) || !!limError(l)} onClick={() => void save()}>{busy ?? (up.length ? "Save · raises risk" : "Save limits")}</Btn>
+        <button className="linkbtn sm" disabled={!!busy} onClick={onClose}>Cancel</button>
+        {busy && <Spinner label={busy} />}
+      </div>
+      <ErrLine error={error} />
+    </div>
+  );
+}
+
 const GROUPS: { g: OwnerJobStep["group"]; label: string }[] = [
   { g: "deploy", label: "Deploying" },
   { g: "limits", label: "Setting limits" },
@@ -281,10 +320,10 @@ const GROUPS: { g: OwnerJobStep["group"]; label: string }[] = [
 function CreatePanel({ st, rows, onClose, onCreated, onUse }: { st: OwnerState; rows: Row[]; onClose(): void; onCreated(): void; onUse(r: Row): void }) {
   const owner = useOwner()!;
   const { toast } = useApp();
-  const defaults = st.defaults;
+  const defaults = useMemo(() => limFromOwner(st.defaults), [st.defaults]);
   const unfinished = st.unfinished.map((u) => mkOf(u.market));
   const [mk, setMk] = useState<Mk[]>(unfinished.length ? [...new Set(unfinished)] : ["btc"]);
-  const [l, setL] = useState<Record<string, string>>(() => ({ ...defaults }));
+  const [l, setL] = useState<Lim>(() => ({ ...defaults }));
   const [job, setJob] = useState<OwnerJob | null>(st.job?.state === "running" ? st.job : null);
   const [running, setRunning] = useState(st.job?.state === "running");
   const [done, setDone] = useState<{ vaults: { market: string; address: string }[]; seconds: number | null; seedError: string | null } | null>(null);
@@ -292,8 +331,8 @@ function CreatePanel({ st, rows, onClose, onCreated, onUse }: { st: OwnerState; 
   const [, tick] = useState(0);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const testnet = st.chainId === 133;
-  const up = raises(defaults, l);
-  const worst = worstDay(l, mk.length);
+  const up = riskier(defaults, l);
+  const bad = limError(l);
   const gas = st.gasHsk === null ? null : Number(st.gasHsk);
   const lowGas = gas !== null && gas < 0.006 * mk.length;
   const resume = mk.some((m) => unfinished.includes(m));
@@ -326,7 +365,7 @@ function CreatePanel({ st, rows, onClose, onCreated, onUse }: { st: OwnerState; 
     setJob(null);
     setRunning(true);
     timer.current = setInterval(() => tick((x) => x + 1), 500);
-    const r = await owner.createVaults({ markets: mk, limits: l, use: false });
+    const r = await owner.createVaults({ markets: mk, limits: l as unknown as Record<string, string | number>, use: false });
     if (timer.current) clearInterval(timer.current);
     timer.current = null;
     const j = owner.job ? await owner.job() : null;
@@ -337,8 +376,6 @@ function CreatePanel({ st, rows, onClose, onCreated, onUse }: { st: OwnerState; 
     setDone({ vaults: r.data.vaults, seconds: r.data.seconds ?? null, seedError: r.data.seedError ?? null });
     toast({ kind: "ok", text: r.data.vaults.length === 2 ? "Two vaults created" : `${NAME[mkOf(r.data.vaults[0]!.market)]} vault created`, sub: r.data.seconds ? `in ${r.data.seconds} s` : undefined });
   };
-  const set = (k: string, usd: number) => setL((x) => ({ ...x, [k]: e8(usd) }));
-  const setN = (k: string, v: number) => setL((x) => ({ ...x, [k]: String(v) }));
   const toggle = (m: Mk) => setMk((x) => (x.includes(m) ? (x.length > 1 ? x.filter((y) => y !== m) : x) : [...x, m].sort() as Mk[]));
 
   return (
@@ -362,48 +399,15 @@ function CreatePanel({ st, rows, onClose, onCreated, onUse }: { st: OwnerState; 
               </button>
             ))}
           </div>
-          <div style={{ marginTop: 14 }}>
-            {(
-              [
-                ["Most per trade", "maxTradeUsd", 5, 1000, 5],
-                ["Most per day", "maxEpochUsd", 10, 5000, 10],
-                ["Most held at once", "maxExposureUsd", 10, 5000, 10],
-              ] as const
-            ).map(([label, k, min, max, step]) => (
-              <div key={k} className="row g12" style={{ marginTop: 8 }}>
-                <span className="sm grow">{label}</span>
-                {l[k] !== defaults[k] && <span className="xs fg2">default {money(d8(defaults[k]), 0)}</span>}
-                <NumField label={label} value={d8(l[k])} prefix="$" min={min} max={max} step={step} onChange={(x) => set(k, x)} />
-              </div>
-            ))}
-            <Details summary="More limits">
-              {(
-                [
-                  ["Max slippage", "maxSlippageBps", 0, 1000, "bps"],
-                  ["Max oracle deviation", "maxOracleDeviationBps", 0, 1000, "bps"],
-                  ["Max exit discount", "maxExitDiscountBps", 0, 2000, "bps"],
-                  ["Cooldown between trades", "cooldown", 0, 3600, "s"],
-                ] as const
-              ).map(([label, k, min, max, unit]) => (
-                <div key={k} className="row g12" style={{ marginTop: 8 }}>
-                  <span className="sm grow">{label}</span>
-                  <NumField label={label} value={Number(l[k])} unit={unit} min={min} max={max} onChange={(x) => setN(k, x)} />
-                </div>
-              ))}
-            </Details>
-          </div>
-          <div className="row g12 base" style={{ marginTop: 14 }}>
-            <span className="sm">Most it can lose in a day</span>
-            <span className="h3">{money(worst)}</span>
-            <span className="xs fg2">{mk.length === 2 ? "across both vaults" : ""}</span>
-          </div>
-          {d8(l.maxEpochUsd) < d8(l.maxTradeUsd) && <StatusText tone="warn">The daily budget must be at least the per-trade cap.</StatusText>}
+          <div className="sm b7" style={{ marginTop: 16 }}>Limits for the agent</div>
+          <div className="xs fg2" style={{ marginTop: 2, marginBottom: 10 }}>They go on chain with the vault. You can change them later from this list.</div>
+          <LimitsEditor value={l} onChange={setL} base={defaults} baseLabel="the defaults" vaults={mk.length} />
           <div className="xs fg2" style={{ marginTop: 8 }}>
-            {up.length ? "Higher than the defaults, so Touch ID confirms it." : "Nothing to sign."} About 0.004 HSK of gas per vault from your Flow wallet ({gas === null ? "…" : `${gas.toFixed(3)} HSK`}).
+            About 0.004 HSK of gas per vault from your Flow wallet ({gas === null ? "…" : `${gas.toFixed(3)} HSK`}).
             {testnet ? " Flow adds test tokens: 150 tUSDT and $50 of the coin." : ""} Your vaults in use stay as they are until you pick Use this vault.
           </div>
           {lowGas && <StatusText tone="warn">Your Flow wallet needs a little more HSK for gas.</StatusText>}
-          <Btn kind="pri" style={{ marginTop: 12 }} disabled={lowGas || d8(l.maxEpochUsd) < d8(l.maxTradeUsd)} onClick={() => void create()}>
+          <Btn kind="pri" style={{ marginTop: 12 }} disabled={lowGas || !!bad} onClick={() => void create()}>
             {resume ? "Finish creating" : mk.length === 2 ? "Create two vaults" : `Create ${NAME[mk[0]!]} vault`}
             {up.length ? " · raises risk" : ""}
           </Btn>

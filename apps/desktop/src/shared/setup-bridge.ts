@@ -171,7 +171,7 @@ export interface OwnerBridge {
   useVault?(o: { market: string; address: string }): Promise<Res<{ restarted: boolean }>>;
   setAgent(agent: string): Promise<Res<OwnerTxs>>;
   /** `loosening` = risk-raising: the caller has already confirmed it with Touch ID (desktop) or a passkey (cloud). */
-  setLimits(limits: unknown, o?: { markets?: string[]; loosening?: boolean }): Promise<Res<OwnerTxs>>;
+  setLimits(limits: unknown, o?: { markets?: string[]; loosening?: boolean; vaults?: string[] }): Promise<Res<OwnerTxs>>;
   unpause(market?: string): Promise<Res<OwnerTxs>>;
   /** Vault → `to` (default the owner wallet); `amount` in the token's smallest unit. Risk-raising: Touch ID. */
   withdraw?(o: { vault: string; token: string; amount: string; to?: string }): Promise<Res<OwnerTxs>>;
